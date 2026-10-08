@@ -25,6 +25,8 @@ window.FALSEHOOD_FIREBASE = {
 #fbGate button{padding:9px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font-weight:600;cursor:pointer}
 #fbGate button.g-go{background:#a02ab8;border-color:#c03bd6}
 #fbGate button:disabled{opacity:.6;cursor:default}
+body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.viewonly .st-file-actions [data-act=replace],body.viewonly .st-file-actions [data-act=remove],body.viewonly [data-act=attach]{display:none!important}
+.notice .unlock{font:inherit;font-weight:600;padding:2px 10px;margin-left:6px;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer}
 </style>
 <script>
 (function(){
@@ -61,16 +63,31 @@ window.FALSEHOOD_FIREBASE = {
   };
 
   let gateDone = null;
-  function askPassword(uid){
+  let role = 'editor';
+  // Editor password first, then the view-only one; the security rules decide which matches
+  async function join(uid, pass){
+    for(const r of ['editor', 'viewer']){
+      try { await fs.collection('members').doc(uid).set({ pass, role: r, joinedAt: Date.now() }); return r; }
+      catch(x) { if(!(x && x.code === 'permission-denied')) throw x; }
+    }
+    return null;
+  }
+  window.falsehoodUnlock = async ()=>{
+    const uid = auth.currentUser && auth.currentUser.uid;
+    if(!uid) return;
+    const r = await askPassword(uid, true);
+    if(r === 'editor') location.reload();
+  };
+  function askPassword(uid, upgrade){
     return new Promise(resolve=>{
       const g = document.createElement('div');
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
         <h2>Falsehood</h2>
-        <p>Enter the guild password to see and update the shared timers and storage. You only need to do this once on this device.</p>
+        <p>${upgrade ? 'Enter the editor password to log kills and manage storage.' : 'Enter the guild password to open the shared timers and storage. You only need to do this once on this device.'}</p>
         <input type="password" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
         <div class="g-err" role="alert"></div>
-        <div class="g-row"><button type="button" class="g-skip">Use offline</button><button class="g-go">Enter</button></div>
+        <div class="g-row"><button type="button" class="g-skip">${upgrade ? 'Cancel' : 'Use offline'}</button><button class="g-go">Enter</button></div>
       </form>`;
       document.body.appendChild(g);
       const form = g.querySelector('form'), inp = g.querySelector('input'), err = g.querySelector('.g-err'), go = g.querySelector('.g-go');
@@ -82,10 +99,14 @@ window.FALSEHOOD_FIREBASE = {
         if(!pass) return;
         go.disabled = true; err.textContent = '';
         try {
-          await fs.collection('members').doc(uid).set({ pass, joinedAt: Date.now() });
-          g.remove(); resolve(true);
+          const r = await join(uid, pass);
+          if(!r || (upgrade && r !== 'editor')){
+            err.textContent = upgrade ? 'That isn’t the editor password.' : 'Wrong password. Ask a guild officer for it.';
+            go.disabled = false; inp.select(); return;
+          }
+          g.remove(); resolve(r);
         } catch(x) {
-          err.textContent = x && x.code === 'permission-denied' ? 'Wrong password. Ask a guild officer for it.' : 'Couldn’t connect. Check your internet and try again.';
+          err.textContent = 'Couldn’t connect. Check your internet and try again.';
           go.disabled = false; inp.select();
         }
       };
@@ -101,12 +122,17 @@ window.FALSEHOOD_FIREBASE = {
         });
         const uid = cred.user.uid;
         let member = false;
-        try { member = (await fs.collection('members').doc(uid).get()).exists; } catch(e) { member = false; }
+        try {
+          const me = await fs.collection('members').doc(uid).get();
+          if(me.exists){ member = true; role = (me.data() || {}).role === 'viewer' ? 'viewer' : 'editor'; }
+        } catch(e) { member = false; }
         if(!member){
           if(document.readyState === 'loading') await new Promise(r=> document.addEventListener('DOMContentLoaded', r, { once:true }));
-          member = await askPassword(uid);
+          const r = await askPassword(uid, false);
+          if(r){ member = true; role = r; }
         }
-        if(member) await importOnce(uid);
+        if(member && role === 'viewer') document.body.classList.add('viewonly');
+        if(member && role === 'editor') await importOnce(uid);
         return member ? uid : null;
       } catch(e) { console.warn('Firebase sign-in failed', e); return null; }
     })();
@@ -161,7 +187,7 @@ window.FALSEHOOD_FIREBASE = {
       if(what === 'db') return fs;
       if(what === 'user') return {
         id: async ()=> uid,
-        can: async ()=> true,
+        can: async ()=> role === 'editor',
         profiles: async ids=>{
           const out = {};
           ids.forEach(id=>{ out[id] = { name: names[id] || null, isMe: id === uid }; });

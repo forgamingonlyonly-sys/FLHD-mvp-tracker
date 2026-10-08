@@ -12,7 +12,8 @@ fixes = {
   "<b>Open the page while signed in to Claude</b> to see and update the guild’s timers.":
   "<b>Reload the page and enter the guild password</b> to see and update the guild’s timers.",
   "'your Claude name'": "'a guildmate (no name set)'",
-  "Ask the page owner to invite you as an <b>Editor</b>.": "Reload the page and enter the guild password again.",
+  "You can see the guild’s timers but can’t log kills. Ask the page owner to invite you as an <b>Editor</b>.":
+  "<b>View only.</b> You can see the timers and storage but can’t make changes.<button class=\"unlock\" onclick=\"falsehoodUnlock()\">🔑 Enter editor password</button>",
 }
 for a, b in fixes.items():
     assert a in src, a
