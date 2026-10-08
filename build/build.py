@@ -4,6 +4,9 @@ import pathlib
 root = pathlib.Path(__file__).resolve().parent
 src = (root / 'source.html').read_text()
 shim = (root / 'firebase-shim.html').read_text()
+imp = root / 'import.json'
+if imp.exists():
+    shim = '<script>window.FALSEHOOD_IMPORT = ' + imp.read_text().replace('</', '<\\/') + ';</script>\n' + shim
 src = src.replace('</head>', shim + '\n</head>', 1)
 fixes = {
   "<b>Open the page while signed in to Claude</b> to see and update the guild’s timers.":

@@ -106,14 +106,49 @@ window.FALSEHOOD_FIREBASE = {
           if(document.readyState === 'loading') await new Promise(r=> document.addEventListener('DOMContentLoaded', r, { once:true }));
           member = await askPassword(uid);
         }
+        if(member) await importOnce(uid);
         return member ? uid : null;
       } catch(e) { console.warn('Firebase sign-in failed', e); return null; }
     })();
     return gateDone;
   }
 
-  const names = {};
+  const IMPORT = window.FALSEHOOD_IMPORT || null;
+  const names = Object.assign({}, IMPORT && IMPORT.names);
   let namesOn = false;
+  // One-time copy of the old Claude board (timers, storage, pictures, history) into Firebase
+  async function importOnce(uid){
+    if(!IMPORT) return;
+    const flag = fs.doc('meta/imported');
+    let mine = false;
+    try {
+      mine = await fs.runTransaction(async tx=>{
+        const s = await tx.get(flag);
+        if(s.exists) return false;
+        tx.set(flag, { at: Date.now(), by: uid });
+        return true;
+      });
+    } catch(e) { return; }
+    if(!mine) return;
+    const writes = [];
+    for(const col of ['loot', 'lootfiles', 'lootlog']){
+      for(const [id, data] of Object.entries(IMPORT[col] || {})) writes.push(fs.collection(col).doc(id).set(data));
+    }
+    for(const [id, data] of Object.entries(IMPORT.mvps || {})){
+      writes.push((async ()=>{
+        const ref = fs.collection('mvps').doc(id);
+        const cur = await ref.get();
+        if(!cur.exists) await ref.set(data);         // keep anything already logged on the new board
+      })());
+    }
+    writes.push((async ()=>{
+      const ref = fs.doc('meta/counter');
+      const cur = await ref.get();
+      const last = cur.exists ? (+(cur.data() || {}).last || 0) : 0;
+      if(last < (IMPORT.counter || 0)) await ref.set({ last: IMPORT.counter });
+    })());
+    try { await Promise.all(writes); } catch(e) { console.warn('Import incomplete', e); }
+  }
   function watchNames(){
     if(namesOn) return; namesOn = true;
     fs.collection('names').onSnapshot(s=>{ s.docs.forEach(d=>{ names[d.id] = (d.data() || {}).name; }); }, ()=>{});
