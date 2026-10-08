@@ -43,6 +43,10 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
 .fb-menu button{display:block;width:100%;text-align:left;padding:8px 10px;margin-top:4px;border-radius:8px;border:1px solid #3b2d52;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
 .fb-menu button:hover{background:#3a3146}
 .fb-menu .m-out{color:#ff8a98}
+.fb-online{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;padding:3px 9px;border-radius:999px;border:1px solid rgba(127,110,150,.35);color:inherit;opacity:.9;vertical-align:middle;white-space:nowrap}
+.fb-online .dot{width:7px;height:7px;border-radius:50%;background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.18)}
+.fb-online b{font-weight:600}
+@media (max-width:600px){.fb-online{font-size:10px;padding:2px 7px;gap:4px}}
 .notice .unlock{font:inherit;font-weight:600;padding:2px 10px;margin-left:6px;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer}
 </style>
 <script>
@@ -122,9 +126,47 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     if(up) up.onclick = ()=>{ menu.hidden = true; window.falsehoodUnlock(); };
     menu.querySelector('.m-out').onclick = async ()=>{
       if(!confirm('Log out of the Falsehood tracker on this device? You’ll need a password to get back in.')) return;
+      try { await fs.collection('presence_' + role).doc(auth.currentUser.uid).delete(); } catch(e) {}
       try { await auth.signOut(); } catch(e) {}
       location.reload();
     };
+  }
+  // Who's online: each open tracker checks in every 2 minutes; counts use cheap server-side count queries
+  const ONLINE_MS = 5 * 60000, BEAT_MS = 2 * 60000;
+  async function countSince(col, since){
+    const token = await auth.currentUser.getIdToken();
+    const url = 'https://firestore.googleapis.com/v1/projects/' + cfg.projectId + '/databases/(default)/documents:runAggregationQuery';
+    const body = { structuredAggregationQuery: {
+      structuredQuery: { from: [{ collectionId: col }],
+        where: { fieldFilter: { field: { fieldPath: 'at' }, op: 'GREATER_THAN', value: { integerValue: String(since) } } } },
+      aggregations: [{ alias: 'n', count: {} }] } };
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+    if(!r.ok) throw new Error('count ' + r.status);
+    const j = await r.json();
+    const f = j && j[0] && j[0].result && j[0].result.aggregateFields;
+    return f && f.n ? +(f.n.integerValue || 0) : 0;
+  }
+  function startPresence(uid){
+    const sync = document.getElementById('sync');
+    const chip = document.createElement('span');
+    chip.className = 'fb-online';
+    chip.title = 'Guildmates with the tracker open in the last 5 minutes';
+    chip.innerHTML = '<span class="dot"></span>Online <b class="o-e" title="Editors">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
+    (document.getElementById('fbRole') || sync).after(chip);
+    const beat = ()=> fs.collection('presence_' + role).doc(uid).set({ at: Date.now() }).catch(()=>{});
+    const refresh = async ()=>{
+      const since = Date.now() - ONLINE_MS;
+      try {
+        const [e, t, v] = await Promise.all(['editor', 'timer', 'viewer'].map(r=> countSince('presence_' + r, since)));
+        chip.querySelector('.o-e').textContent = '✎ ' + e;
+        chip.querySelector('.o-t').textContent = '⏱ ' + t;
+        chip.querySelector('.o-v').textContent = '👁 ' + v;
+        chip.title = `Online in the last 5 minutes: ${e} editor${e === 1 ? '' : 's'}, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only`;
+      } catch(x) { chip.title = 'Couldn’t load who’s online right now'; }
+    };
+    beat().then(refresh);
+    setInterval(()=>{ beat(); refresh(); }, BEAT_MS);
+    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ beat().then(refresh); } });
   }
   window.falsehoodUnlock = async ()=>{
     const uid = auth.currentUser && auth.currentUser.uid;
@@ -189,7 +231,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         window.FALSEHOOD_ROLE = role;
         if(member && role === 'viewer') document.body.classList.add('viewonly');
         if(member && role === 'timer') document.body.classList.add('storage-ro');
-        if(member) showRole();
+        if(member){ showRole(); startPresence(uid); }
         if(member && role === 'editor') await importOnce(uid);
         return member ? uid : null;
       } catch(e) {

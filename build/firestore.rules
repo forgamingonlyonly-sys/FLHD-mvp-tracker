@@ -23,6 +23,8 @@ service cloud.firestore {
     match /{col}/{id} {
       allow read: if member() && !(col in ['members', 'config', 'names']);
       allow write: if editor() && !(col in ['members', 'config', 'names']);
+      allow write: if col in ['presence_editor', 'presence_timer', 'presence_viewer']
+        && member() && request.auth.uid == id;
     }
   }
 }
