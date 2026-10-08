@@ -925,6 +925,7 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
 .cyc-ring-ic { font-size: 22px; }
 .cyc-ring.is-lure { border-color: var(--waiting); box-shadow: 0 0 0 4px color-mix(in srgb, var(--waiting) 22%, transparent), var(--shadow); }
 #cycStepLure.on { color: var(--waiting); }
+.cyc-card.is-lure .cyc-clock, .cyc-card.is-lure .cyc-phase { color: var(--gold, var(--waiting)); }
 .cyc-ring-txt { display: grid; font-size: 12.5px; color: var(--text-2); }
 .cyc-ring-txt b { font-size: 15px; color: var(--text); }
 .ap-timer-row[hidden] { display: none !important; }
@@ -3265,11 +3266,16 @@ function paintCycle(){
   $('cycStepRun').classList.toggle('on', !!c && c.phase === 'run');
   $('cycStepLure').classList.toggle('on', !!c && c.phase === 'prep' && !c.lure && +cycle.prep > 1);
   if(c){
-    $('cycPhase').textContent = c.phase === 'prep' ? 'Clock starts in' : 'Kill na in';
-    $('cycClock').textContent = fmtClock(c.left);
-    $('cycSub').textContent = `Round ${c.round + 1}` + (c.phase === 'prep' ? ` · then a ${+cycle.run} min clock` : ` · then ${+cycle.prep} min wait`)
-      + (c.phase === 'prep' && !c.lure && +cycle.prep > 1 ? ` · 🎣 lure na in ${fmtClock(60000 - c.sinceStart)}` : '');
-    $('cycFill').style.width = (Math.min(1, Math.max(0, c.pct)) * 100).toFixed(2) + '%';
+    // first minute of the wait counts down to LURE NA, then the rest of the wait to the clock
+    const toLure = c.phase === 'prep' && !c.lure && +cycle.prep > 1;
+    card.classList.toggle('is-lure', toLure);
+    $('cycPhase').textContent = toLure ? '🎣 Lure na in' : (c.phase === 'prep' ? 'Clock starts in' : 'Kill na in');
+    $('cycClock').textContent = fmtClock(toLure ? 60000 - c.sinceStart : c.left);
+    $('cycSub').textContent = `Round ${c.round + 1}` + (toLure
+      ? ` · then the clock starts in ${fmtClock((+cycle.prep - 1) * 60000)}`
+      : (c.phase === 'prep' ? ` · then a ${+cycle.run} min clock` : ` · then ${+cycle.prep} min wait`));
+    const pct = toLure ? c.sinceStart / 60000 : (c.phase === 'prep' && +cycle.prep > 1 ? (c.sinceStart - 60000) / ((+cycle.prep - 1) * 60000) : c.pct);
+    $('cycFill').style.width = (Math.min(1, Math.max(0, pct)) * 100).toFixed(2) + '%';
   } else {
     $('cycPhase').textContent = 'Not running';
     $('cycClock').textContent = fmtClock((+cycle.prep) * 60000);
