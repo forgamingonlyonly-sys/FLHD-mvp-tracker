@@ -20,6 +20,7 @@ service cloud.firestore {
       allow write: if member() && request.auth.uid == uid;
     }
     match /mvps/{id} { allow write: if timer(); }
+    match /cycle/{id} { allow write: if timer(); }
     match /{col}/{id} {
       allow read: if member() && !(col in ['members', 'config', 'names']);
       allow write: if editor() && !(col in ['members', 'config', 'names']);

@@ -581,6 +581,33 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
 .modal input.st-price { width: 200px; font-size: 16px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); }
 .st-preview { margin-top: 12px; min-height: 2.6em; }
 .storage { display: grid; gap: 12px; }
+/* ================= TIMER TAB ================= */
+.cyc { display: grid; }
+.cyc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px 18px; display: grid; justify-items: center; gap: 10px; text-align: center; box-shadow: var(--shadow); }
+.cyc-phase { font: 700 12px var(--font-body, Inter, sans-serif); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); }
+.cyc-clock { font: 700 clamp(56px, 12vw, 96px)/1 var(--font-display, Cinzel, serif); letter-spacing: .02em; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.cyc-card.is-prep .cyc-clock, .cyc-card.is-prep .cyc-phase { color: var(--waiting); }
+.cyc-card.is-run .cyc-clock, .cyc-card.is-run .cyc-phase { color: var(--window); }
+.cyc-card.is-urgent .cyc-clock { color: var(--overdue); animation: cycPulse 1s ease-in-out infinite; }
+@keyframes cycPulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .cyc-card.is-urgent .cyc-clock { animation: none; } }
+.cyc-sub { color: var(--text-2); font-size: 13px; }
+.cyc-bar { width: min(520px, 100%); height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--text-3) 22%, transparent); overflow: hidden; }
+.cyc-bar span { display: block; height: 100%; width: 0; background: var(--text-3); transition: width 1s linear; }
+.cyc-card.is-prep .cyc-bar span { background: var(--waiting); }
+.cyc-card.is-run .cyc-bar span { background: var(--window); box-shadow: 0 0 6px var(--window); }
+.cyc-steps { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); }
+.cyc-step { padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); }
+.cyc-step.on { border-color: currentColor; font-weight: 600; }
+#cycStepPrep.on { color: var(--waiting); } #cycStepRun.on { color: var(--window); }
+.cyc-arrow { color: var(--text-3); }
+.cyc-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+.cyc-actions .btn { font-size: 14px; padding: 8px 18px; }
+.cyc-set { display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: center; align-items: center; font-size: 13px; color: var(--text-2); }
+.cyc-set input { width: 64px; margin: 0 4px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg, var(--surface-2)); color: var(--text); font: inherit; }
+.cyc-hint { width: 100%; font-size: 11.5px; color: var(--text-3); }
+.cyc-by { font-size: 11.5px; color: var(--text-3); min-height: 14px; }
+
 .st-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .st-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
 .st-stat span { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
@@ -1150,14 +1177,20 @@ async function fillNames(){
 const MINI_IDS = ['angel_toy','angel_mjolnir','ghost_poring','angel_poring','angel_magma','devil_magma','arch_magma','ghost_sunken','Ghost','Angel','Ghost_sun'];
 mvps.forEach(m=>{ m.type = MINI_IDS.includes(m.id) ? 'mini' : 'mvp'; });
 let tabSig = '';
-let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); return t === 'mini' || t === 'storage' ? t : 'mvp'; } catch(e) { return 'mvp'; } })();
+let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); return t === 'mini' || t === 'storage' || t === 'timer' ? t : 'mvp'; } catch(e) { return 'mvp'; } })();
 const inTab = m => m.type === currentTab;
 function tabSignature(){ return currentTab + ['mvp','mini'].map(t=>mvps.some(m=>m.type===t && getStatus(m)==='window')).join(); }
-const TAB_LABEL = { mvp:'MVP', mini:'MINI MVP', storage:'STORAGE' };
+const TAB_LABEL = { mvp:'MVP', mini:'MINI MVP', storage:'STORAGE', timer:'TIMER' };
 function renderTabs(){
   tabSig = tabSignature();
   const box = document.getElementById('tabs');
-  box.innerHTML = ['mvp','mini','storage'].map(t=>{
+  const tabList = ['mvp','mini','storage'];
+  try { if(typeof cycleAllowed === 'function' && cycleAllowed()) tabList.push('timer'); } catch(e) {}
+  box.innerHTML = tabList.map(t=>{
+    if(t === 'timer'){
+      const run = typeof cycle !== 'undefined' && cycle.startedAt;
+      return `<button class="tab tab-timer${t === currentTab ? ' active' : ''}" data-tab="timer" role="tab" aria-selected="${t === currentTab}">${run ? '<span class="live-dot" title="Timer running"></span>' : ''}TIMER</button>`;
+    }
     if(t === 'storage'){
       const n = (typeof storageItems !== 'undefined' ? storageItems : []).filter(x=>x.status !== 'sold').length;
       return `<button class="tab tab-storage${t === currentTab ? ' active' : ''}" data-tab="storage" role="tab" aria-selected="${t === currentTab}">STORAGE<span class="count">${n}</span></button>`;
@@ -2211,9 +2244,17 @@ function openEditModal(x){
 /* Show storage instead of the MVP list when its tab is selected */
 function applyStorageView(){
   try { if(typeof paintAlertEmpty === 'function') paintAlertEmpty(); } catch(e) {}   // re-filter alerts for the open tab
+  const tOn = currentTab === 'timer';
   const on = currentTab === 'storage';
-  document.getElementById('mvpList').hidden = on;
+  document.getElementById('mvpList').hidden = on || tOn;
   storageView.hidden = !on;
+  try { timerView.hidden = !tOn; if(tOn) paintCycle(); } catch(e) {}
+  if(tOn){
+    const hb0 = document.getElementById('hiddenBox'); if(hb0) hb0.hidden = true;
+    const r0 = document.querySelector('.toolbar-right'); if(r0) r0.hidden = true;
+    const s0 = document.getElementById('summary'); if(s0) s0.hidden = true;
+    return;
+  }
   const hb = document.getElementById('hiddenBox'); if(hb) hb.hidden = on;
   const right = document.querySelector('.toolbar-right'); if(right) right.hidden = on;
   const sum = document.getElementById('summary'); if(sum) sum.hidden = on;   // MVP status counts don't apply to storage
@@ -2737,6 +2778,176 @@ apWrap.querySelector('#apTest').onclick = ()=>{
   if(alertCfg.desktop) notify('Test MVP is floating', 'This is how a spawn alert looks', 'mvp-test');
   if(alertCfg.banner) showBanner(demo, 'main');
 };
+
+
+/* ================= TIMER TAB (repeating cycle: wait, then count down, alarm, repeat) ================= */
+// Shared through cycle/main: { startedAt, prep, run, by, updatedAt }. FLHD and Timers accounts only on the hosted site.
+const cycleAllowed = ()=>{
+  const r = window.FALSEHOOD_ROLE;
+  if(r) return r === 'editor' || r === 'timer';
+  return mode === 'local' || (mode === 'live' && canWrite);
+};
+let cycle = { startedAt: null, prep: 8, run: 20, by: null };
+try { const c = JSON.parse(localStorage.getItem('falsehood-cycle') || 'null'); if(c && mode !== 'live') Object.assign(cycle, c); } catch(e) {}
+let cycleLive = false, cycleSeen = null;   // cycleSeen: last phase key, so alarms fire only on a real change
+
+const timerView = document.createElement('section');
+timerView.className = 'cyc';
+timerView.hidden = true;
+timerView.setAttribute('aria-label', 'Repeating timer');
+timerView.innerHTML = `
+  <div class="cyc-card" id="cycCard">
+    <div class="cyc-phase" id="cycPhase">Not running</div>
+    <div class="cyc-clock" id="cycClock">--:--</div>
+    <div class="cyc-sub" id="cycSub">Press Start: the clock starts after the wait, then alarms when it reaches zero, and repeats.</div>
+    <div class="cyc-bar"><span id="cycFill"></span></div>
+    <div class="cyc-steps">
+      <span class="cyc-step" id="cycStepPrep"><b id="cycPrepLbl">8</b> min wait</span>
+      <span class="cyc-arrow">→</span>
+      <span class="cyc-step" id="cycStepRun"><b id="cycRunLbl">20</b> min clock</span>
+      <span class="cyc-arrow">→</span>
+      <span class="cyc-step">🔔 alarm</span>
+      <span class="cyc-arrow">↺</span>
+    </div>
+    <div class="cyc-actions">
+      <button class="btn btn-primary" id="cycStart" type="button">▶ Start</button>
+      <button class="btn" id="cycRestart" type="button">↻ Restart</button>
+      <button class="btn reset-all" id="cycStop" type="button">■ Stop</button>
+    </div>
+    <div class="cyc-set">
+      <label>Wait <input id="cycPrep" type="number" min="0" max="180" step="1"> min</label>
+      <label>Clock <input id="cycRun" type="number" min="1" max="600" step="1"> min</label>
+      <span class="cyc-hint" id="cycSetHint">You can change these while the timer is stopped.</span>
+    </div>
+    <div class="cyc-by" id="cycBy"></div>
+  </div>`;
+document.getElementById('mvpList').after(timerView);
+
+function cycleMath(now){
+  if(!cycle.startedAt) return null;
+  const p = Math.max(0, +cycle.prep || 0) * 60000, r = Math.max(1, +cycle.run || 1) * 60000, len = p + r;
+  const el = Math.max(0, now - cycle.startedAt);
+  const round = Math.floor(el / len), pos = el - round * len;
+  return pos < p
+    ? { phase: 'prep', left: p - pos, pct: p ? pos / p : 1, round }
+    : { phase: 'run', left: len - pos, pct: (pos - p) / r, round };
+}
+function saveCycle(patch){
+  if(!cycleAllowed()) return;
+  Object.assign(cycle, patch, { by: meId(), updatedAt: Date.now() });
+  cycleSeen = null;
+  if(cycleLive){
+    const body = { startedAt: cycle.startedAt || null, prep: +cycle.prep, run: +cycle.run, by: cycle.by || null, updatedAt: cycle.updatedAt };
+    db.doc('cycle/main').set(body).catch(e=>{ if(typeof handleWriteError === 'function') handleWriteError(e); });
+  } else {
+    try { localStorage.setItem('falsehood-cycle', JSON.stringify(cycle)); } catch(e) {}
+  }
+  paintCycle();
+}
+function cycleAlarm(kind){
+  try { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
+  if(kind === 'end'){
+    playChime(); setTimeout(playChime, 900); setTimeout(playChime, 1800);
+    speakNow('Timer is up');
+    flashTitle('🔔 Timer is up');
+    showToast('🔔 Timer is up. The next round starts after the wait.');
+  } else {
+    playSoft();
+    speakNow('Timer started');
+    showToast('⏱ The clock has started.');
+  }
+}
+function paintCycle(){
+  const now = Date.now(), c = cycleMath(now), allowed = cycleAllowed();
+  const $ = id => document.getElementById(id);
+  $('cycPrepLbl').textContent = +cycle.prep;
+  $('cycRunLbl').textContent = +cycle.run;
+  const card = $('cycCard');
+  card.classList.toggle('is-prep', !!c && c.phase === 'prep');
+  card.classList.toggle('is-run', !!c && c.phase === 'run');
+  card.classList.toggle('is-urgent', !!c && c.phase === 'run' && c.left <= 60000);
+  $('cycStepPrep').classList.toggle('on', !!c && c.phase === 'prep');
+  $('cycStepRun').classList.toggle('on', !!c && c.phase === 'run');
+  if(c){
+    $('cycPhase').textContent = c.phase === 'prep' ? 'Clock starts in' : 'Alarm in';
+    $('cycClock').textContent = fmtClock(c.left);
+    $('cycSub').textContent = `Round ${c.round + 1}` + (c.phase === 'prep' ? ` · then a ${+cycle.run} min clock` : ` · then ${+cycle.prep} min wait`);
+    $('cycFill').style.width = (Math.min(1, Math.max(0, c.pct)) * 100).toFixed(2) + '%';
+  } else {
+    $('cycPhase').textContent = 'Not running';
+    $('cycClock').textContent = fmtClock((+cycle.prep) * 60000);
+    $('cycSub').textContent = 'Press Start: the clock starts after the wait, then alarms when it reaches zero, and repeats.';
+    $('cycFill').style.width = '0%';
+  }
+  const running = !!cycle.startedAt;
+  $('cycStart').hidden = running;
+  $('cycRestart').hidden = !running;
+  $('cycStop').hidden = !running;
+  [$('cycStart'), $('cycRestart'), $('cycStop')].forEach(b=> b.disabled = !allowed);
+  const prepIn = $('cycPrep'), runIn = $('cycRun');
+  if(document.activeElement !== prepIn) prepIn.value = +cycle.prep;
+  if(document.activeElement !== runIn) runIn.value = +cycle.run;
+  prepIn.disabled = runIn.disabled = running || !allowed;
+  $('cycSetHint').textContent = running ? 'Stop the timer to change these.' : 'You can change these while the timer is stopped.';
+  let who = '';
+  if(cycle.by){
+    const me = meId();
+    who = cycle.by === me ? 'you' : ((typeof nickNames !== 'undefined' && nickNames[cycle.by]) || 'a guildmate');
+  }
+  $('cycBy').textContent = running
+    ? `Started by ${who || 'someone'} at ${formatTime(cycle.startedAt)}`
+    : (cycle.updatedAt ? `Stopped by ${who || 'someone'} at ${formatTime(cycle.updatedAt)}` : '');
+}
+function cycleTick(){
+  const c = cycleMath(Date.now());
+  const key = c ? `${cycle.startedAt}:${c.round}:${c.phase}` : null;
+  if(c && cycleSeen && key !== cycleSeen && cycleSeen.startsWith(cycle.startedAt + ':') && cycleAllowed()){
+    cycleAlarm(c.phase === 'prep' ? 'end' : 'start');
+  }
+  cycleSeen = key;
+  if(currentTab === 'timer') paintCycle();
+}
+document.getElementById('cycStart').onclick = ()=>{
+  try { if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  saveCycle({ startedAt: Date.now() });
+};
+document.getElementById('cycRestart').onclick = ()=>{
+  openModal('Restart the timer?', 'The wait starts again from the beginning for everyone.', ()=> saveCycle({ startedAt: Date.now() }));
+  confirmBtn.textContent = 'Restart';
+};
+document.getElementById('cycStop').onclick = ()=>{
+  openModal('Stop the timer?', 'The timer stops for everyone until someone starts it again.', ()=> saveCycle({ startedAt: null }));
+  confirmBtn.textContent = 'Stop';
+};
+['cycPrep', 'cycRun'].forEach(id=>{
+  document.getElementById(id).onchange = e=>{
+    const v = Math.round(+e.target.value);
+    const ok = id === 'cycPrep' ? v >= 0 && v <= 180 : v >= 1 && v <= 600;
+    if(!ok){ paintCycle(); return; }
+    saveCycle(id === 'cycPrep' ? { prep: v } : { run: v });
+  };
+});
+function startCycleLive(){
+  if(!db || cycleLive) return;
+  cycleLive = true;
+  db.doc('cycle/main').onSnapshot(snap=>{
+    const d = snap.exists ? (snap.data() || {}) : {};
+    cycle = {
+      startedAt: typeof d.startedAt === 'number' ? d.startedAt : null,
+      prep: Number.isFinite(+d.prep) && d.prep !== undefined ? +d.prep : 8,
+      run: Number.isFinite(+d.run) && d.run !== undefined ? +d.run : 20,
+      by: d.by || null, updatedAt: d.updatedAt || null,
+    };
+    if(cycleSeen && !cycleSeen.startsWith(cycle.startedAt + ':')) cycleSeen = null;
+    paintCycle();
+    renderTabs();
+  }, ()=>{});
+}
+setInterval(()=>{
+  if(mode === 'live' && db && !cycleLive) startCycleLive();
+  if(currentTab === 'timer' && !cycleAllowed() && mode !== 'connecting'){ currentTab = 'mvp'; render(); }
+  cycleTick();
+}, 1000);
 
 /* ================= START ================= */
 setSync();
