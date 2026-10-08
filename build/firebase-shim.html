@@ -1,0 +1,118 @@
+<!-- Firebase bridge: gives the tracker the same shared-store API it uses on Claude, backed by Firestore. -->
+<script>
+window.FALSEHOOD_FIREBASE = /*CONFIG*/null/*END*/;
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+#fbGate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(10,6,18,.86);font-family:Inter,system-ui,sans-serif}
+#fbGate[hidden]{display:none!important}
+#fbGate .g-card{width:min(360px,calc(100vw - 32px));background:#1b1426;border:1px solid #3b2d52;border-radius:14px;padding:22px;color:#f1ecf8;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+#fbGate h2{margin:0 0 6px;font:700 20px Cinzel,serif;letter-spacing:.04em}
+#fbGate p{margin:0 0 14px;font-size:13px;color:#b9aecb;line-height:1.45}
+#fbGate input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:9px;border:1px solid #4a3a63;background:#120d1b;color:#fff;font-size:15px}
+#fbGate input:focus{outline:2px solid #c03bd6;outline-offset:1px}
+#fbGate .g-err{min-height:18px;margin:8px 0 4px;font-size:12.5px;color:#ff7a8a}
+#fbGate .g-row{display:flex;gap:8px;justify-content:flex-end}
+#fbGate button{padding:9px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font-weight:600;cursor:pointer}
+#fbGate button.g-go{background:#a02ab8;border-color:#c03bd6}
+#fbGate button:disabled{opacity:.6;cursor:default}
+</style>
+<script>
+(function(){
+  const cfg = window.FALSEHOOD_FIREBASE;
+  if(!cfg || !window.firebase) return;            // no config: the tracker runs in this-device mode
+  window.FALSEHOOD_HOST = 'firebase';
+  firebase.initializeApp(cfg);
+  const auth = firebase.auth();
+  const fs = firebase.firestore();
+
+  // Short lease on a doc, used by the tracker to hand out item numbers one at a time
+  firebase.firestore.DocumentReference.prototype.acquire = async function(opts){
+    const lock = fs.collection('locks').doc(this.path.replace(/\//g, '_'));
+    const holder = (opts && opts.holder) || String(Math.random());
+    const ttl = (opts && opts.ttlMs) || 4000;
+    const ok = await fs.runTransaction(async tx=>{
+      const s = await tx.get(lock);
+      const d = s.exists ? s.data() : null;
+      if(d && d.until > Date.now() && d.holder !== holder) return false;
+      tx.set(lock, { holder, until: Date.now() + ttl });
+      return true;
+    });
+    return { acquired: ok };
+  };
+
+  let gateDone = null;
+  function askPassword(uid){
+    return new Promise(resolve=>{
+      const g = document.createElement('div');
+      g.id = 'fbGate';
+      g.innerHTML = `<form class="g-card">
+        <h2>Falsehood</h2>
+        <p>Enter the guild password to see and update the shared timers and storage. You only need to do this once on this device.</p>
+        <input type="password" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
+        <div class="g-err" role="alert"></div>
+        <div class="g-row"><button type="button" class="g-skip">Use offline</button><button class="g-go">Enter</button></div>
+      </form>`;
+      document.body.appendChild(g);
+      const form = g.querySelector('form'), inp = g.querySelector('input'), err = g.querySelector('.g-err'), go = g.querySelector('.g-go');
+      inp.focus();
+      g.querySelector('.g-skip').onclick = ()=>{ g.remove(); resolve(false); };
+      form.onsubmit = async e=>{
+        e.preventDefault();
+        const pass = inp.value;
+        if(!pass) return;
+        go.disabled = true; err.textContent = '';
+        try {
+          await fs.collection('members').doc(uid).set({ pass, joinedAt: Date.now() });
+          g.remove(); resolve(true);
+        } catch(x) {
+          err.textContent = x && x.code === 'permission-denied' ? 'Wrong password. Ask a guild officer for it.' : 'Couldn’t connect. Check your internet and try again.';
+          go.disabled = false; inp.select();
+        }
+      };
+    });
+  }
+  async function ready(){
+    if(gateDone) return gateDone;
+    gateDone = (async ()=>{
+      try {
+        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        const cred = auth.currentUser ? { user: auth.currentUser } : await new Promise((res, rej)=>{
+          const off = auth.onAuthStateChanged(u=>{ off(); u ? res({ user: u }) : auth.signInAnonymously().then(res, rej); });
+        });
+        const uid = cred.user.uid;
+        let member = false;
+        try { member = (await fs.collection('members').doc(uid).get()).exists; } catch(e) { member = false; }
+        if(!member){
+          if(document.readyState === 'loading') await new Promise(r=> document.addEventListener('DOMContentLoaded', r, { once:true }));
+          member = await askPassword(uid);
+        }
+        return member ? uid : null;
+      } catch(e) { console.warn('Firebase sign-in failed', e); return null; }
+    })();
+    return gateDone;
+  }
+
+  const names = {};
+  fs.collection('names').onSnapshot(s=>{ s.docs.forEach(d=>{ names[d.id] = (d.data() || {}).name; }); }, ()=>{});
+  window.claude = {
+    async use(what){
+      const uid = await ready();
+      if(!uid) return null;
+      if(what === 'db') return fs;
+      if(what === 'user') return {
+        id: async ()=> uid,
+        can: async ()=> true,
+        profiles: async ids=>{
+          const out = {};
+          ids.forEach(id=>{ out[id] = { name: names[id] || null, isMe: id === uid }; });
+          return out;
+        },
+      };
+      return null;
+    },
+  };
+})();
+</script>
