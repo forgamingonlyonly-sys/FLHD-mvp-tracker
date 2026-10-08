@@ -31,9 +31,11 @@ window.FALSEHOOD_FIREBASE = {
 #fbGate button{padding:9px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font-weight:600;cursor:pointer}
 #fbGate button.g-go{background:#a02ab8;border-color:#c03bd6}
 #fbGate button:disabled{opacity:.6;cursor:default}
+body.storage-ro #stAdd,body.storage-ro .st-actions,body.storage-ro .st-restore,body.storage-ro .st-file-actions [data-act=replace],body.storage-ro .st-file-actions [data-act=remove],body.storage-ro [data-act=attach],
 body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.viewonly .st-file-actions [data-act=replace],body.viewonly .st-file-actions [data-act=remove],body.viewonly [data-act=attach]{display:none!important}
 .fb-role{margin-left:6px;font:600 11px Inter,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid;cursor:pointer;background:transparent;vertical-align:middle}
 .fb-role.editor{color:#8b2bd8;border-color:#b77ee8;background:rgba(160,42,184,.08)}
+.fb-role.timer{color:#1f7a4d;border-color:#7cc7a0;background:rgba(60,170,110,.1)}
 .fb-role.viewer{color:#9a6a00;border-color:#d9b25a;background:rgba(217,178,90,.12)}
 .fb-menu{position:fixed;z-index:9998;min-width:220px;background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:12px;padding:10px;box-shadow:0 14px 40px rgba(0,0,0,.45);font:13px Inter,system-ui,sans-serif}
 .fb-menu[hidden]{display:none!important}
@@ -80,8 +82,8 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
   let gateDone = null;
   let role = 'editor';
   // Editor password first, then the view-only one; the security rules decide which matches
-  async function join(uid, pass){
-    for(const r of ['editor', 'viewer']){
+  async function join(uid, pass, roles){
+    for(const r of roles || ['editor', 'timer', 'viewer']){
       try { await fs.collection('members').doc(uid).set({ pass, role: r, joinedAt: Date.now() }); return r; }
       catch(x) { if(!(x && x.code === 'permission-denied')) throw x; }
     }
@@ -94,15 +96,17 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     const b = document.createElement('button');
     b.id = 'fbRole'; b.type = 'button';
     b.className = 'fb-role ' + role;
-    b.textContent = role === 'editor' ? '✎ Editor' : '👁 View only';
+    b.textContent = role === 'editor' ? '✎ Editor' : role === 'timer' ? '⏱ Timers' : '👁 View only';
     b.title = 'Your access on this device. Click for options.';
     sync.after(b);
     const menu = document.createElement('div');
     menu.className = 'fb-menu'; menu.hidden = true;
     menu.innerHTML = `<div class="m-info">${role === 'editor'
-        ? 'You have <b>edit access</b> on this device: you can log kills and manage storage.'
+        ? 'You have <b>full edit access</b> on this device: you can log kills and manage storage.'
+        : role === 'timer'
+        ? 'You have <b>timer access</b> on this device: you can log MVP and MINI MVP kills. Storage is view only.'
         : 'You have <b>view-only access</b> on this device: you can see everything but can’t make changes.'}</div>
-      ${role === 'viewer' ? '<button type="button" class="m-up">🔑 Enter editor password</button>' : ''}
+      ${role !== 'editor' ? '<button type="button" class="m-up">🔑 Enter another password</button>' : ''}
       <button type="button" class="m-out">⎋ Log out of this device</button>`;
     document.body.appendChild(menu);
     b.onclick = e=>{
@@ -126,7 +130,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     const uid = auth.currentUser && auth.currentUser.uid;
     if(!uid) return;
     const r = await askPassword(uid, true);
-    if(r === 'editor') location.reload();
+    if(r) location.reload();
   };
   function askPassword(uid, upgrade){
     return new Promise(resolve=>{
@@ -134,7 +138,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
         <h2>Falsehood</h2>
-        <p>${upgrade ? 'Enter the editor password to log kills and manage storage.' : 'Enter the guild password to open the shared timers and storage. You only need to do this once on this device.'}</p>
+        <p>${upgrade ? 'Enter the timer or editor password to get more access on this device.' : 'Enter the guild password to open the shared timers and storage. You only need to do this once on this device.'}</p>
         <input type="password" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
         <div class="g-err" role="alert"></div>
         <div class="g-row"><button type="button" class="g-skip">${upgrade ? 'Cancel' : 'Use offline'}</button><button class="g-go">Enter</button></div>
@@ -149,9 +153,10 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         if(!pass) return;
         go.disabled = true; err.textContent = '';
         try {
-          const r = await join(uid, pass);
-          if(!r || (upgrade && r !== 'editor')){
-            err.textContent = upgrade ? 'That isn’t the editor password.' : 'Wrong password. Ask a guild officer for it.';
+          // when upgrading, only try roles above the current one so a lower password can't downgrade
+          const r = await join(uid, pass, upgrade ? (role === 'viewer' ? ['editor', 'timer'] : ['editor']) : null);
+          if(!r){
+            err.textContent = upgrade ? 'That password doesn’t give more access.' : 'Wrong password. Ask a guild officer for it.';
             go.disabled = false; inp.select(); return;
           }
           g.remove(); resolve(r);
@@ -174,14 +179,16 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         let member = false;
         try {
           const me = await fs.collection('members').doc(uid).get();
-          if(me.exists){ member = true; role = (me.data() || {}).role === 'viewer' ? 'viewer' : 'editor'; }
+          if(me.exists){ member = true; const r = (me.data() || {}).role; role = r === 'viewer' || r === 'timer' ? r : 'editor'; }
         } catch(e) { member = false; }
         if(!member){
           if(document.readyState === 'loading') await new Promise(r=> document.addEventListener('DOMContentLoaded', r, { once:true }));
           const r = await askPassword(uid, false);
           if(r){ member = true; role = r; }
         }
+        window.FALSEHOOD_ROLE = role;
         if(member && role === 'viewer') document.body.classList.add('viewonly');
+        if(member && role === 'timer') document.body.classList.add('storage-ro');
         if(member) showRole();
         if(member && role === 'editor') await importOnce(uid);
         return member ? uid : null;
@@ -242,7 +249,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
       if(what === 'db') return fs;
       if(what === 'user') return {
         id: async ()=> uid,
-        can: async ()=> role === 'editor',
+        can: async ()=> role !== 'viewer',
         profiles: async ids=>{
           const out = {};
           ids.forEach(id=>{ out[id] = { name: names[id] || null, isMe: id === uid }; });
@@ -1778,7 +1785,7 @@ const GUILD_CUT = 0.10, TRADE_TAX = 0.10;
 let storageItems = [];
 let storageLive = false;
 let storageFilter = 'storage';            // 'storage' | 'sold'
-const canEditStorage = ()=>{ try { return A.canKill(); } catch(e) { return true; } };
+const canEditStorage = ()=>{ if(window.FALSEHOOD_ROLE === 'timer') return false; try { return A.canKill(); } catch(e) { return true; } };
 const zeny = n => Math.round(n).toLocaleString('en-US');
 
 function loadStorageLocal(){

@@ -4,11 +4,14 @@ service cloud.firestore {
     function secret() { return get(/databases/$(db)/documents/config/secret).data; }
     function me() { return /databases/$(db)/documents/members/$(request.auth.uid); }
     function member() { return request.auth != null && exists(me()); }
-    function editor() { return member() && get(me()).data.get('role', 'editor') == 'editor'; }
+    function role() { return get(me()).data.get('role', 'editor'); }
+    function editor() { return member() && role() == 'editor'; }
+    function timer() { return member() && role() in ['editor', 'timer']; }
     match /members/{uid} {
       allow get: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid && (
         (request.resource.data.role == 'editor' && request.resource.data.pass == secret().pass) ||
+        (request.resource.data.role == 'timer' && request.resource.data.pass == secret().timerpass) ||
         (request.resource.data.role == 'viewer' && request.resource.data.pass == secret().viewpass));
     }
     match /config/{d} { allow read, write: if false; }
@@ -16,6 +19,7 @@ service cloud.firestore {
       allow read: if member();
       allow write: if member() && request.auth.uid == uid;
     }
+    match /mvps/{id} { allow write: if timer(); }
     match /{col}/{id} {
       allow read: if member() && !(col in ['members', 'config', 'names']);
       allow write: if editor() && !(col in ['members', 'config', 'names']);
