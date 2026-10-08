@@ -32,6 +32,15 @@ window.FALSEHOOD_FIREBASE = {
 #fbGate button.g-go{background:#a02ab8;border-color:#c03bd6}
 #fbGate button:disabled{opacity:.6;cursor:default}
 body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.viewonly .st-file-actions [data-act=replace],body.viewonly .st-file-actions [data-act=remove],body.viewonly [data-act=attach]{display:none!important}
+.fb-role{margin-left:6px;font:600 11px Inter,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid;cursor:pointer;background:transparent;vertical-align:middle}
+.fb-role.editor{color:#8b2bd8;border-color:#b77ee8;background:rgba(160,42,184,.08)}
+.fb-role.viewer{color:#9a6a00;border-color:#d9b25a;background:rgba(217,178,90,.12)}
+.fb-menu{position:fixed;z-index:9998;min-width:220px;background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:12px;padding:10px;box-shadow:0 14px 40px rgba(0,0,0,.45);font:13px Inter,system-ui,sans-serif}
+.fb-menu[hidden]{display:none!important}
+.fb-menu .m-info{color:#b9aecb;margin:2px 4px 8px;line-height:1.4}
+.fb-menu button{display:block;width:100%;text-align:left;padding:8px 10px;margin-top:4px;border-radius:8px;border:1px solid #3b2d52;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+.fb-menu button:hover{background:#3a3146}
+.fb-menu .m-out{color:#ff8a98}
 .notice .unlock{font:inherit;font-weight:600;padding:2px 10px;margin-left:6px;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer}
 </style>
 <script>
@@ -77,6 +86,41 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
       catch(x) { if(!(x && x.code === 'permission-denied')) throw x; }
     }
     return null;
+  }
+  // Access badge beside LIVE: shows Editor / View only, click for switch + log out
+  function showRole(){
+    const sync = document.getElementById('sync');
+    if(!sync || document.getElementById('fbRole')) return;
+    const b = document.createElement('button');
+    b.id = 'fbRole'; b.type = 'button';
+    b.className = 'fb-role ' + role;
+    b.textContent = role === 'editor' ? '✎ Editor' : '👁 View only';
+    b.title = 'Your access on this device. Click for options.';
+    sync.after(b);
+    const menu = document.createElement('div');
+    menu.className = 'fb-menu'; menu.hidden = true;
+    menu.innerHTML = `<div class="m-info">${role === 'editor'
+        ? 'You have <b>edit access</b> on this device: you can log kills and manage storage.'
+        : 'You have <b>view-only access</b> on this device: you can see everything but can’t make changes.'}</div>
+      ${role === 'viewer' ? '<button type="button" class="m-up">🔑 Enter editor password</button>' : ''}
+      <button type="button" class="m-out">⎋ Log out of this device</button>`;
+    document.body.appendChild(menu);
+    b.onclick = e=>{
+      e.stopPropagation();
+      if(!menu.hidden){ menu.hidden = true; return; }
+      const r = b.getBoundingClientRect();
+      menu.hidden = false;
+      menu.style.top = (r.bottom + 6) + 'px';
+      menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + 'px';
+    };
+    document.addEventListener('click', e=>{ if(!menu.contains(e.target)) menu.hidden = true; });
+    const up = menu.querySelector('.m-up');
+    if(up) up.onclick = ()=>{ menu.hidden = true; window.falsehoodUnlock(); };
+    menu.querySelector('.m-out').onclick = async ()=>{
+      if(!confirm('Log out of the Falsehood tracker on this device? You’ll need a password to get back in.')) return;
+      try { await auth.signOut(); } catch(e) {}
+      location.reload();
+    };
   }
   window.falsehoodUnlock = async ()=>{
     const uid = auth.currentUser && auth.currentUser.uid;
@@ -138,6 +182,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
           if(r){ member = true; role = r; }
         }
         if(member && role === 'viewer') document.body.classList.add('viewonly');
+        if(member) showRole();
         if(member && role === 'editor') await importOnce(uid);
         return member ? uid : null;
       } catch(e) { console.warn('Firebase sign-in failed', e); return null; }
