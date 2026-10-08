@@ -607,8 +607,12 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
 .cyc-set input { width: 64px; margin: 0 4px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg, var(--surface-2)); color: var(--text); font: inherit; }
 .cyc-hint { width: 100%; font-size: 11.5px; color: var(--text-3); }
 .cyc-by { font-size: 11.5px; color: var(--text-3); min-height: 14px; }
-.cyc-note { font-size: 12px; color: var(--text-2); }
-.cyc-note a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+.cyc-alarm { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+.cyc-alarm-lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-right: 2px; }
+.cyc-tg { font: 600 12.5px var(--font-body, Inter, sans-serif); padding: 5px 11px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); cursor: pointer; }
+.cyc-tg[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); }
+.cyc-tg:disabled { opacity: .45; cursor: default; }
+.cyc-test { font-size: 12.5px; padding: 5px 11px; }
 .cyc-ring { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; border-radius: 14px; background: var(--surface); border: 2px solid var(--window); box-shadow: 0 0 0 4px var(--window-glow, rgba(47,191,113,.2)), var(--shadow); color: var(--text); max-width: calc(100vw - 32px); }
 .cyc-ring[hidden] { display: none !important; }
 .cyc-ring-ic { font-size: 22px; }
@@ -2684,7 +2688,6 @@ apWrap.innerHTML = `
       ${SW('mvp', 'MVP')}
       ${SW('mini', 'MINI MVP')}
       ${SW('overdue', 'Overdue', 'Red card and a low chime when floating ends')}
-      <div class="ap-timer-row" id="apTimerRow">${SW('timer', 'TIMER tab', 'When the clock starts and when it’s up')}</div>
       <div class="ap-sub">How</div>
       ${SW('sound', 'Sound', 'Chime when something spawns')}
       ${SW('repeat', 'Repeat sound', 'Every 30s until the alert card is dismissed')}
@@ -2716,7 +2719,6 @@ function paintPanel(){
   });
   apWrap.querySelector('#apPre').value = String(alertCfg.pre);
   apWrap.querySelector('#apGroup').classList.toggle('off', !alertsOn);
-  try { apWrap.querySelector('#apTimerRow').hidden = !cycleAllowed(); } catch(e) {}
   apWrap.querySelector('#ap-repeat').disabled = !alertCfg.banner || !alertCfg.sound;
 }
 paintPanel();
@@ -2829,7 +2831,14 @@ timerView.innerHTML = `
       <label>Clock <input id="cycRun" type="number" min="1" max="600" step="1"> min</label>
       <span class="cyc-hint" id="cycSetHint">You can change these while the timer is stopped.</span>
     </div>
-    <div class="cyc-note" id="cycNote"></div>
+    <div class="cyc-alarm" id="cycAlarm">
+      <span class="cyc-alarm-lbl">My alarm</span>
+      <button type="button" class="cyc-tg" data-k="on">🔔 Alarm</button>
+      <button type="button" class="cyc-tg" data-k="sound">Sound</button>
+      <button type="button" class="cyc-tg" data-k="repeat">Repeat 30s</button>
+      <button type="button" class="cyc-tg" data-k="voice">Voice</button>
+      <button type="button" class="btn cyc-test" id="cycTest">▶ Test</button>
+    </div>
     <div class="cyc-by" id="cycBy"></div>
   </div>`;
 document.getElementById('mvpList').after(timerView);
@@ -2855,7 +2864,7 @@ function saveCycle(patch){
   }
   paintCycle();
 }
-// Follows each person's Notification settings: Spawn alerts + TIMER tab switches, Sound, Repeat sound, Voice
+// Alarm card + sound + voice, per the person's own TIMER alarm settings (on the TIMER tab)
 const cycRing = document.createElement('div');
 cycRing.className = 'cyc-ring';
 cycRing.hidden = true;
@@ -2869,20 +2878,25 @@ document.getElementById('cycRingOpen').onclick = ()=>{
   hideCycRing();
   if(currentTab !== 'timer'){ currentTab = 'timer'; try { localStorage.setItem('falsehood-tab', 'timer'); } catch(e) {} render(); }
 };
-const cycleAlertsOn = ()=> alertsOn && alertCfg.timer !== false;
+// The TIMER alarm has its own per-person settings, separate from Spawn alerts
+let tcfg = { on: true, sound: true, repeat: true, voice: true };
+try { Object.assign(tcfg, JSON.parse(localStorage.getItem('falsehood-timer-alarm') || '{}')); } catch(e) {}
+const saveTcfg = ()=>{ try { localStorage.setItem('falsehood-timer-alarm', JSON.stringify(tcfg)); } catch(e) {} };
+const cycleAlertsOn = ()=> !!tcfg.on;
+const tSpeak = text=>{ if(tcfg.voice) speakNow(text); };
 function cycleAlarm(kind, round){
   if(!cycleAlertsOn()){ hideCycRing(); return; }
   try { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
   if(kind === 'end'){
-    if(alertCfg.sound){ playChime(); setTimeout(playChime, 900); setTimeout(playChime, 1800); }
-    speak('Timer is up');
+    if(tcfg.sound){ playChime(); setTimeout(playChime, 900); setTimeout(playChime, 1800); }
+    tSpeak('Timer is up');
     document.getElementById('cycRingSub').textContent = `Round ${round} done · next clock starts after the ${+cycle.prep} min wait`;
     cycRing.hidden = false;
     cycRingAt = cycRingRepeat = Date.now();
   } else {
     hideCycRing();
-    if(alertCfg.sound) playSoft();
-    speak('Timer started');
+    if(tcfg.sound) playSoft();
+    tSpeak('Timer started');
     showToast('⏱ The clock has started.');
   }
 }
@@ -2891,7 +2905,7 @@ setInterval(()=>{
   if(cycRing.hidden) return;
   if(!cycleAlertsOn() || !cycle.startedAt){ hideCycRing(); return; }
   const now = Date.now();
-  if(alertCfg.repeat && alertCfg.sound && now - cycRingRepeat >= 30000){ cycRingRepeat = now; playChime(); }
+  if(tcfg.repeat && tcfg.sound && now - cycRingRepeat >= 30000){ cycRingRepeat = now; playChime(); }
 }, 1000);
 function paintCycle(){
   const now = Date.now(), c = cycleMath(now), allowed = cycleAllowed();
@@ -2925,17 +2939,7 @@ function paintCycle(){
   if(document.activeElement !== runIn) runIn.value = +cycle.run;
   prepIn.disabled = runIn.disabled = running || !allowed;
   $('cycSetHint').textContent = running ? 'Stop the timer to change these.' : 'You can change these while the timer is stopped.';
-  const note = $('cycNote');
-  const on = cycleAlertsOn();
-  const how = [alertCfg.sound && 'sound', alertCfg.sound && alertCfg.repeat && 'repeat every 30s', alertCfg.voice && 'voice'].filter(Boolean).join(', ');
-  const sig = on + '|' + how;
-  if(note.dataset.sig !== sig){
-    note.dataset.sig = sig;
-    note.innerHTML = on
-      ? `🔔 Your alarm: ${how || 'card only (sound and voice are off)'} · <a id="cycCfg">change</a>`
-      : `🔕 Your alarm is off · <a id="cycCfg">turn on in notification settings</a>`;
-    note.querySelector('#cycCfg').onclick = e=>{ e.stopPropagation(); apBtn.click(); };
-  }
+  paintTcfg();
   let who = '';
   if(cycle.by){
     const me = meId();
@@ -2945,6 +2949,32 @@ function paintCycle(){
     ? `Started by ${who || 'someone'} at ${formatTime(cycle.startedAt)}`
     : (cycle.updatedAt ? `Stopped by ${who || 'someone'} at ${formatTime(cycle.updatedAt)}` : '');
 }
+function paintTcfg(){
+  const box = document.getElementById('cycAlarm');
+  box.classList.toggle('off', !tcfg.on);
+  box.querySelectorAll('.cyc-tg').forEach(b=>{
+    const k = b.dataset.k;
+    const v = !!tcfg[k];
+    b.setAttribute('aria-pressed', String(v));
+    b.disabled = k !== 'on' && (!tcfg.on || (k === 'repeat' && !tcfg.sound));
+    if(k === 'on') b.textContent = v ? '🔔 Alarm on' : '🔕 Alarm off';
+  });
+}
+document.querySelectorAll('#cycAlarm .cyc-tg').forEach(b=>{
+  b.onclick = ()=>{
+    tcfg[b.dataset.k] = !tcfg[b.dataset.k];
+    saveTcfg();
+    if(!tcfg.on) hideCycRing();
+    try { if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    paintTcfg();
+  };
+});
+document.getElementById('cycTest').onclick = ()=>{
+  try { if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  if(!tcfg.on){ showToast('Your timer alarm is off. Turn on 🔔 Alarm first.'); return; }
+  cycleAlarm('end', 0);
+  document.getElementById('cycRingSub').textContent = 'This is a test · nothing changed for anyone else';
+};
 function cycleTick(){
   const c = cycleMath(Date.now());
   const key = c ? `${cycle.startedAt}:${c.round}:${c.phase}` : null;
