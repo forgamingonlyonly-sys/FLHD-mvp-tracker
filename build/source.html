@@ -613,9 +613,11 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
 .cyc-tg[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); }
 .cyc-tg:disabled { opacity: .45; cursor: default; }
 .cyc-test { font-size: 12.5px; padding: 5px 11px; }
-.cyc-ring { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; border-radius: 14px; background: var(--surface); border: 2px solid var(--window); box-shadow: 0 0 0 4px var(--window-glow, rgba(47,191,113,.2)), var(--shadow); color: var(--text); max-width: calc(100vw - 32px); }
+.cyc-ring { position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; border-radius: 14px; background: var(--surface); border: 2px solid var(--window); box-shadow: 0 0 0 4px var(--window-glow, rgba(47,191,113,.2)), var(--shadow); color: var(--text); max-width: calc(100vw - 32px); }
 .cyc-ring[hidden] { display: none !important; }
 .cyc-ring-ic { font-size: 22px; }
+.cyc-ring.is-lure { border-color: var(--waiting); box-shadow: 0 0 0 4px color-mix(in srgb, var(--waiting) 22%, transparent), var(--shadow); }
+#cycStepLure.on { color: var(--waiting); }
 .cyc-ring-txt { display: grid; font-size: 12.5px; color: var(--text-2); }
 .cyc-ring-txt b { font-size: 15px; color: var(--text); }
 .ap-timer-row[hidden] { display: none !important; }
@@ -2816,9 +2818,11 @@ timerView.innerHTML = `
     <div class="cyc-steps">
       <span class="cyc-step" id="cycStepPrep"><b id="cycPrepLbl">8</b> min wait</span>
       <span class="cyc-arrow">→</span>
+      <span class="cyc-step" id="cycStepLure">🎣 lure at 1:00</span>
+      <span class="cyc-arrow">→</span>
       <span class="cyc-step" id="cycStepRun"><b id="cycRunLbl">20</b> min clock</span>
       <span class="cyc-arrow">→</span>
-      <span class="cyc-step">🔔 alarm</span>
+      <span class="cyc-step">🔔 kill na</span>
       <span class="cyc-arrow">↺</span>
     </div>
     <div class="cyc-actions">
@@ -2848,9 +2852,10 @@ function cycleMath(now){
   const p = Math.max(0, +cycle.prep || 0) * 60000, r = Math.max(1, +cycle.run || 1) * 60000, len = p + r;
   const el = Math.max(0, now - cycle.startedAt);
   const round = Math.floor(el / len), pos = el - round * len;
+  // lure: 1 minute after the wait ends (only when the clock is longer than a minute)
   return pos < p
-    ? { phase: 'prep', left: p - pos, pct: p ? pos / p : 1, round }
-    : { phase: 'run', left: len - pos, pct: (pos - p) / r, round };
+    ? { phase: 'prep', left: p - pos, pct: p ? pos / p : 1, round, lure: false }
+    : { phase: 'run', left: len - pos, pct: (pos - p) / r, round, lure: r > 60000 && pos - p >= 60000 };
 }
 function saveCycle(patch){
   if(!cycleAllowed()) return;
@@ -2869,9 +2874,9 @@ const cycRing = document.createElement('div');
 cycRing.className = 'cyc-ring';
 cycRing.hidden = true;
 cycRing.setAttribute('role', 'alert');
-cycRing.innerHTML = '<span class="cyc-ring-ic">🔔</span><span class="cyc-ring-txt"><b>KILL NA! KILL NA!</b><span id="cycRingSub"></span></span><button class="btn" type="button" id="cycRingOpen">Open</button><button class="btn btn-icon" type="button" id="cycRingX" aria-label="Dismiss">✕</button>';
+cycRing.innerHTML = '<span class="cyc-ring-ic">🔔</span><span class="cyc-ring-txt"><b id="cycRingTitle">KILL NA! KILL NA!</b><span id="cycRingSub"></span></span><button class="btn" type="button" id="cycRingOpen">Open</button><button class="btn btn-icon" type="button" id="cycRingX" aria-label="Dismiss">✕</button>';
 document.body.appendChild(cycRing);
-let cycRingAt = 0, cycRingRepeat = 0;
+let cycRingAt = 0, cycRingRepeat = 0, cycLureHide = null;
 function hideCycRing(){ cycRing.hidden = true; cycRingAt = 0; }
 document.getElementById('cycRingX').onclick = hideCycRing;
 document.getElementById('cycRingOpen').onclick = ()=>{
@@ -2885,12 +2890,13 @@ const saveTcfg = ()=>{ try { localStorage.setItem('falsehood-timer-alarm', JSON.
 const cycleAlertsOn = ()=> !!tcfg.on;
 const tSpeak = text=>{ if(tcfg.voice) speakNow(text); };
 // "Kill na!": use a Filipino voice when the device has one (e.g. Edge's Angelo / Blessica); otherwise spell it so English voices say "na" like Tagalog
-function speakKillNa(){
+function speakKillNa(){ speakTl('Kill na! Kill na!', 'Kill nah! Kill nah!'); }
+function speakTl(tl, en){
   if(!tcfg.voice) return;
   try {
     const vs = window.speechSynthesis.getVoices();
     const fil = vs.find(v=> /^(fil|tl)\b/i.test(v.lang) || /filipino|tagalog/i.test(v.name));
-    const u = new SpeechSynthesisUtterance(fil ? 'Kill na! Kill na!' : 'Kill nah! Kill nah!');
+    const u = new SpeechSynthesisUtterance(fil ? tl : en);
     if(fil){ u.voice = fil; u.lang = fil.lang; }
     else {
       const v = alertCfg.voiceName && vs.find(x=>x.name === alertCfg.voiceName);
@@ -2903,6 +2909,22 @@ function speakKillNa(){
 function cycleAlarm(kind, round){
   if(!cycleAlertsOn()){ hideCycRing(); return; }
   try { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
+  if(kind === 'lure'){
+    if(tcfg.sound){ playSoft(); setTimeout(playSoft, 600); }
+    speakTl('Lure na! Lure na!', 'Lure nah! Lure nah!');
+    cycRing.classList.add('is-lure');
+    document.getElementById('cycRingTitle').textContent = 'LURE NA! LURE NA!';
+    cycRing.querySelector('.cyc-ring-ic').textContent = '🎣';
+    document.getElementById('cycRingSub').textContent = `Round ${round + 1} · kill call in ${fmtClock(Math.max(0, (+cycle.run - 1) * 60000))}`;
+    cycRing.hidden = false;
+    cycRingAt = Date.now(); cycRingRepeat = Infinity;   // no repeat chime for the lure call
+    clearTimeout(cycLureHide);
+    cycLureHide = setTimeout(()=>{ if(cycRing.classList.contains('is-lure')) hideCycRing(); }, 20000);
+    return;
+  }
+  cycRing.classList.remove('is-lure');
+  document.getElementById('cycRingTitle').textContent = 'KILL NA! KILL NA!';
+  cycRing.querySelector('.cyc-ring-ic').textContent = '🔔';
   if(kind === 'end'){
     if(tcfg.sound){ playChime(); setTimeout(playChime, 900); setTimeout(playChime, 1800); }
     speakKillNa();
@@ -2933,11 +2955,13 @@ function paintCycle(){
   card.classList.toggle('is-run', !!c && c.phase === 'run');
   card.classList.toggle('is-urgent', !!c && c.phase === 'run' && c.left <= 60000);
   $('cycStepPrep').classList.toggle('on', !!c && c.phase === 'prep');
-  $('cycStepRun').classList.toggle('on', !!c && c.phase === 'run');
+  $('cycStepRun').classList.toggle('on', !!c && c.phase === 'run' && c.lure);
+  $('cycStepLure').classList.toggle('on', !!c && c.phase === 'run' && !c.lure);
   if(c){
-    $('cycPhase').textContent = c.phase === 'prep' ? 'Clock starts in' : 'Alarm in';
+    $('cycPhase').textContent = c.phase === 'prep' ? 'Clock starts in' : 'Kill na in';
     $('cycClock').textContent = fmtClock(c.left);
-    $('cycSub').textContent = `Round ${c.round + 1}` + (c.phase === 'prep' ? ` · then a ${+cycle.run} min clock` : ` · then ${+cycle.prep} min wait`);
+    $('cycSub').textContent = `Round ${c.round + 1}` + (c.phase === 'prep' ? ` · then a ${+cycle.run} min clock` : ` · then ${+cycle.prep} min wait`)
+      + (c.phase === 'run' && !c.lure ? ` · 🎣 lure na in ${fmtClock(c.left - ((+cycle.run) - 1) * 60000)}` : '');
     $('cycFill').style.width = (Math.min(1, Math.max(0, c.pct)) * 100).toFixed(2) + '%';
   } else {
     $('cycPhase').textContent = 'Not running';
@@ -2993,9 +3017,9 @@ document.getElementById('cycTest').onclick = ()=>{
 };
 function cycleTick(){
   const c = cycleMath(Date.now());
-  const key = c ? `${cycle.startedAt}:${c.round}:${c.phase}` : null;
+  const key = c ? `${cycle.startedAt}:${c.round}:${c.phase}${c.lure ? ':lure' : ''}` : null;
   if(c && cycleSeen && key !== cycleSeen && cycleSeen.startsWith(cycle.startedAt + ':') && cycleAllowed()){
-    cycleAlarm(c.phase === 'prep' ? 'end' : 'start', c.round);
+    cycleAlarm(c.phase === 'prep' ? 'end' : (c.lure ? 'lure' : 'start'), c.round);
   }
   cycleSeen = key;
   if(currentTab === 'timer') paintCycle();
