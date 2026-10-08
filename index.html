@@ -46,6 +46,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
 .fb-online{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;padding:3px 9px;border-radius:999px;border:1px solid rgba(127,110,150,.35);color:inherit;opacity:.9;vertical-align:middle;white-space:nowrap}
 .fb-online .dot{width:7px;height:7px;border-radius:50%;background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.18)}
 .fb-online b{font-weight:600}
+.fb-online.err .dot{background:#e0a100;box-shadow:0 0 0 3px rgba(224,161,0,.2)}
 @media (max-width:600px){.fb-online{font-size:10px;padding:2px 7px;gap:4px}}
 .notice .unlock{font:inherit;font-weight:600;padding:2px 10px;margin-left:6px;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer}
 </style>
@@ -153,7 +154,10 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     chip.title = 'Guildmates with the tracker open in the last 5 minutes';
     chip.innerHTML = '<span class="dot"></span>Online <b class="o-e" title="Editors">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
     (document.getElementById('fbRole') || sync).after(chip);
-    const beat = ()=> fs.collection('presence_' + role).doc(uid).set({ at: Date.now() }).catch(()=>{});
+    let beatErr = null;
+    const beat = ()=> fs.collection('presence_' + role).doc(uid).set({ at: Date.now() })
+      .then(()=>{ beatErr = null; chip.classList.remove('err'); })
+      .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
     const refresh = async ()=>{
       const since = Date.now() - ONLINE_MS;
       try {
@@ -161,7 +165,9 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         chip.querySelector('.o-e').textContent = '✎ ' + e;
         chip.querySelector('.o-t').textContent = '⏱ ' + t;
         chip.querySelector('.o-v').textContent = '👁 ' + v;
-        chip.title = `Online in the last 5 minutes: ${e} editor${e === 1 ? '' : 's'}, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only`;
+        chip.title = beatErr
+          ? `You aren’t being counted (${beatErr}). Ask the board owner to update the Firebase rules.`
+          : `Online in the last 5 minutes: ${e} editor${e === 1 ? '' : 's'}, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only`;
       } catch(x) { chip.title = 'Couldn’t load who’s online right now'; }
     };
     beat().then(refresh);
