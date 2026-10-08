@@ -3124,8 +3124,8 @@ timerView.innerHTML = `
     <div class="cyc-bar"><span id="cycFill"></span></div>
     <div class="cyc-steps">
       <span class="cyc-step" id="cycStepPrep"><b id="cycPrepLbl">8</b> min wait</span>
-      <span class="cyc-arrow">→</span>
-      <span class="cyc-step" id="cycStepLure">🎣 lure at 1:00</span>
+      <span class="cyc-arrow">·</span>
+      <span class="cyc-step" id="cycStepLure">🎣 lure 1 min in</span>
       <span class="cyc-arrow">→</span>
       <span class="cyc-step" id="cycStepRun"><b id="cycRunLbl">20</b> min clock</span>
       <span class="cyc-arrow">→</span>
@@ -3159,10 +3159,10 @@ function cycleMath(now){
   const p = Math.max(0, +cycle.prep || 0) * 60000, r = Math.max(1, +cycle.run || 1) * 60000, len = p + r;
   const el = Math.max(0, now - cycle.startedAt);
   const round = Math.floor(el / len), pos = el - round * len;
-  // lure: 1 minute after the wait ends (only when the clock is longer than a minute)
+  // lure: 1 minute into the wait (only when the wait is longer than a minute)
   return pos < p
-    ? { phase: 'prep', left: p - pos, pct: p ? pos / p : 1, round, lure: false }
-    : { phase: 'run', left: len - pos, pct: (pos - p) / r, round, lure: r > 60000 && pos - p >= 60000 };
+    ? { phase: 'prep', left: p - pos, pct: p ? pos / p : 1, round, lure: p > 60000 && pos >= 60000, sinceStart: pos }
+    : { phase: 'run', left: len - pos, pct: (pos - p) / r, round, lure: false, sinceStart: pos };
 }
 function saveCycle(patch){
   if(!cycleAllowed()) return;
@@ -3222,7 +3222,7 @@ function cycleAlarm(kind, round){
     cycRing.classList.add('is-lure');
     document.getElementById('cycRingTitle').textContent = 'LURE NA! LURE NA!';
     cycRing.querySelector('.cyc-ring-ic').textContent = '🎣';
-    document.getElementById('cycRingSub').textContent = `Round ${round + 1} · kill call in ${fmtClock(Math.max(0, (+cycle.run - 1) * 60000))}`;
+    document.getElementById('cycRingSub').textContent = `Round ${round + 1} · clock starts in ${fmtClock(Math.max(0, (+cycle.prep - 1) * 60000))}`;
     cycRing.hidden = false;
     cycRingAt = Date.now(); cycRingRepeat = Infinity;   // no repeat chime for the lure call
     clearTimeout(cycLureHide);
@@ -3262,13 +3262,13 @@ function paintCycle(){
   card.classList.toggle('is-run', !!c && c.phase === 'run');
   card.classList.toggle('is-urgent', !!c && c.phase === 'run' && c.left <= 60000);
   $('cycStepPrep').classList.toggle('on', !!c && c.phase === 'prep');
-  $('cycStepRun').classList.toggle('on', !!c && c.phase === 'run' && c.lure);
-  $('cycStepLure').classList.toggle('on', !!c && c.phase === 'run' && !c.lure);
+  $('cycStepRun').classList.toggle('on', !!c && c.phase === 'run');
+  $('cycStepLure').classList.toggle('on', !!c && c.phase === 'prep' && !c.lure && +cycle.prep > 1);
   if(c){
     $('cycPhase').textContent = c.phase === 'prep' ? 'Clock starts in' : 'Kill na in';
     $('cycClock').textContent = fmtClock(c.left);
     $('cycSub').textContent = `Round ${c.round + 1}` + (c.phase === 'prep' ? ` · then a ${+cycle.run} min clock` : ` · then ${+cycle.prep} min wait`)
-      + (c.phase === 'run' && !c.lure ? ` · 🎣 lure na in ${fmtClock(c.left - ((+cycle.run) - 1) * 60000)}` : '');
+      + (c.phase === 'prep' && !c.lure && +cycle.prep > 1 ? ` · 🎣 lure na in ${fmtClock(60000 - c.sinceStart)}` : '');
     $('cycFill').style.width = (Math.min(1, Math.max(0, c.pct)) * 100).toFixed(2) + '%';
   } else {
     $('cycPhase').textContent = 'Not running';
@@ -3326,7 +3326,7 @@ function cycleTick(){
   const c = cycleMath(Date.now());
   const key = c ? `${cycle.startedAt}:${c.round}:${c.phase}${c.lure ? ':lure' : ''}` : null;
   if(c && cycleSeen && key !== cycleSeen && cycleSeen.startsWith(cycle.startedAt + ':') && cycleAllowed()){
-    cycleAlarm(c.phase === 'prep' ? 'end' : (c.lure ? 'lure' : 'start'), c.round);
+    cycleAlarm(c.phase === 'run' ? 'start' : (c.lure ? 'lure' : 'end'), c.round);
   }
   cycleSeen = key;
   if(currentTab === 'timer') paintCycle();
