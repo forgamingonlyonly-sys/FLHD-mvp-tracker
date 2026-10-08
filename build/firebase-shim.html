@@ -95,13 +95,13 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     const b = document.createElement('button');
     b.id = 'fbRole'; b.type = 'button';
     b.className = 'fb-role ' + role;
-    b.textContent = role === 'editor' ? '✎ Editor' : role === 'timer' ? '⏱ Timers' : '👁 View only';
+    b.textContent = role === 'editor' ? '✎ FLHD' : role === 'timer' ? '⏱ Timers' : '👁 View only';
     b.title = 'Your access on this device. Click for options.';
     sync.after(b);
     const menu = document.createElement('div');
     menu.className = 'fb-menu'; menu.hidden = true;
     menu.innerHTML = `<div class="m-info">${role === 'editor'
-        ? 'You have <b>full edit access</b> on this device: you can log kills and manage storage.'
+        ? 'You have <b>FLHD access</b> on this device: you can log kills and manage storage.'
         : role === 'timer'
         ? 'You have <b>timer access</b> on this device: you can log MVP and MINI MVP kills. Storage is view only.'
         : 'You have <b>view-only access</b> on this device: you can see everything but can’t make changes.'}</div>
@@ -146,7 +146,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     const chip = document.createElement('span');
     chip.className = 'fb-online';
     chip.title = 'Guildmates with the tracker open in the last 5 minutes';
-    chip.innerHTML = '<span class="dot"></span>Online <b class="o-e" title="Editors">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
+    chip.innerHTML = '<span class="dot"></span>Online <b class="o-e" title="FLHD">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
     (document.getElementById('fbRole') || sync).after(chip);
     let beatErr = null;
     const beat = ()=> fs.collection('presence_' + role).doc(uid).set({ at: Date.now() })
@@ -161,7 +161,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         chip.querySelector('.o-v').textContent = '👁 ' + v;
         chip.title = beatErr
           ? `You aren’t being counted (${beatErr}). Ask the board owner to update the Firebase rules.`
-          : `Online in the last 5 minutes: ${e} editor${e === 1 ? '' : 's'}, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only`;
+          : `Online in the last 5 minutes: ${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only`;
       } catch(x) { chip.title = 'Couldn’t load who’s online right now'; }
     };
     beat().then(refresh);
