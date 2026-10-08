@@ -3176,7 +3176,7 @@ const cycRing = document.createElement('div');
 cycRing.className = 'cyc-ring';
 cycRing.hidden = true;
 cycRing.setAttribute('role', 'alert');
-cycRing.innerHTML = '<span class="cyc-ring-ic">🔔</span><span class="cyc-ring-txt"><b>Timer is up</b><span id="cycRingSub"></span></span><button class="btn" type="button" id="cycRingOpen">Open</button><button class="btn btn-icon" type="button" id="cycRingX" aria-label="Dismiss">✕</button>';
+cycRing.innerHTML = '<span class="cyc-ring-ic">🔔</span><span class="cyc-ring-txt"><b>KILL NA! KILL NA!</b><span id="cycRingSub"></span></span><button class="btn" type="button" id="cycRingOpen">Open</button><button class="btn btn-icon" type="button" id="cycRingX" aria-label="Dismiss">✕</button>';
 document.body.appendChild(cycRing);
 let cycRingAt = 0, cycRingRepeat = 0;
 function hideCycRing(){ cycRing.hidden = true; cycRingAt = 0; }
@@ -3196,7 +3196,7 @@ function cycleAlarm(kind, round){
   try { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
   if(kind === 'end'){
     if(tcfg.sound){ playChime(); setTimeout(playChime, 900); setTimeout(playChime, 1800); }
-    tSpeak('Timer is up');
+    tSpeak('Kill na! Kill na!');
     document.getElementById('cycRingSub').textContent = `Round ${round} done · next clock starts after the ${+cycle.prep} min wait`;
     cycRing.hidden = false;
     cycRingAt = cycRingRepeat = Date.now();
@@ -3207,7 +3207,7 @@ function cycleAlarm(kind, round){
     showToast('⏱ The clock has started.');
   }
 }
-// Repeat sound: chime every 30s while the "Timer is up" card is showing
+// Repeat sound: chime every 30s while the "KILL NA!" card is showing
 setInterval(()=>{
   if(cycRing.hidden) return;
   if(!cycleAlertsOn() || !cycle.startedAt){ hideCycRing(); return; }
