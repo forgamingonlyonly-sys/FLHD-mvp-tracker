@@ -150,7 +150,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
           }
           g.remove(); resolve(r);
         } catch(x) {
-          err.textContent = 'Couldn’t connect. Check your internet and try again.';
+          err.textContent = 'Couldn’t connect (' + ((x && (x.code || x.message)) || 'unknown') + '). Check your internet and try again.';
           go.disabled = false; inp.select();
         }
       };
@@ -179,7 +179,11 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         if(member) showRole();
         if(member && role === 'editor') await importOnce(uid);
         return member ? uid : null;
-      } catch(e) { console.warn('Firebase sign-in failed', e); return null; }
+      } catch(e) {
+        console.warn('Firebase sign-in failed', e);
+        window.FALSEHOOD_FB_ERROR = (e && (e.code || e.message)) || 'unknown';
+        return null;
+      }
     })();
     return gateDone;
   }

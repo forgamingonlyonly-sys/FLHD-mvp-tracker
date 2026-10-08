@@ -156,7 +156,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
           }
           g.remove(); resolve(r);
         } catch(x) {
-          err.textContent = 'Couldn’t connect. Check your internet and try again.';
+          err.textContent = 'Couldn’t connect (' + ((x && (x.code || x.message)) || 'unknown') + '). Check your internet and try again.';
           go.disabled = false; inp.select();
         }
       };
@@ -185,7 +185,11 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         if(member) showRole();
         if(member && role === 'editor') await importOnce(uid);
         return member ? uid : null;
-      } catch(e) { console.warn('Firebase sign-in failed', e); return null; }
+      } catch(e) {
+        console.warn('Firebase sign-in failed', e);
+        window.FALSEHOOD_FB_ERROR = (e && (e.code || e.message)) || 'unknown';
+        return null;
+      }
     })();
     return gateDone;
   }
@@ -1195,7 +1199,7 @@ async function connect(){
     loadStorageLocal();
     loadLogLocal();
     mvps.forEach(m=> prevStatus[m.id] = getStatus(m));
-    showNotice('Not connected to the shared board. Kills you log here are saved in this browser only. <b>Reload the page and enter the guild password</b> to see and update the guild’s timers.');
+    showNotice((window.FALSEHOOD_FB_ERROR ? '<b>Firebase error: ' + window.FALSEHOOD_FB_ERROR + '.</b> ' : '') + 'Not connected to the shared board. Kills you log here are saved in this browser only. <b>Reload the page and enter the guild password</b> to see and update the guild’s timers.');
     setSync();
     render();
     return;
