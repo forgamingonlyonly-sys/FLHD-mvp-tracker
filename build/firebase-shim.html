@@ -1,6 +1,13 @@
 <!-- Firebase bridge: gives the tracker the same shared-store API it uses on Claude, backed by Firestore. -->
 <script>
-window.FALSEHOOD_FIREBASE = /*CONFIG*/null/*END*/;
+window.FALSEHOOD_FIREBASE = {
+  apiKey: "AIzaSyAuqJQuTIFsWyF471DLDUWHe2-bMQ24n84",
+  authDomain: "flhd-mvp-tracker-ed57f.firebaseapp.com",
+  projectId: "flhd-mvp-tracker-ed57f",
+  storageBucket: "flhd-mvp-tracker-ed57f.firebasestorage.app",
+  messagingSenderId: "580556058798",
+  appId: "1:580556058798:web:3b39277174aa9ee6cabd3f"
+};
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -40,7 +47,17 @@ window.FALSEHOOD_FIREBASE = /*CONFIG*/null/*END*/;
       tx.set(lock, { holder, until: Date.now() + ttl });
       return true;
     });
+    if(ok) held.set(this.path, lock);
     return { acquired: ok };
+  };
+  // Saving the leased doc releases the lease, so the next person doesn't wait for it to expire
+  const held = new Map();
+  const origSet = firebase.firestore.DocumentReference.prototype.set;
+  firebase.firestore.DocumentReference.prototype.set = async function(...args){
+    const r = await origSet.apply(this, args);
+    const lock = held.get(this.path);
+    if(lock){ held.delete(this.path); lock.delete().catch(()=>{}); }
+    return r;
   };
 
   let gateDone = null;
@@ -96,11 +113,16 @@ window.FALSEHOOD_FIREBASE = /*CONFIG*/null/*END*/;
   }
 
   const names = {};
-  fs.collection('names').onSnapshot(s=>{ s.docs.forEach(d=>{ names[d.id] = (d.data() || {}).name; }); }, ()=>{});
+  let namesOn = false;
+  function watchNames(){
+    if(namesOn) return; namesOn = true;
+    fs.collection('names').onSnapshot(s=>{ s.docs.forEach(d=>{ names[d.id] = (d.data() || {}).name; }); }, ()=>{});
+  }
   window.claude = {
     async use(what){
       const uid = await ready();
       if(!uid) return null;
+      watchNames();
       if(what === 'db') return fs;
       if(what === 'user') return {
         id: async ()=> uid,
