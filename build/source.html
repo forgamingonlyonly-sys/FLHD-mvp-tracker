@@ -2884,12 +2884,28 @@ try { Object.assign(tcfg, JSON.parse(localStorage.getItem('falsehood-timer-alarm
 const saveTcfg = ()=>{ try { localStorage.setItem('falsehood-timer-alarm', JSON.stringify(tcfg)); } catch(e) {} };
 const cycleAlertsOn = ()=> !!tcfg.on;
 const tSpeak = text=>{ if(tcfg.voice) speakNow(text); };
+// "Kill na!": use a Filipino voice when the device has one (e.g. Edge's Angelo / Blessica); otherwise spell it so English voices say "na" like Tagalog
+function speakKillNa(){
+  if(!tcfg.voice) return;
+  try {
+    const vs = window.speechSynthesis.getVoices();
+    const fil = vs.find(v=> /^(fil|tl)\b/i.test(v.lang) || /filipino|tagalog/i.test(v.name));
+    const u = new SpeechSynthesisUtterance(fil ? 'Kill na! Kill na!' : 'Kill nah! Kill nah!');
+    if(fil){ u.voice = fil; u.lang = fil.lang; }
+    else {
+      const v = alertCfg.voiceName && vs.find(x=>x.name === alertCfg.voiceName);
+      if(v){ u.voice = v; u.lang = v.lang; }
+    }
+    u.rate = +alertCfg.rate || 1; u.pitch = +alertCfg.pitch || 1; u.volume = alertCfg.vol == null ? 1 : +alertCfg.vol;
+    window.speechSynthesis.speak(u);
+  } catch(e) {}
+}
 function cycleAlarm(kind, round){
   if(!cycleAlertsOn()){ hideCycRing(); return; }
   try { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
   if(kind === 'end'){
     if(tcfg.sound){ playChime(); setTimeout(playChime, 900); setTimeout(playChime, 1800); }
-    tSpeak('Kill na! Kill na!');
+    speakKillNa();
     document.getElementById('cycRingSub').textContent = `Round ${round} done · next clock starts after the ${+cycle.prep} min wait`;
     cycRing.hidden = false;
     cycRingAt = cycRingRepeat = Date.now();
