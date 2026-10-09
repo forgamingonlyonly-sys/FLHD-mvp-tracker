@@ -2817,9 +2817,9 @@ timerView.innerHTML = `
     <div class="cyc-sub" id="cycSub">Press Start: the clock starts after the wait, then alarms when it reaches zero, and repeats.</div>
     <div class="cyc-bar"><span id="cycFill"></span></div>
     <div class="cyc-steps">
-      <span class="cyc-step" id="cycStepPrep"><b id="cycPrepLbl">8</b> min wait</span>
-      <span class="cyc-arrow">·</span>
       <span class="cyc-step" id="cycStepLure">🎣 lure 1 min in</span>
+      <span class="cyc-arrow">→</span>
+      <span class="cyc-step" id="cycStepPrep"><b id="cycPrepLbl">8</b> min wait</span>
       <span class="cyc-arrow">→</span>
       <span class="cyc-step" id="cycStepRun"><b id="cycRunLbl">20</b> min clock</span>
       <span class="cyc-arrow">→</span>
@@ -2955,7 +2955,7 @@ function paintCycle(){
   card.classList.toggle('is-prep', !!c && c.phase === 'prep');
   card.classList.toggle('is-run', !!c && c.phase === 'run');
   card.classList.toggle('is-urgent', !!c && c.phase === 'run' && c.left <= 60000);
-  $('cycStepPrep').classList.toggle('on', !!c && c.phase === 'prep');
+  $('cycStepPrep').classList.toggle('on', !!c && c.phase === 'prep' && (c.lure || +cycle.prep <= 1));
   $('cycStepRun').classList.toggle('on', !!c && c.phase === 'run');
   $('cycStepLure').classList.toggle('on', !!c && c.phase === 'prep' && !c.lure && +cycle.prep > 1);
   if(c){
