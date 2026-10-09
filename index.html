@@ -3193,7 +3193,7 @@ document.getElementById('cycRingOpen').onclick = ()=>{
   if(currentTab !== 'timer'){ currentTab = 'timer'; try { localStorage.setItem('falsehood-tab', 'timer'); } catch(e) {} render(); }
 };
 // The TIMER alarm has its own per-person settings, separate from Spawn alerts
-let tcfg = { on: true, sound: true, repeat: true, voice: true };
+let tcfg = { on: false, sound: true, repeat: true, voice: true };   // alarm starts off; each person turns it on
 try { Object.assign(tcfg, JSON.parse(localStorage.getItem('falsehood-timer-alarm') || '{}')); } catch(e) {}
 const saveTcfg = ()=>{ try { localStorage.setItem('falsehood-timer-alarm', JSON.stringify(tcfg)); } catch(e) {} };
 const cycleAlertsOn = ()=> !!tcfg.on;
