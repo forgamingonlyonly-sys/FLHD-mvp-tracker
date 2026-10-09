@@ -2842,7 +2842,8 @@ timerView.innerHTML = `
       <button type="button" class="cyc-tg" data-k="sound">Sound</button>
       <button type="button" class="cyc-tg" data-k="repeat">Repeat 30s</button>
       <button type="button" class="cyc-tg" data-k="voice">Voice</button>
-      <button type="button" class="btn cyc-test" id="cycTest">▶ Test</button>
+      <button type="button" class="btn cyc-test" id="cycTestLure">▶ Test Lure na</button>
+      <button type="button" class="btn cyc-test" id="cycTestKill">▶ Test Kill na</button>
     </div>
     <div class="cyc-by" id="cycBy"></div>
   </div>`;
@@ -3028,17 +3029,16 @@ document.querySelectorAll('#cycAlarm .cyc-tg').forEach(b=>{
     paintTcfg();
   };
 });
-document.getElementById('cycTest').onclick = ()=>{
+// Test buttons: play one call just for you
+function testCall(kind){
   try { if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
   if(!tcfg.on){ showToast('Your timer alarm is off. Turn on 🔔 Alarm first.'); return; }
-  // test both calls: the recorded lure call, then the kill call
-  cycleAlarm('lure', 0);
-  document.getElementById('cycRingSub').textContent = 'Test · nothing changed for anyone else';
-  setTimeout(()=>{
-    cycleAlarm('end', 0);
-    document.getElementById('cycRingSub').textContent = 'Test · nothing changed for anyone else';
-  }, 4200);
-};
+  if(!tcfg.voice) showToast('Voice is off, so you’ll only hear the chime. Turn on Voice to hear the call.');
+  cycleAlarm(kind, 0);
+  document.getElementById('cycRingSub').textContent = 'Test · only you hear this';
+}
+document.getElementById('cycTestLure').onclick = ()=> testCall('lure');
+document.getElementById('cycTestKill').onclick = ()=> testCall('end');
 function cycleTick(){
   const c = cycleMath(Date.now());
   const key = c ? `${cycle.startedAt}:${c.round}:${c.phase}${c.lure ? ':lure' : ''}` : null;
