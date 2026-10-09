@@ -590,6 +590,8 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
 .cyc-card.is-run .cyc-clock, .cyc-card.is-run .cyc-phase { color: var(--window); }
 .cyc-card.is-urgent .cyc-clock { color: var(--overdue); animation: cycPulse 1s ease-in-out infinite; }
 @keyframes cycPulse { 50% { opacity: .55; } }
+.cyc-card.is-paused .cyc-clock { opacity: .5; animation: none; }
+.cyc-card.is-paused .cyc-bar span { transition: none; }
 @media (prefers-reduced-motion: reduce) { .cyc-card.is-urgent .cyc-clock { animation: none; } }
 .cyc-sub { color: var(--text-2); font-size: 13px; }
 .cyc-bar { width: min(520px, 100%); height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--text-3) 22%, transparent); overflow: hidden; }
@@ -2802,7 +2804,7 @@ const cycleAllowed = ()=>{
   if(r) return r === 'editor' || r === 'timer';
   return mode === 'local' || (mode === 'live' && canWrite);
 };
-let cycle = { startedAt: null, prep: 8, run: 20, by: null };
+let cycle = { startedAt: null, pausedAt: null, prep: 8, run: 20, by: null };
 try { const c = JSON.parse(localStorage.getItem('falsehood-cycle') || 'null'); if(c && mode !== 'live') Object.assign(cycle, c); } catch(e) {}
 let cycleLive = false, cycleSeen = null;   // cycleSeen: last phase key, so alarms fire only on a real change
 
@@ -2828,6 +2830,8 @@ timerView.innerHTML = `
     </div>
     <div class="cyc-actions">
       <button class="btn btn-primary" id="cycStart" type="button">▶ Start</button>
+      <button class="btn" id="cycPause" type="button">⏸ Pause</button>
+      <button class="btn btn-primary" id="cycResume" type="button">▶ Resume</button>
       <button class="btn" id="cycRestart" type="button">↻ Restart</button>
       <button class="btn reset-all" id="cycStop" type="button">■ Stop</button>
     </div>
@@ -2852,6 +2856,7 @@ document.getElementById('mvpList').after(timerView);
 function cycleMath(now){
   if(!cycle.startedAt) return null;
   const p = Math.max(0, +cycle.prep || 0) * 60000, r = Math.max(1, +cycle.run || 1) * 60000, len = p + r;
+  if(cycle.pausedAt) now = cycle.pausedAt;          // paused: frozen where it stopped
   const el = Math.max(0, now - cycle.startedAt);
   const round = Math.floor(el / len), pos = el - round * len;
   // lure: 1 minute into the wait (only when the wait is longer than a minute)
@@ -2864,7 +2869,7 @@ function saveCycle(patch){
   Object.assign(cycle, patch, { by: meId(), updatedAt: Date.now() });
   cycleSeen = null;
   if(cycleLive){
-    const body = { startedAt: cycle.startedAt || null, prep: +cycle.prep, run: +cycle.run, by: cycle.by || null, updatedAt: cycle.updatedAt };
+    const body = { startedAt: cycle.startedAt || null, pausedAt: cycle.pausedAt || null, prep: +cycle.prep, run: +cycle.run, by: cycle.by || null, updatedAt: cycle.updatedAt };
     db.doc('cycle/main').set(body).catch(e=>{ if(typeof handleWriteError === 'function') handleWriteError(e); });
   } else {
     try { localStorage.setItem('falsehood-cycle', JSON.stringify(cycle)); } catch(e) {}
@@ -2966,6 +2971,7 @@ function paintCycle(){
   $('cycPrepLbl').textContent = +cycle.prep;
   $('cycRunLbl').textContent = +cycle.run;
   const card = $('cycCard');
+  card.classList.toggle('is-paused', !!cycle.pausedAt);
   card.classList.toggle('is-prep', !!c && c.phase === 'prep');
   card.classList.toggle('is-run', !!c && c.phase === 'run');
   card.classList.toggle('is-urgent', !!c && c.phase === 'run' && c.left <= 60000);
@@ -2990,10 +2996,14 @@ function paintCycle(){
     $('cycFill').style.width = '0%';
   }
   const running = !!cycle.startedAt;
+  const paused = running && !!cycle.pausedAt;
   $('cycStart').hidden = running;
+  $('cycPause').hidden = !running || paused;
+  $('cycResume').hidden = !paused;
   $('cycRestart').hidden = !running;
   $('cycStop').hidden = !running;
-  [$('cycStart'), $('cycRestart'), $('cycStop')].forEach(b=> b.disabled = !allowed);
+  [$('cycStart'), $('cycPause'), $('cycResume'), $('cycRestart'), $('cycStop')].forEach(b=> b.disabled = !allowed);
+  if(paused) $('cycPhase').textContent = '⏸ Paused · ' + $('cycPhase').textContent;
   const prepIn = $('cycPrep'), runIn = $('cycRun');
   if(document.activeElement !== prepIn) prepIn.value = +cycle.prep;
   if(document.activeElement !== runIn) runIn.value = +cycle.run;
@@ -3005,7 +3015,9 @@ function paintCycle(){
     const me = meId();
     who = cycle.by === me ? 'you' : ((typeof nickNames !== 'undefined' && nickNames[cycle.by]) || 'a guildmate');
   }
-  $('cycBy').textContent = running
+  $('cycBy').textContent = paused
+    ? `Paused by ${who || 'someone'} at ${formatTime(cycle.pausedAt)}`
+    : running
     ? `Started by ${who || 'someone'} at ${formatTime(cycle.startedAt)}`
     : (cycle.updatedAt ? `Stopped by ${who || 'someone'} at ${formatTime(cycle.updatedAt)}` : '');
 }
@@ -3041,8 +3053,8 @@ document.getElementById('cycTestLure').onclick = ()=> testCall('lure');
 document.getElementById('cycTestKill').onclick = ()=> testCall('end');
 function cycleTick(){
   const c = cycleMath(Date.now());
-  const key = c ? `${cycle.startedAt}:${c.round}:${c.phase}${c.lure ? ':lure' : ''}` : null;
-  if(c && cycleSeen && key !== cycleSeen && cycleSeen.startsWith(cycle.startedAt + ':') && cycleAllowed()){
+  const key = c ? `${cycle.startedAt}:${c.round}:${c.phase}${c.lure ? ':lure' : ''}${cycle.pausedAt ? ':p' : ''}` : null;
+  if(c && !cycle.pausedAt && cycleSeen && !cycleSeen.endsWith(':p') && key !== cycleSeen && cycleSeen.startsWith(cycle.startedAt + ':') && cycleAllowed()){
     cycleAlarm(c.phase === 'run' ? 'start' : (c.lure ? 'lure' : 'end'), c.round);
   }
   cycleSeen = key;
@@ -3050,14 +3062,24 @@ function cycleTick(){
 }
 document.getElementById('cycStart').onclick = ()=>{
   try { if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
-  saveCycle({ startedAt: Date.now() });
+  saveCycle({ startedAt: Date.now(), pausedAt: null });
+};
+document.getElementById('cycPause').onclick = ()=>{
+  if(!cycle.startedAt || cycle.pausedAt) return;
+  saveCycle({ pausedAt: Date.now() });
+};
+document.getElementById('cycResume').onclick = ()=>{
+  if(!cycle.startedAt || !cycle.pausedAt) return;
+  try { if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  // shift the start forward by the paused time so it carries on from the same spot
+  saveCycle({ startedAt: cycle.startedAt + (Date.now() - cycle.pausedAt), pausedAt: null });
 };
 document.getElementById('cycRestart').onclick = ()=>{
-  openModal('Restart the timer?', 'The wait starts again from the beginning for everyone.', ()=> saveCycle({ startedAt: Date.now() }));
+  openModal('Restart the timer?', 'The wait starts again from the beginning for everyone.', ()=> saveCycle({ startedAt: Date.now(), pausedAt: null }));
   confirmBtn.textContent = 'Restart';
 };
 document.getElementById('cycStop').onclick = ()=>{
-  openModal('Stop the timer?', 'The timer stops for everyone until someone starts it again.', ()=> saveCycle({ startedAt: null }));
+  openModal('Stop the timer?', 'The timer stops for everyone until someone starts it again.', ()=> saveCycle({ startedAt: null, pausedAt: null }));
   confirmBtn.textContent = 'Stop';
 };
 ['cycPrep', 'cycRun'].forEach(id=>{
@@ -3075,6 +3097,7 @@ function startCycleLive(){
     const d = snap.exists ? (snap.data() || {}) : {};
     cycle = {
       startedAt: typeof d.startedAt === 'number' ? d.startedAt : null,
+      pausedAt: typeof d.pausedAt === 'number' ? d.pausedAt : null,
       prep: Number.isFinite(+d.prep) && d.prep !== undefined ? +d.prep : 8,
       run: Number.isFinite(+d.run) && d.run !== undefined ? +d.run : 20,
       by: d.by || null, updatedAt: d.updatedAt || null,
