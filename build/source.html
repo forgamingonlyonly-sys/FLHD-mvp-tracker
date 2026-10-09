@@ -1117,7 +1117,7 @@ function getStatus(m){
 }
 
 /* Order: In window → Overdue → Waiting (soonest first) → Unknown; favorites first within each */
-const STATUS_RANK = { window:0, overdue:1, waiting:2, unknown:3 };
+const STATUS_RANK = { overdue:0, window:1, waiting:2, unknown:3 };   // overdue first, then floating
 function compareMvps(a,b){
   const sa = getStatus(a), sb = getStatus(b);
   if(sa !== sb) return STATUS_RANK[sa] - STATUS_RANK[sb];
