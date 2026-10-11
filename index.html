@@ -696,6 +696,9 @@ input[type=number]:focus { outline: none; border-color: var(--accent-2); }
 .mm-label { display: block; margin-bottom: 10px; }
 .mm-row { display: flex; align-items: center; gap: 8px; }
 .modal input#mmInput { width: 96px; font-size: 16px; padding: 7px 9px; }
+.modal input#mmTime { width: 132px; font-size: 16px; padding: 6px 9px; }
+.mm-or { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.mm-or::before, .mm-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 .mm-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .mm-q { font-size: 12px; padding: 3px 9px; }
 .mm-hint { display: block; margin-top: 10px; font-size: 12px; color: var(--text-3); min-height: 1.2em; }
@@ -1391,11 +1394,41 @@ function openMinutesModal(m, onSave){
     <label class="mm-label" for="mmInput">How many minutes ago did <b>${safe}</b> die?</label>
     <span class="mm-row"><input type="number" id="mmInput" min="0" max="1440" step="1" inputmode="numeric" placeholder="0"> <span>min ago</span></span>
     <span class="mm-quick">${[1,3,5,10,15,30].map(v=>`<button type="button" class="btn mm-q" data-v="${v}">${v} min</button>`).join('')}</span>
+    <span class="mm-or">or the time it died</span>
+    <span class="mm-row"><input type="time" id="mmTime" aria-label="Time of death"> <span class="mm-time-note" id="mmTimeNote"></span></span>
     <span class="mm-hint" id="mmHint"></span>`,
     ()=>{ const v = readMins(); if(v !== null) onSave(v); });
   confirmBtn.textContent = 'Save';
   const inp = document.getElementById('mmInput');
   const hint = document.getElementById('mmHint');
+  const tIn = document.getElementById('mmTime');
+  const tNote = document.getElementById('mmTimeNote');
+  const pad = n => String(n).padStart(2, '0');
+  // minutes -> clock time, and clock time -> minutes (a time later than now means yesterday)
+  const minsToTime = v=>{ const d = new Date(Date.now() - v*60000); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  const timeToMins = s=>{
+    const mt = /^(\d{1,2}):(\d{2})/.exec(s || '');
+    if(!mt) return null;
+    const now = new Date(), d = new Date(now);
+    d.setHours(+mt[1], +mt[2], 0, 0);
+    let diff = now - d;
+    if(diff < 0) diff += 24 * 3600000;
+    return Math.floor(diff / 60000);
+  };
+  const syncTime = ()=>{
+    const v = readMins();
+    tIn.value = v === null ? '' : minsToTime(v);
+    tNote.textContent = '';
+  };
+  tIn.oninput = tIn.onchange = ()=>{
+    const v = timeToMins(tIn.value);
+    if(v === null){ inp.value = ''; check(); return; }
+    inp.value = String(Math.min(1440, v));
+    const d = new Date(); d.setHours(+tIn.value.slice(0,2), +tIn.value.slice(3,5), 0, 0);
+    tNote.textContent = d > new Date() ? 'yesterday' : '';
+    check();
+  };
+  tIn.onkeydown = e=>{ if(e.key === 'Enter'){ e.preventDefault(); if(!confirmBtn.disabled) confirmBtn.click(); } };
   const check = ()=>{
     const v = readMins();
     confirmBtn.disabled = v === null;
@@ -1403,10 +1436,10 @@ function openMinutesModal(m, onSave){
       ? (inp.value.trim() === '' ? 'Enter the minutes to continue.' : 'Enter a whole number from 0 to 1440.')
       : `Death time will be logged as ${new Date(Date.now() - v*60000).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' })}.`;
   };
-  inp.oninput = check;
+  inp.oninput = ()=>{ check(); syncTime(); };
   inp.onkeydown = e=>{ if(e.key === 'Enter'){ e.preventDefault(); if(!confirmBtn.disabled) confirmBtn.click(); } };
   document.querySelectorAll('.mm-q').forEach(b=>{
-    b.onclick = ()=>{ inp.value = b.dataset.v; check(); inp.focus(); };
+    b.onclick = ()=>{ inp.value = b.dataset.v; check(); syncTime(); inp.focus(); };
   });
   check();
   inp.focus();
