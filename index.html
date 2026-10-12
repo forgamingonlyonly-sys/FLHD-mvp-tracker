@@ -195,14 +195,14 @@ body.no-delete .st-del{display:none!important}
     chip.className = 'fb-online';
     chip.title = 'Guildmates with the tracker open in the last 5 minutes';
     chip.innerHTML = '<span class="dot"></span>Online <b class="o-a" title="Admin">👑 –</b><b class="o-e" title="FLHD">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
-    // only Admin and FLHD see the Online badge; everyone still checks in so they're counted
-    if(isOfficer()) (document.getElementById('fbRole') || sync).after(chip);
+    // only the Admin sees the Online badge and list; everyone still checks in so they're counted
+    if(role === 'admin') (document.getElementById('fbRole') || sync).after(chip);
     let beatErr = null;
     const beat = ()=> fs.collection(presCol()).doc(uid).set({ at: Date.now(), name: myNick || null, admin: role === 'admin' || null })
       .then(()=>{ beatErr = null; chip.classList.remove('err'); })
       .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
     const refresh = async ()=>{
-      if(!isOfficer()) return;
+      if(role !== 'admin') return;
       const since = Date.now() - ONLINE_MS;
       try {
         const [a, e, t, v] = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(r=> countSince('presence_' + r, since)));
@@ -213,11 +213,11 @@ body.no-delete .st-del{display:none!important}
         chip.querySelector('.o-v').textContent = '👁 ' + v;
         chip.title = beatErr
           ? `You aren’t being counted (${beatErr}). Ask the board owner to update the Firebase rules.`
-          : `Online in the last 5 minutes: ${a ? 'Admin, ' : ''}${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only` + (isOfficer() ? ' · click to see who' : '');
+          : `Online in the last 5 minutes: ${a ? 'Admin, ' : ''}${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only` + (role === 'admin' ? ' · click to see who' : '');
       } catch(x) { chip.title = 'Couldn’t load who’s online right now'; }
     };
     // FLHD accounts: click Online to see who's on, with nicknames
-    if(isOfficer()){
+    if(role === 'admin'){
       chip.classList.add('clickable'); chip.setAttribute('role', 'button'); chip.tabIndex = 0;
       const pop = document.createElement('div');
       pop.className = 'fb-menu fb-who'; pop.hidden = true;

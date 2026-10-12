@@ -39,7 +39,8 @@ service cloud.firestore {
       allow create, update: if id == 'session' && admin() && request.resource.data.resetAt == request.time;
     }
     match /{col}/{id} {
-      allow read: if member() && !(col in ['members', 'config', 'names']);
+      allow read: if member() && !(col in ['members', 'config', 'names'])
+        && (!(col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer']) || admin());
       allow create, update: if editor() && !(col in ['members', 'config', 'names']) && !(col == 'meta' && id == 'session');
       allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot']);
       allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer']
