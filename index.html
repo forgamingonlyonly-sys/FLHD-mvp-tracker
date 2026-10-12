@@ -252,7 +252,11 @@ body.no-delete .st-del{display:none!important}
     const uid = auth.currentUser && auth.currentUser.uid;
     if(!uid) return;
     const r = await askPassword(uid, true);
-    if(r) location.reload();
+    if(r){
+      // drop the old access level's online entry so you aren't listed twice
+      try { await fs.collection(presCol()).doc(uid).delete(); } catch(e) {}
+      location.reload();
+    }
   };
   function askPassword(uid, upgrade){
     let idleOut = false, kicked = false;
