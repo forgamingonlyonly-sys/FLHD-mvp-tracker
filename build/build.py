@@ -7,7 +7,8 @@ shim = (root / 'firebase-shim.html').read_text()
 imp = root / 'import.json'
 if imp.exists():
     shim = '<script>window.FALSEHOOD_IMPORT = ' + imp.read_text().replace('</', '<\\/') + ';</script>\n' + shim
-src = src.replace('</head>', shim + '\n</head>', 1)
+icons = '<link rel="icon" type="image/png" sizes="192x192" href="favicon.png">\n<link rel="icon" href="favicon.ico" sizes="any">\n<link rel="apple-touch-icon" href="apple-touch-icon.png">\n'
+src = src.replace('</head>', icons + shim + '\n</head>', 1)
 fixes = {
   "<b>Open the page while signed in to Claude</b> to see and update the guild’s timers.":
   "<b>Reload the page and enter the guild password</b> to see and update the guild’s timers.",
