@@ -131,7 +131,8 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         ? 'You have <b>timer access</b> on this device: you can log MVP and MINI MVP kills. Storage is view only.'
         : 'You have <b>view-only access</b> on this device: you can see everything but can’t make changes.'}</div>
       ${role !== 'editor' ? '<button type="button" class="m-up">🔑 Enter another password</button>' : ''}
-      <button type="button" class="m-out">⎋ Log out of this device</button>`;
+      <button type="button" class="m-out">⎋ Log out of this device</button>
+      ${role === 'editor' ? '<button type="button" class="m-out m-all">⎋ Log out all devices</button>' : ''}`;
     document.body.appendChild(menu);
     b.onclick = e=>{
       e.stopPropagation();
@@ -142,6 +143,13 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
       menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + 'px';
     };
     document.addEventListener('click', e=>{ if(!menu.contains(e.target)) menu.hidden = true; });
+    const all = menu.querySelector('.m-all');
+    if(all) all.onclick = async ()=>{
+      if(!confirm('Log out EVERY device using the Falsehood tracker?\n\nEveryone else will need to enter their name and the guild password again. You stay logged in.\n\nTip: change the passwords in Firebase first if someone should lose access for good.')) return;
+      menu.hidden = true;
+      try { await logoutAll(); alert('Done. All other devices are being logged out now.'); }
+      catch(e) { alert('Couldn’t log everyone out (' + ((e && e.code) || 'error') + '). Check your connection and try again.'); }
+    };
     const up = menu.querySelector('.m-up');
     if(up) up.onclick = ()=>{ menu.hidden = true; window.falsehoodUnlock(); };
     menu.querySelector('.m-out').onclick = async ()=>{
@@ -235,14 +243,15 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     if(r) location.reload();
   };
   function askPassword(uid, upgrade){
-    let idleOut = false;
+    let idleOut = false, kicked = false;
     try { idleOut = sessionStorage.getItem(IDLE_FLAG) === '1'; sessionStorage.removeItem(IDLE_FLAG); } catch(e) {}
+    try { kicked = sessionStorage.getItem(KICK_FLAG) === '1'; sessionStorage.removeItem(KICK_FLAG); } catch(e) {}
     return new Promise(resolve=>{
       const g = document.createElement('div');
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
         <h2>Falsehood</h2>
-        <p>${upgrade ? 'Enter the timer or editor password to get more access on this device.' : (idleOut ? '<b>You were logged out after 3 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
+        <p>${upgrade ? 'Enter the timer or editor password to get more access on this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 3 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
         ${upgrade ? '' : `<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="Your in-game name (e.g. Scrumzilla)" aria-label="Your in-game name">`}
         <input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
         <div class="g-err" role="alert"></div>
@@ -267,6 +276,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
             go.disabled = false; inp.select(); return;
           }
           if(nick) await saveNick(uid, nick);
+          lsSetX(LOGIN_KEY, String(Date.now()));
           g.remove(); resolve(r);
         } catch(x) {
           err.textContent = 'Couldn’t connect (' + ((x && (x.code || x.message)) || 'unknown') + '). Check your internet and try again.';
@@ -362,6 +372,26 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     await saveNick(uid, await askNick());
   }
 
+  // ---- Log out all devices: an FLHD account sets meta/session.resetAt; every device logged in before that signs out ----
+  const LOGIN_KEY = 'falsehood-login-at', KICK_FLAG = 'falsehood-kicked';
+  async function forcedLogout(){
+    try { sessionStorage.setItem(KICK_FLAG, '1'); } catch(e) {}
+    try { if(auth.currentUser) await fs.collection('presence_' + role).doc(auth.currentUser.uid).delete(); } catch(e) {}
+    try { await auth.signOut(); } catch(e) {}
+    location.reload();
+  }
+  function watchSession(){
+    fs.doc('meta/session').onSnapshot(d=>{
+      const r = d.exists ? +((d.data() || {}).resetAt) || 0 : 0;
+      if(r && r > (+lsGetX(LOGIN_KEY) || 0)) forcedLogout();
+    }, ()=>{});
+  }
+  async function logoutAll(){
+    const now = Date.now();
+    lsSetX(LOGIN_KEY, String(now + 1000));          // keep the officer who pressed it logged in
+    await fs.doc('meta/session').set({ resetAt: now, by: auth.currentUser ? auth.currentUser.uid : null, byName: myNick || null });
+  }
+
   async function ready(){
     if(gateDone) return gateDone;
     gateDone = (async ()=>{
@@ -390,7 +420,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         window.FALSEHOOD_ROLE = role;
         if(member && role === 'viewer') document.body.classList.add('viewonly');
         if(member && role === 'timer') document.body.classList.add('storage-ro');
-        if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); }
+        if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); watchSession(); }
         if(member && role === 'editor') await importOnce(uid);
         return member ? uid : null;
       } catch(e) {
