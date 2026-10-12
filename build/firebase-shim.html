@@ -40,6 +40,17 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
 .fb-online{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;padding:3px 9px;border-radius:999px;border:1px solid rgba(127,110,150,.35);color:inherit;opacity:.9;vertical-align:middle;white-space:nowrap}
 .fb-online .dot{width:7px;height:7px;border-radius:50%;background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.18)}
 .fb-online b{font-weight:600}
+.fb-online.clickable{cursor:pointer}
+.fb-online.clickable:hover{border-color:#b77ee8}
+.fb-who{min-width:240px;max-height:60vh;overflow:auto}
+.fb-who .w-grp{margin-top:8px}
+.fb-who .w-h{font-weight:700;font-size:12px;color:#d9c9f0;display:flex;justify-content:space-between;padding:0 4px 4px;border-bottom:1px solid #3b2d52}
+.fb-who .w-h span{color:#9d8fb3;font-weight:600}
+.fb-who .w-row{display:flex;justify-content:space-between;gap:12px;padding:5px 4px;font-size:13px}
+.fb-who .w-row em{color:#b9aecb;font-style:normal;font-size:11.5px}
+.fb-who .w-row small{color:#8f82a6;font-size:11px}
+.fb-who .w-none{padding:5px 4px;font-size:12px;color:#8f82a6}
+#fbGate input + input{margin-top:8px}
 .fb-online.err .dot{background:#e0a100;box-shadow:0 0 0 3px rgba(224,161,0,.2)}
 @media (max-width:600px){.fb-online{font-size:10px;padding:2px 7px;gap:4px}}
 #fbIdleWarn{position:fixed;inset:0;z-index:9997;display:flex;align-items:center;justify-content:center;background:rgba(10,6,18,.55);font-family:Inter,system-ui,sans-serif}
@@ -157,7 +168,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     chip.innerHTML = '<span class="dot"></span>Online <b class="o-e" title="FLHD">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
     (document.getElementById('fbRole') || sync).after(chip);
     let beatErr = null;
-    const beat = ()=> fs.collection('presence_' + role).doc(uid).set({ at: Date.now() })
+    const beat = ()=> fs.collection('presence_' + role).doc(uid).set({ at: Date.now(), name: myNick || null })
       .then(()=>{ beatErr = null; chip.classList.remove('err'); })
       .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
     const refresh = async ()=>{
@@ -169,9 +180,44 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         chip.querySelector('.o-v').textContent = '👁 ' + v;
         chip.title = beatErr
           ? `You aren’t being counted (${beatErr}). Ask the board owner to update the Firebase rules.`
-          : `Online in the last 5 minutes: ${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only`;
+          : `Online in the last 5 minutes: ${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only` + (role === 'editor' ? ' · click to see who' : '');
       } catch(x) { chip.title = 'Couldn’t load who’s online right now'; }
     };
+    // FLHD accounts: click Online to see who's on, with nicknames
+    if(role === 'editor'){
+      chip.classList.add('clickable'); chip.setAttribute('role', 'button'); chip.tabIndex = 0;
+      const pop = document.createElement('div');
+      pop.className = 'fb-menu fb-who'; pop.hidden = true;
+      document.body.appendChild(pop);
+      const LBL = { editor: '✎ FLHD', timer: '⏱ Timers', viewer: '👁 View only' };
+      const esc = v=> String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const ago = t=>{ const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? 'now' : m + 'm ago'; };
+      const open = async ()=>{
+        const r = chip.getBoundingClientRect();
+        pop.innerHTML = '<div class="m-info">Loading who’s online…</div>';
+        pop.hidden = false;
+        pop.style.top = (r.bottom + 6) + 'px';
+        pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
+        const since = Date.now() - ONLINE_MS;
+        try {
+          const groups = await Promise.all(['editor', 'timer', 'viewer'].map(async rl=>{
+            const snap = await fs.collection('presence_' + rl).where('at', '>', since).get();
+            return [rl, snap.docs.map(d=>({ id: d.id, at: (d.data() || {}).at || 0, name: (d.data() || {}).name || names[d.id] || '' }))
+              .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'))];
+          }));
+          pop.innerHTML = `<div class="m-info">Online in the last 5 minutes</div>` + groups.map(([rl, list])=>
+            `<div class="w-grp"><div class="w-h">${LBL[rl]} <span>${list.length}</span></div>${list.length
+              ? list.map(p=>`<div class="w-row"><span>${esc(p.name || 'No nickname')}${p.id === uid ? ' <em>(you)</em>' : ''}</span><small>${ago(p.at)}</small></div>`).join('')
+              : '<div class="w-none">Nobody</div>'}</div>`).join('');
+          pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
+        } catch(x) { pop.innerHTML = '<div class="m-info">Couldn’t load the list right now.</div>'; }
+      };
+      chip.onclick = e=>{ e.stopPropagation(); if(!pop.hidden){ pop.hidden = true; return; } open(); };
+      chip.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); chip.onclick(e); } };
+      pop.onclick = e=> e.stopPropagation();
+      document.addEventListener('click', ()=>{ pop.hidden = true; });
+      chip.title = 'Click to see who’s online';
+    }
     beat().then(refresh);
     setInterval(()=>{ beat(); refresh(); }, BEAT_MS);
     document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ beat().then(refresh); } });
@@ -191,17 +237,20 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
       g.innerHTML = `<form class="g-card">
         <h2>Falsehood</h2>
         <p>${upgrade ? 'Enter the timer or editor password to get more access on this device.' : (idleOut ? '<b>You were logged out after 3 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
-        <input type="password" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
+        ${upgrade ? '' : `<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="Your in-game name (e.g. Scrumzilla)" aria-label="Your in-game name">`}
+        <input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
         <div class="g-err" role="alert"></div>
         <div class="g-row"><button type="button" class="g-skip">${upgrade ? 'Cancel' : 'Use offline'}</button><button class="g-go">Enter</button></div>
       </form>`;
       document.body.appendChild(g);
-      const form = g.querySelector('form'), inp = g.querySelector('input'), err = g.querySelector('.g-err'), go = g.querySelector('.g-go');
-      inp.focus();
+      const form = g.querySelector('form'), inp = g.querySelector('.g-pass'), nickIn = g.querySelector('.g-nick'), err = g.querySelector('.g-err'), go = g.querySelector('.g-go');
+      if(nickIn){ nickIn.value = lsGetX(NICK_KEY) || ''; (nickIn.value ? inp : nickIn).focus(); } else inp.focus();
       g.querySelector('.g-skip').onclick = ()=>{ g.remove(); resolve(false); };
       form.onsubmit = async e=>{
         e.preventDefault();
         const pass = inp.value;
+        const nick = nickIn ? cleanNick(nickIn.value) : '';
+        if(nickIn && nick.length < 2){ err.textContent = 'Enter your in-game name (at least 2 characters).'; nickIn.focus(); return; }
         if(!pass) return;
         go.disabled = true; err.textContent = '';
         try {
@@ -211,6 +260,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
             err.textContent = upgrade ? 'That password doesn’t give more access.' : 'Wrong password. Ask a guild officer for it.';
             go.disabled = false; inp.select(); return;
           }
+          if(nick) await saveNick(uid, nick);
           g.remove(); resolve(r);
         } catch(x) {
           err.textContent = 'Couldn’t connect (' + ((x && (x.code || x.message)) || 'unknown') + '). Check your internet and try again.';
@@ -265,6 +315,47 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     });
   }
 
+  // ---- Nicknames: required at login, saved to names/<uid> (the same names Storage uses) ----
+  const NICK_KEY = 'falsehood-nick';
+  let myNick = '';
+  const cleanNick = v=> String(v || '').replace(/\s+/g, ' ').trim().slice(0, 24);
+  async function saveNick(uid, nick){
+    myNick = nick; lsSetX(NICK_KEY, nick);
+    try { names[uid] = nick; } catch(e) {}
+    try { await fs.collection('names').doc(uid).set({ name: nick }); } catch(e) {}
+  }
+  function askNick(){
+    return new Promise(resolve=>{
+      const g = document.createElement('div');
+      g.id = 'fbGate';
+      g.innerHTML = `<form class="g-card">
+        <h2>Your nickname</h2>
+        <p>Enter your in-game name so guildmates know who’s online and who logged each kill.</p>
+        <input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="e.g. Scrumzilla" aria-label="Your in-game name">
+        <div class="g-err" role="alert"></div>
+        <div class="g-row"><button class="g-go">Save</button></div>
+      </form>`;
+      document.body.appendChild(g);
+      const nickIn = g.querySelector('.g-nick'), err = g.querySelector('.g-err');
+      nickIn.value = lsGetX(NICK_KEY) || ''; nickIn.focus();
+      g.querySelector('form').onsubmit = e=>{
+        e.preventDefault();
+        const n = cleanNick(nickIn.value);
+        if(n.length < 2){ err.textContent = 'At least 2 characters.'; return; }
+        g.remove(); resolve(n);
+      };
+    });
+  }
+  async function ensureNick(uid){
+    try {
+      const d = await fs.collection('names').doc(uid).get();
+      const n = d.exists ? cleanNick((d.data() || {}).name) : '';
+      if(n){ myNick = n; lsSetX(NICK_KEY, n); return; }
+    } catch(e) {}
+    if(document.readyState === 'loading') await new Promise(r=> document.addEventListener('DOMContentLoaded', r, { once:true }));
+    await saveNick(uid, await askNick());
+  }
+
   async function ready(){
     if(gateDone) return gateDone;
     gateDone = (async ()=>{
@@ -293,7 +384,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         window.FALSEHOOD_ROLE = role;
         if(member && role === 'viewer') document.body.classList.add('viewonly');
         if(member && role === 'timer') document.body.classList.add('storage-ro');
-        if(member){ showRole(); startPresence(uid); startIdleWatch(); }
+        if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); }
         if(member && role === 'editor') await importOnce(uid);
         return member ? uid : null;
       } catch(e) {
