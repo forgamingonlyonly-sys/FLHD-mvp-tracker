@@ -48,6 +48,14 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
 .fb-online b{font-weight:600}
 .fb-online.err .dot{background:#e0a100;box-shadow:0 0 0 3px rgba(224,161,0,.2)}
 @media (max-width:600px){.fb-online{font-size:10px;padding:2px 7px;gap:4px}}
+#fbIdleWarn{position:fixed;inset:0;z-index:9997;display:flex;align-items:center;justify-content:center;background:rgba(10,6,18,.55);font-family:Inter,system-ui,sans-serif}
+#fbIdleWarn[hidden]{display:none!important}
+#fbIdleWarn .iw-card{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center;max-width:min(440px,calc(100vw - 32px));background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:14px;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+#fbIdleWarn .iw-ic{font-size:28px}
+#fbIdleWarn .iw-txt{display:grid;gap:2px;font-size:13.5px;color:#cfc4df}
+#fbIdleWarn .iw-txt>b{font:700 18px Cinzel,serif;color:#fff;letter-spacing:.03em}
+#fbIdleWarn #fbIdleLeft{color:#ffb35c;font-variant-numeric:tabular-nums}
+#fbIdleWarn .iw-btn{padding:9px 16px;border-radius:9px;border:1px solid #c03bd6;background:#a02ab8;color:#fff;font:600 14px Inter,system-ui,sans-serif;cursor:pointer}
 .notice .unlock{font:inherit;font-weight:600;padding:2px 10px;margin-left:6px;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer}
 </style>
 <script>
@@ -233,7 +241,31 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
   function startIdleWatch(){
     lsSetX(ACT_KEY, String(Date.now())); actWritten = Date.now();
     ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'].forEach(ev=> window.addEventListener(ev, markActive, { passive: true, capture: true }));
-    setInterval(()=>{ if(Date.now() - lastActive() > IDLE_MS) idleLogout(); }, 60000);
+    // "Still there?" warning 5 minutes before the log out; any click/tap/key (or the button) keeps you in
+    const WARN_MS = 5 * 60000;
+    const warn = document.createElement('div');
+    warn.id = 'fbIdleWarn'; warn.hidden = true; warn.setAttribute('role', 'alertdialog'); warn.setAttribute('aria-live', 'assertive');
+    warn.innerHTML = `<div class="iw-card"><div class="iw-ic">⏳</div>
+      <div class="iw-txt"><b>Still there?</b><span>You’ll be logged out for inactivity in <b id="fbIdleLeft">5:00</b>.</span></div>
+      <button type="button" class="iw-btn" id="fbIdleStay">I’m still here</button></div>`;
+    document.body.appendChild(warn);
+    const stay = ()=>{ actWritten = Date.now(); lsSetX(ACT_KEY, String(actWritten)); warn.hidden = true; };
+    warn.querySelector('#fbIdleStay').onclick = stay;
+    let warnedChime = false;
+    setInterval(()=>{
+      const idle = Date.now() - lastActive();
+      if(idle > IDLE_MS){ idleLogout(); return; }
+      const left = IDLE_MS - idle;
+      if(left <= WARN_MS){
+        if(warn.hidden){
+          warn.hidden = false;
+          if(!warnedChime){ warnedChime = true; try { if(typeof playSoft === 'function') playSoft(); } catch(e) {} }
+        }
+        const sec = Math.ceil(left / 1000);
+        warn.querySelector('#fbIdleLeft').textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+      } else if(!warn.hidden){ warn.hidden = true; warnedChime = false; }
+      else warnedChime = false;
+    }, 1000);
     document.addEventListener('visibilitychange', ()=>{
       if(document.visibilityState === 'visible' && Date.now() - lastActive() > IDLE_MS) idleLogout();
     });
