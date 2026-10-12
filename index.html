@@ -190,12 +190,14 @@ body.no-delete .st-del{display:none!important}
     chip.className = 'fb-online';
     chip.title = 'Guildmates with the tracker open in the last 5 minutes';
     chip.innerHTML = '<span class="dot"></span>Online <b class="o-a" title="Admin">👑 –</b><b class="o-e" title="FLHD">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
-    (document.getElementById('fbRole') || sync).after(chip);
+    // only Admin and FLHD see the Online badge; everyone still checks in so they're counted
+    if(isOfficer()) (document.getElementById('fbRole') || sync).after(chip);
     let beatErr = null;
     const beat = ()=> fs.collection(presCol()).doc(uid).set({ at: Date.now(), name: myNick || null, admin: role === 'admin' || null })
       .then(()=>{ beatErr = null; chip.classList.remove('err'); })
       .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
     const refresh = async ()=>{
+      if(!isOfficer()) return;
       const since = Date.now() - ONLINE_MS;
       try {
         const [a, e, t, v] = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(r=> countSince('presence_' + r, since)));
