@@ -24,9 +24,10 @@ service cloud.firestore {
     match /mvps/{id} { allow write: if timer(); }
     match /cycle/{id} { allow write: if timer(); }
     match /loot/{id} { allow delete: if admin(); }
+    match /meta/{id} { allow write: if id == 'session' && admin(); }
     match /{col}/{id} {
       allow read: if member() && !(col in ['members', 'config', 'names']);
-      allow create, update: if editor() && !(col in ['members', 'config', 'names']);
+      allow create, update: if editor() && !(col in ['members', 'config', 'names']) && !(col == 'meta' && id == 'session');
       allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot']);
       allow write: if col in ['presence_editor', 'presence_timer', 'presence_viewer']
         && member() && request.auth.uid == id;

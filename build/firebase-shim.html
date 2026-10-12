@@ -102,7 +102,7 @@ body.no-delete .st-del{display:none!important}
   let gateDone = null;
   let role = 'editor';
   // admin = everything FLHD can do, plus deleting Storage items
-  const RANK = { viewer: 0, timer: 1, editor: 2, admin: 3 };
+  const RANK = { viewer: 0, timer: 1, editor: 2, admin: 3 };   // admin only: delete Storage items, log out all devices
   const isOfficer = ()=> role === 'editor' || role === 'admin';
   const presCol = ()=> 'presence_' + (role === 'admin' ? 'editor' : role);   // admins show under FLHD in the counts
   // Editor password first, then the view-only one; the security rules decide which matches
@@ -126,7 +126,7 @@ body.no-delete .st-del{display:none!important}
     const menu = document.createElement('div');
     menu.className = 'fb-menu'; menu.hidden = true;
     menu.innerHTML = `<div class="m-info">${role === 'admin'
-        ? 'You have <b>Admin access</b> on this device: everything FLHD can do, plus deleting Storage items.'
+        ? 'You have <b>Admin access</b> on this device: everything FLHD can do, plus deleting Storage items and logging out all devices.'
         : role === 'editor'
         ? 'You have <b>FLHD access</b> on this device: you can log kills and manage storage (only the Admin can delete items).'
         : role === 'timer'
@@ -134,7 +134,7 @@ body.no-delete .st-del{display:none!important}
         : 'You have <b>view-only access</b> on this device: you can see everything but can’t make changes.'}</div>
       ${role !== 'admin' ? '<button type="button" class="m-up">🔑 Enter another password</button>' : ''}
       <button type="button" class="m-out">⎋ Log out of this device</button>
-      ${isOfficer() ? '<button type="button" class="m-out m-all">⎋ Log out all devices</button>' : ''}`;
+      ${role === 'admin' ? '<button type="button" class="m-out m-all">⎋ Log out all devices</button>' : ''}`;
     document.body.appendChild(menu);
     b.onclick = e=>{
       e.stopPropagation();
