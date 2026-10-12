@@ -35,6 +35,8 @@ body.storage-ro #stAdd,body.storage-ro .st-actions,body.storage-ro .st-restore,b
 body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.viewonly .st-file-actions [data-act=replace],body.viewonly .st-file-actions [data-act=remove],body.viewonly [data-act=attach]{display:none!important}
 .fb-role{margin-left:6px;font:600 11px Inter,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid;cursor:pointer;background:transparent;vertical-align:middle}
 .fb-role.editor{color:#8b2bd8;border-color:#b77ee8;background:rgba(160,42,184,.08)}
+.fb-role.admin{color:#a8790a;border-color:#e2bd52;background:rgba(240,190,60,.14)}
+body.no-delete .st-del{display:none!important}
 .fb-role.timer{color:#1f7a4d;border-color:#7cc7a0;background:rgba(60,170,110,.1)}
 .fb-role.viewer{color:#9a6a00;border-color:#d9b25a;background:rgba(217,178,90,.12)}
 .fb-menu{position:fixed;z-index:9998;min-width:220px;background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:12px;padding:10px;box-shadow:0 14px 40px rgba(0,0,0,.45);font:13px Inter,system-ui,sans-serif}
@@ -105,9 +107,13 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
 
   let gateDone = null;
   let role = 'editor';
+  // admin = everything FLHD can do, plus deleting Storage items
+  const RANK = { viewer: 0, timer: 1, editor: 2, admin: 3 };
+  const isOfficer = ()=> role === 'editor' || role === 'admin';
+  const presCol = ()=> 'presence_' + (role === 'admin' ? 'editor' : role);   // admins show under FLHD in the counts
   // Editor password first, then the view-only one; the security rules decide which matches
   async function join(uid, pass, roles){
-    for(const r of roles || ['editor', 'timer', 'viewer']){
+    for(const r of roles || ['admin', 'editor', 'timer', 'viewer']){
       try { await fs.collection('members').doc(uid).set({ pass, role: r, joinedAt: Date.now() }); return r; }
       catch(x) { if(!(x && x.code === 'permission-denied')) throw x; }
     }
@@ -120,19 +126,21 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     const b = document.createElement('button');
     b.id = 'fbRole'; b.type = 'button';
     b.className = 'fb-role ' + role;
-    b.textContent = role === 'editor' ? '✎ FLHD' : role === 'timer' ? '⏱ Timers' : '👁 View only';
+    b.textContent = role === 'admin' ? '👑 Admin' : role === 'editor' ? '✎ FLHD' : role === 'timer' ? '⏱ Timers' : '👁 View only';
     b.title = 'Your access on this device. Click for options.';
     sync.after(b);
     const menu = document.createElement('div');
     menu.className = 'fb-menu'; menu.hidden = true;
-    menu.innerHTML = `<div class="m-info">${role === 'editor'
-        ? 'You have <b>FLHD access</b> on this device: you can log kills and manage storage.'
+    menu.innerHTML = `<div class="m-info">${role === 'admin'
+        ? 'You have <b>Admin access</b> on this device: everything FLHD can do, plus deleting Storage items.'
+        : role === 'editor'
+        ? 'You have <b>FLHD access</b> on this device: you can log kills and manage storage (only the Admin can delete items).'
         : role === 'timer'
         ? 'You have <b>timer access</b> on this device: you can log MVP and MINI MVP kills. Storage is view only.'
         : 'You have <b>view-only access</b> on this device: you can see everything but can’t make changes.'}</div>
-      ${role !== 'editor' ? '<button type="button" class="m-up">🔑 Enter another password</button>' : ''}
+      ${role !== 'admin' ? '<button type="button" class="m-up">🔑 Enter another password</button>' : ''}
       <button type="button" class="m-out">⎋ Log out of this device</button>
-      ${role === 'editor' ? '<button type="button" class="m-out m-all">⎋ Log out all devices</button>' : ''}`;
+      ${isOfficer() ? '<button type="button" class="m-out m-all">⎋ Log out all devices</button>' : ''}`;
     document.body.appendChild(menu);
     b.onclick = e=>{
       e.stopPropagation();
@@ -154,7 +162,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     if(up) up.onclick = ()=>{ menu.hidden = true; window.falsehoodUnlock(); };
     menu.querySelector('.m-out').onclick = async ()=>{
       if(!confirm('Log out of the Falsehood tracker on this device? You’ll need a password to get back in.')) return;
-      try { await fs.collection('presence_' + role).doc(auth.currentUser.uid).delete(); } catch(e) {}
+      try { await fs.collection(presCol()).doc(auth.currentUser.uid).delete(); } catch(e) {}
       try { await auth.signOut(); } catch(e) {}
       location.reload();
     };
@@ -182,7 +190,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     chip.innerHTML = '<span class="dot"></span>Online <b class="o-e" title="FLHD">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
     (document.getElementById('fbRole') || sync).after(chip);
     let beatErr = null;
-    const beat = ()=> fs.collection('presence_' + role).doc(uid).set({ at: Date.now(), name: myNick || null })
+    const beat = ()=> fs.collection(presCol()).doc(uid).set({ at: Date.now(), name: myNick || null, admin: role === 'admin' || null })
       .then(()=>{ beatErr = null; chip.classList.remove('err'); })
       .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
     const refresh = async ()=>{
@@ -194,11 +202,11 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         chip.querySelector('.o-v').textContent = '👁 ' + v;
         chip.title = beatErr
           ? `You aren’t being counted (${beatErr}). Ask the board owner to update the Firebase rules.`
-          : `Online in the last 5 minutes: ${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only` + (role === 'editor' ? ' · click to see who' : '');
+          : `Online in the last 5 minutes: ${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only` + (isOfficer() ? ' · click to see who' : '');
       } catch(x) { chip.title = 'Couldn’t load who’s online right now'; }
     };
     // FLHD accounts: click Online to see who's on, with nicknames
-    if(role === 'editor'){
+    if(isOfficer()){
       chip.classList.add('clickable'); chip.setAttribute('role', 'button'); chip.tabIndex = 0;
       const pop = document.createElement('div');
       pop.className = 'fb-menu fb-who'; pop.hidden = true;
@@ -216,12 +224,12 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         try {
           const groups = await Promise.all(['editor', 'timer', 'viewer'].map(async rl=>{
             const snap = await fs.collection('presence_' + rl).where('at', '>', since).get();
-            return [rl, snap.docs.map(d=>({ id: d.id, at: (d.data() || {}).at || 0, name: (d.data() || {}).name || names[d.id] || '' }))
+            return [rl, snap.docs.map(d=>({ id: d.id, at: (d.data() || {}).at || 0, name: (d.data() || {}).name || names[d.id] || '', admin: !!(d.data() || {}).admin }))
               .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'))];
           }));
           pop.innerHTML = `<div class="m-info">Online in the last 5 minutes</div>` + groups.map(([rl, list])=>
             `<div class="w-grp"><div class="w-h">${LBL[rl]} <span>${list.length}</span></div>${list.length
-              ? list.map(p=>`<div class="w-row"><span>${esc(p.name || 'No nickname')}${p.id === uid ? ' <em>(you)</em>' : ''}</span><small>${ago(p.at)}</small></div>`).join('')
+              ? list.map(p=>`<div class="w-row"><span>${p.admin ? '👑 ' : ''}${esc(p.name || 'No nickname')}${p.id === uid ? ' <em>(you)</em>' : ''}</span><small>${ago(p.at)}</small></div>`).join('')
               : '<div class="w-none">Nobody</div>'}</div>`).join('');
           pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
         } catch(x) { pop.innerHTML = '<div class="m-info">Couldn’t load the list right now.</div>'; }
@@ -251,7 +259,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
         <h2>Falsehood</h2>
-        <p>${upgrade ? 'Enter the timer or editor password to get more access on this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 3 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
+        <p>${upgrade ? 'Enter a higher-access password (Timers, FLHD or Admin) for this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 3 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
         ${upgrade ? '' : `<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="Your in-game name (e.g. Scrumzilla)" aria-label="Your in-game name">`}
         <input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
         <div class="g-err" role="alert"></div>
@@ -270,7 +278,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         go.disabled = true; err.textContent = '';
         try {
           // when upgrading, only try roles above the current one so a lower password can't downgrade
-          const r = await join(uid, pass, upgrade ? (role === 'viewer' ? ['editor', 'timer'] : ['editor']) : null);
+          const r = await join(uid, pass, upgrade ? ['admin', 'editor', 'timer'].filter(x=> RANK[x] > RANK[role]) : null);
           if(!r){
             err.textContent = upgrade ? 'That password doesn’t give more access.' : 'Wrong password. Ask a guild officer for it.';
             go.disabled = false; inp.select(); return;
@@ -294,7 +302,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
   const markActive = ()=>{ const n = Date.now(); if(n - actWritten > 30000){ actWritten = n; lsSetX(ACT_KEY, String(n)); } };
   async function idleLogout(){
     try { sessionStorage.setItem(IDLE_FLAG, '1'); } catch(e) {}
-    try { if(auth.currentUser) await fs.collection('presence_' + role).doc(auth.currentUser.uid).delete(); } catch(e) {}
+    try { if(auth.currentUser) await fs.collection(presCol()).doc(auth.currentUser.uid).delete(); } catch(e) {}
     try { await auth.signOut(); } catch(e) {}
     location.reload();
   }
@@ -376,7 +384,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
   const LOGIN_KEY = 'falsehood-login-at', KICK_FLAG = 'falsehood-kicked';
   async function forcedLogout(){
     try { sessionStorage.setItem(KICK_FLAG, '1'); } catch(e) {}
-    try { if(auth.currentUser) await fs.collection('presence_' + role).doc(auth.currentUser.uid).delete(); } catch(e) {}
+    try { if(auth.currentUser) await fs.collection(presCol()).doc(auth.currentUser.uid).delete(); } catch(e) {}
     try { await auth.signOut(); } catch(e) {}
     location.reload();
   }
@@ -410,7 +418,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         let member = false;
         try {
           const me = await fs.collection('members').doc(uid).get();
-          if(me.exists){ member = true; const r = (me.data() || {}).role; role = r === 'viewer' || r === 'timer' ? r : 'editor'; }
+          if(me.exists){ member = true; const r = (me.data() || {}).role; role = r === 'viewer' || r === 'timer' || r === 'admin' ? r : 'editor'; }
         } catch(e) { member = false; }
         if(!member){
           if(document.readyState === 'loading') await new Promise(r=> document.addEventListener('DOMContentLoaded', r, { once:true }));
@@ -421,7 +429,8 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         if(member && role === 'viewer') document.body.classList.add('viewonly');
         if(member && role === 'timer') document.body.classList.add('storage-ro');
         if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); watchSession(); }
-        if(member && role === 'editor') await importOnce(uid);
+        if(member && role !== 'admin') document.body.classList.add('no-delete');   // only the Admin deletes Storage items
+        if(member && isOfficer()) await importOnce(uid);
         return member ? uid : null;
       } catch(e) {
         console.warn('Firebase sign-in failed', e);
@@ -3327,7 +3336,7 @@ apWrap.querySelector('#apTest').onclick = ()=>{
 // Shared through cycle/main: { startedAt, prep, run, by, updatedAt }. FLHD and Timers accounts only on the hosted site.
 const cycleAllowed = ()=>{
   const r = window.FALSEHOOD_ROLE;
-  if(r) return r === 'editor' || r === 'timer';
+  if(r) return r === 'editor' || r === 'timer' || r === 'admin';
   return mode === 'local' || (mode === 'live' && canWrite);
 };
 let cycle = { startedAt: null, pausedAt: null, prep: 8, run: 20, by: null };

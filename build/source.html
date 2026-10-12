@@ -2837,7 +2837,7 @@ apWrap.querySelector('#apTest').onclick = ()=>{
 // Shared through cycle/main: { startedAt, prep, run, by, updatedAt }. FLHD and Timers accounts only on the hosted site.
 const cycleAllowed = ()=>{
   const r = window.FALSEHOOD_ROLE;
-  if(r) return r === 'editor' || r === 'timer';
+  if(r) return r === 'editor' || r === 'timer' || r === 'admin';
   return mode === 'local' || (mode === 'live' && canWrite);
 };
 let cycle = { startedAt: null, pausedAt: null, prep: 8, run: 20, by: null };
