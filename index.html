@@ -53,6 +53,8 @@ body.no-delete .st-del{display:none!important}
 .fb-online.clickable{cursor:pointer}
 .fb-online.clickable:hover{border-color:#b77ee8}
 .fb-who{min-width:240px;max-height:60vh;overflow:auto}
+.fb-who .w-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fb-who .w-top .w-ref{display:inline-block;width:auto;margin:0;padding:4px 10px;font-size:12px}
 .fb-who .w-grp{margin-top:8px}
 .fb-who .w-h{font-weight:700;font-size:12px;color:#d9c9f0;display:flex;justify-content:space-between;padding:0 4px 4px;border-bottom:1px solid #3b2d52}
 .fb-who .w-h span{color:#9d8fb3;font-weight:600}
@@ -220,9 +222,10 @@ body.no-delete .st-del{display:none!important}
       const LBL = { admin: '👑 Admin', editor: '✎ FLHD', timer: '⏱ Timers', viewer: '👁 View only' };
       const esc = v=> String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       const ago = t=>{ const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? 'now' : m + 'm ago'; };
-      const open = async ()=>{
+      const open = async (again)=>{
         const r = chip.getBoundingClientRect();
-        pop.innerHTML = '<div class="m-info">Loading who’s online…</div>';
+        if(!again) pop.innerHTML = '<div class="m-info">Loading who’s online…</div>';
+        else { const b = pop.querySelector('.w-ref'); if(b){ b.disabled = true; b.textContent = '↻ Refreshing…'; } }
         pop.hidden = false;
         pop.style.top = (r.bottom + 6) + 'px';
         pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
@@ -233,14 +236,19 @@ body.no-delete .st-del{display:none!important}
             return [rl, snap.docs.map(d=>({ id: d.id, at: (d.data() || {}).at || 0, name: (d.data() || {}).name || names[d.id] || '', admin: !!(d.data() || {}).admin }))
               .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'))];
           }));
-          pop.innerHTML = `<div class="m-info">Online in the last 5 minutes</div>` + groups.map(([rl, list])=>
+          // someone who switched access level shows only under their current (highest) level
+          const seen = new Set();
+          groups.forEach(g=>{ g[1] = g[1].filter(p=>{ if(seen.has(p.id)) return false; seen.add(p.id); return true; }); });
+          pop.innerHTML = `<div class="m-info w-top"><span>Online in the last 5 minutes</span><button type="button" class="w-ref">↻ Refresh</button></div>` + groups.map(([rl, list])=>
             `<div class="w-grp"><div class="w-h">${LBL[rl]} <span>${list.length}</span></div>${list.length
               ? list.map(p=>`<div class="w-row"><span>${esc(p.name || 'No nickname')}${p.id === uid ? ' <em>(you)</em>' : ''}</span><small>${ago(p.at)}</small></div>`).join('')
               : '<div class="w-none">Nobody</div>'}</div>`).join('');
           pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
+          pop.querySelector('.w-ref').onclick = async ()=>{ await beat(); refresh(); open(true); };
         } catch(x) { pop.innerHTML = '<div class="m-info">Couldn’t load the list right now.</div>'; }
       };
-      chip.onclick = e=>{ e.stopPropagation(); if(!pop.hidden){ pop.hidden = true; return; } open(); };
+      chip.onclick = e=>{ e.stopPropagation(); if(!pop.hidden){ pop.hidden = true; return; } refresh(); open(); };
+      setInterval(()=>{ if(!pop.hidden) open(true); }, 30000);   // keeps itself fresh while open
       chip.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); chip.onclick(e); } };
       pop.onclick = e=> e.stopPropagation();
       document.addEventListener('click', ()=>{ pop.hidden = true; });
