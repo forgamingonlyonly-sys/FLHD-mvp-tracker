@@ -51,8 +51,12 @@ body.no-delete .st-del{display:none!important}
 .fb-online{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;padding:3px 9px;border-radius:999px;border:1px solid rgba(127,110,150,.35);color:inherit;opacity:.9;vertical-align:middle;white-space:nowrap}
 .fb-online .dot{width:7px;height:7px;border-radius:50%;background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.18)}
 .fb-online b{font-weight:600}
+.fb-online b{display:inline-flex;align-items:center;gap:3px;line-height:1}
+.fb-online .ic{display:inline-flex;width:12px;height:12px}
+.fb-online .ic svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.fb-online .o-a .ic svg{fill:currentColor;stroke-width:1.5}
 .fb-online .o-a{opacity:.55}
-.fb-online .o-a.on{opacity:1;color:#c9930a}
+.fb-online .o-a.on{opacity:1;color:#d9a514}
 .fb-online.clickable{cursor:pointer}
 .fb-online.clickable:hover{border-color:#b77ee8}
 .fb-who{min-width:240px;max-height:60vh;overflow:auto}
@@ -189,12 +193,20 @@ body.no-delete .st-del{display:none!important}
     const f = j && j[0] && j[0].result && j[0].result.aggregateFields;
     return f && f.n ? +(f.n.integerValue || 0) : 0;
   }
+  // matching line icons for the Online badge (same size and color, so they line up)
+  const ICON = {
+    a: '<svg viewBox="0 0 24 24"><path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 11H5z"/></svg>',
+    e: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>',
+    t: '<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>',
+    v: '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  };
+  const icn = (k, n)=> `<i class="ic">${ICON[k]}</i><span class="n">${n}</span>`;
   function startPresence(uid){
     const sync = document.getElementById('sync');
     const chip = document.createElement('span');
     chip.className = 'fb-online';
     chip.title = 'Guildmates with the tracker open in the last 5 minutes';
-    chip.innerHTML = '<span class="dot"></span>Online <b class="o-a" title="Admin">👑 –</b><b class="o-e" title="FLHD">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
+    chip.innerHTML = '<span class="dot"></span>Online <b class="o-a" title="Admin">' + icn('a','–') + '</b><b class="o-e" title="FLHD">' + icn('e','–') + '</b><b class="o-t" title="Timers">' + icn('t','–') + '</b><b class="o-v" title="View only">' + icn('v','–') + '</b>';
     // only the Admin sees the Online badge and list; everyone still checks in so they're counted
     if(role === 'admin') (document.getElementById('fbRole') || sync).after(chip);
     let beatErr = null;
@@ -206,11 +218,11 @@ body.no-delete .st-del{display:none!important}
       const since = Date.now() - ONLINE_MS;
       try {
         const [a, e, t, v] = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(r=> countSince('presence_' + r, since)));
-        chip.querySelector('.o-a').textContent = '👑 ' + a;
+        chip.querySelector('.o-a .n').textContent = a;
         chip.querySelector('.o-a').classList.toggle('on', a > 0);
-        chip.querySelector('.o-e').textContent = '✎ ' + e;
-        chip.querySelector('.o-t').textContent = '⏱ ' + t;
-        chip.querySelector('.o-v').textContent = '👁 ' + v;
+        chip.querySelector('.o-e .n').textContent = e;
+        chip.querySelector('.o-t .n').textContent = t;
+        chip.querySelector('.o-v .n').textContent = v;
         chip.title = beatErr
           ? `You aren’t being counted (${beatErr}). Ask the board owner to update the Firebase rules.`
           : `Online in the last 5 minutes: ${a ? 'Admin, ' : ''}${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only` + (role === 'admin' ? ' · click to see who' : '');
