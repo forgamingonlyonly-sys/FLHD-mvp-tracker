@@ -43,7 +43,10 @@ body.no-delete .st-del{display:none!important}
 .fb-online .dot{width:7px;height:7px;border-radius:50%;background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.18)}
 .fb-online b{font-weight:600}
 .fb-online b{display:inline-flex;align-items:center;gap:3px;line-height:1}
-.fb-online .ic{display:inline-flex;width:12px;height:12px}
+.fb-online .ic,.fb-role .ic{display:inline-flex;width:12px;height:12px}
+.fb-role{display:inline-flex;align-items:center;gap:5px;line-height:1}
+.fb-role .ic svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.fb-role.admin .ic svg{fill:currentColor;stroke-width:1.5}
 .fb-online .ic svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .fb-online .o-a .ic svg{fill:currentColor;stroke-width:1.5}
 .fb-online .o-a{opacity:.55}
@@ -128,7 +131,8 @@ body.no-delete .st-del{display:none!important}
     const b = document.createElement('button');
     b.id = 'fbRole'; b.type = 'button';
     b.className = 'fb-role ' + role;
-    b.textContent = role === 'admin' ? '👑 Admin' : role === 'editor' ? '✎ FLHD' : role === 'timer' ? '⏱ Timers' : '👁 View only';
+    const k = role === 'admin' ? 'a' : role === 'editor' ? 'e' : role === 'timer' ? 't' : 'v';
+    b.innerHTML = `<i class="ic">${ICON[k]}</i><span>${role === 'admin' ? 'Admin' : role === 'editor' ? 'FLHD' : role === 'timer' ? 'Timers' : 'View only'}</span>`;
     b.title = 'Your access on this device. Click for options.';
     sync.after(b);
     const menu = document.createElement('div');
