@@ -175,12 +175,14 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
     if(r) location.reload();
   };
   function askPassword(uid, upgrade){
+    let idleOut = false;
+    try { idleOut = sessionStorage.getItem(IDLE_FLAG) === '1'; sessionStorage.removeItem(IDLE_FLAG); } catch(e) {}
     return new Promise(resolve=>{
       const g = document.createElement('div');
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
         <h2>Falsehood</h2>
-        <p>${upgrade ? 'Enter the timer or editor password to get more access on this device.' : 'Enter the guild password to open the shared timers and storage. You only need to do this once on this device.'}</p>
+        <p>${upgrade ? 'Enter the timer or editor password to get more access on this device.' : (idleOut ? '<b>You were logged out after 3 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
         <input type="password" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
         <div class="g-err" role="alert"></div>
         <div class="g-row"><button type="button" class="g-skip">${upgrade ? 'Cancel' : 'Use offline'}</button><button class="g-go">Enter</button></div>
@@ -209,11 +211,39 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
       };
     });
   }
+  // ---- Log out after 3 hours with no activity (clicks, keys, taps, scrolling) on this device ----
+  const IDLE_MS = 3 * 60 * 60000, ACT_KEY = 'falsehood-last-active', IDLE_FLAG = 'falsehood-idle-out';
+  const lsGetX = k=>{ try { return localStorage.getItem(k); } catch(e) { return null; } };
+  const lsSetX = (k, v)=>{ try { localStorage.setItem(k, v); } catch(e) {} };
+  const lastActive = ()=> +lsGetX(ACT_KEY) || 0;
+  let actWritten = 0;
+  const markActive = ()=>{ const n = Date.now(); if(n - actWritten > 30000){ actWritten = n; lsSetX(ACT_KEY, String(n)); } };
+  async function idleLogout(){
+    try { sessionStorage.setItem(IDLE_FLAG, '1'); } catch(e) {}
+    try { if(auth.currentUser) await fs.collection('presence_' + role).doc(auth.currentUser.uid).delete(); } catch(e) {}
+    try { await auth.signOut(); } catch(e) {}
+    location.reload();
+  }
+  function startIdleWatch(){
+    lsSetX(ACT_KEY, String(Date.now())); actWritten = Date.now();
+    ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'].forEach(ev=> window.addEventListener(ev, markActive, { passive: true, capture: true }));
+    setInterval(()=>{ if(Date.now() - lastActive() > IDLE_MS) idleLogout(); }, 60000);
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState === 'visible' && Date.now() - lastActive() > IDLE_MS) idleLogout();
+    });
+  }
+
   async function ready(){
     if(gateDone) return gateDone;
     gateDone = (async ()=>{
       try {
         await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        // already idle too long since the last visit: start fresh (asks for the password again)
+        await new Promise(res=>{ const off = auth.onAuthStateChanged(()=>{ off(); res(); }); });
+        if(auth.currentUser && lastActive() && Date.now() - lastActive() > IDLE_MS){
+          try { sessionStorage.setItem(IDLE_FLAG, '1'); } catch(e) {}
+          try { await auth.signOut(); } catch(e) {}
+        }
         const cred = auth.currentUser ? { user: auth.currentUser } : await new Promise((res, rej)=>{
           const off = auth.onAuthStateChanged(u=>{ off(); u ? res({ user: u }) : auth.signInAnonymously().then(res, rej); });
         });
@@ -231,7 +261,7 @@ body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.vi
         window.FALSEHOOD_ROLE = role;
         if(member && role === 'viewer') document.body.classList.add('viewonly');
         if(member && role === 'timer') document.body.classList.add('storage-ro');
-        if(member){ showRole(); startPresence(uid); }
+        if(member){ showRole(); startPresence(uid); startIdleWatch(); }
         if(member && role === 'editor') await importOnce(uid);
         return member ? uid : null;
       } catch(e) {
