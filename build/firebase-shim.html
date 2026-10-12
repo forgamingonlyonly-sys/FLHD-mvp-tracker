@@ -42,6 +42,8 @@ body.no-delete .st-del{display:none!important}
 .fb-online{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;padding:3px 9px;border-radius:999px;border:1px solid rgba(127,110,150,.35);color:inherit;opacity:.9;vertical-align:middle;white-space:nowrap}
 .fb-online .dot{width:7px;height:7px;border-radius:50%;background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.18)}
 .fb-online b{font-weight:600}
+.fb-online .o-a{opacity:.55}
+.fb-online .o-a.on{opacity:1;color:#c9930a}
 .fb-online.clickable{cursor:pointer}
 .fb-online.clickable:hover{border-color:#b77ee8}
 .fb-who{min-width:240px;max-height:60vh;overflow:auto}
@@ -104,7 +106,7 @@ body.no-delete .st-del{display:none!important}
   // admin = everything FLHD can do, plus deleting Storage items
   const RANK = { viewer: 0, timer: 1, editor: 2, admin: 3 };   // admin only: delete Storage items, log out all devices
   const isOfficer = ()=> role === 'editor' || role === 'admin';
-  const presCol = ()=> 'presence_' + (role === 'admin' ? 'editor' : role);   // admins show under FLHD in the counts
+  const presCol = ()=> 'presence_' + role;   // presence_admin / _editor / _timer / _viewer
   // Editor password first, then the view-only one; the security rules decide which matches
   async function join(uid, pass, roles){
     for(const r of roles || ['admin', 'editor', 'timer', 'viewer']){
@@ -181,7 +183,7 @@ body.no-delete .st-del{display:none!important}
     const chip = document.createElement('span');
     chip.className = 'fb-online';
     chip.title = 'Guildmates with the tracker open in the last 5 minutes';
-    chip.innerHTML = '<span class="dot"></span>Online <b class="o-e" title="FLHD">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
+    chip.innerHTML = '<span class="dot"></span>Online <b class="o-a" title="Admin">👑 –</b><b class="o-e" title="FLHD">✎ –</b><b class="o-t" title="Timers">⏱ –</b><b class="o-v" title="View only">👁 –</b>';
     (document.getElementById('fbRole') || sync).after(chip);
     let beatErr = null;
     const beat = ()=> fs.collection(presCol()).doc(uid).set({ at: Date.now(), name: myNick || null, admin: role === 'admin' || null })
@@ -190,13 +192,15 @@ body.no-delete .st-del{display:none!important}
     const refresh = async ()=>{
       const since = Date.now() - ONLINE_MS;
       try {
-        const [e, t, v] = await Promise.all(['editor', 'timer', 'viewer'].map(r=> countSince('presence_' + r, since)));
+        const [a, e, t, v] = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(r=> countSince('presence_' + r, since)));
+        chip.querySelector('.o-a').textContent = '👑 ' + a;
+        chip.querySelector('.o-a').classList.toggle('on', a > 0);
         chip.querySelector('.o-e').textContent = '✎ ' + e;
         chip.querySelector('.o-t').textContent = '⏱ ' + t;
         chip.querySelector('.o-v').textContent = '👁 ' + v;
         chip.title = beatErr
           ? `You aren’t being counted (${beatErr}). Ask the board owner to update the Firebase rules.`
-          : `Online in the last 5 minutes: ${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only` + (isOfficer() ? ' · click to see who' : '');
+          : `Online in the last 5 minutes: ${a ? 'Admin, ' : ''}${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only` + (isOfficer() ? ' · click to see who' : '');
       } catch(x) { chip.title = 'Couldn’t load who’s online right now'; }
     };
     // FLHD accounts: click Online to see who's on, with nicknames
@@ -205,7 +209,7 @@ body.no-delete .st-del{display:none!important}
       const pop = document.createElement('div');
       pop.className = 'fb-menu fb-who'; pop.hidden = true;
       document.body.appendChild(pop);
-      const LBL = { editor: '✎ FLHD', timer: '⏱ Timers', viewer: '👁 View only' };
+      const LBL = { admin: '👑 Admin', editor: '✎ FLHD', timer: '⏱ Timers', viewer: '👁 View only' };
       const esc = v=> String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       const ago = t=>{ const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? 'now' : m + 'm ago'; };
       const open = async ()=>{
@@ -216,14 +220,14 @@ body.no-delete .st-del{display:none!important}
         pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
         const since = Date.now() - ONLINE_MS;
         try {
-          const groups = await Promise.all(['editor', 'timer', 'viewer'].map(async rl=>{
+          const groups = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(async rl=>{
             const snap = await fs.collection('presence_' + rl).where('at', '>', since).get();
             return [rl, snap.docs.map(d=>({ id: d.id, at: (d.data() || {}).at || 0, name: (d.data() || {}).name || names[d.id] || '', admin: !!(d.data() || {}).admin }))
               .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'))];
           }));
           pop.innerHTML = `<div class="m-info">Online in the last 5 minutes</div>` + groups.map(([rl, list])=>
             `<div class="w-grp"><div class="w-h">${LBL[rl]} <span>${list.length}</span></div>${list.length
-              ? list.map(p=>`<div class="w-row"><span>${p.admin ? '👑 ' : ''}${esc(p.name || 'No nickname')}${p.id === uid ? ' <em>(you)</em>' : ''}</span><small>${ago(p.at)}</small></div>`).join('')
+              ? list.map(p=>`<div class="w-row"><span>${esc(p.name || 'No nickname')}${p.id === uid ? ' <em>(you)</em>' : ''}</span><small>${ago(p.at)}</small></div>`).join('')
               : '<div class="w-none">Nobody</div>'}</div>`).join('');
           pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
         } catch(x) { pop.innerHTML = '<div class="m-info">Couldn’t load the list right now.</div>'; }
