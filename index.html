@@ -118,7 +118,7 @@ body.no-delete .st-del{display:none!important}
   // Editor password first, then the view-only one; the security rules decide which matches
   async function join(uid, pass, roles){
     for(const r of roles || ['admin', 'editor', 'timer', 'viewer']){
-      try { await fs.collection('members').doc(uid).set({ pass, role: r, joinedAt: Date.now() }); return r; }
+      try { await fs.collection('members').doc(uid).set({ pass, role: r, joinedAt: firebase.firestore.FieldValue.serverTimestamp() }); return r; }
       catch(x) { if(!(x && x.code === 'permission-denied')) throw x; }
     }
     return null;
@@ -406,16 +406,26 @@ body.no-delete .st-del{display:none!important}
     try { await auth.signOut(); } catch(e) {}
     location.reload();
   }
-  function watchSession(){
-    fs.doc('meta/session').onSnapshot(d=>{
-      const r = d.exists ? +((d.data() || {}).resetAt) || 0 : 0;
-      if(r && r > (+lsGetX(LOGIN_KEY) || 0)) forcedLogout();
-    }, ()=>{});
+  // Firebase also enforces this: after a reset, logins from before it can't read or write anything
+  async function staleLogin(uid, data){
+    const r = data && data.resetAt;
+    if(!r || data.by === uid) return false;
+    if(typeof r === 'number') return r > (+lsGetX(LOGIN_KEY) || 0);           // older style reset
+    if(typeof r.toMillis !== 'function') return false;                          // still being saved
+    try {
+      const me = await fs.collection('members').doc(uid).get();
+      const j = me.exists ? (me.data() || {}).joinedAt : null;
+      return !(j && typeof j.toMillis === 'function' && j.toMillis() > r.toMillis());
+    } catch(e) { return false; }
+  }
+  function watchSession(uid){
+    fs.doc('meta/session').onSnapshot(async d=>{
+      if(await staleLogin(uid, d.exists ? d.data() : null)) forcedLogout();
+    }, e=>{ if(e && e.code === 'permission-denied') forcedLogout(); });
   }
   async function logoutAll(){
-    const now = Date.now();
-    lsSetX(LOGIN_KEY, String(now + 1000));          // keep the officer who pressed it logged in
-    await fs.doc('meta/session').set({ resetAt: now, by: auth.currentUser ? auth.currentUser.uid : null, byName: myNick || null });
+    lsSetX(LOGIN_KEY, String(Date.now() + 1000));
+    await fs.doc('meta/session').set({ resetAt: firebase.firestore.FieldValue.serverTimestamp(), by: auth.currentUser ? auth.currentUser.uid : null, byName: myNick || null });
   }
 
   async function ready(){
@@ -437,6 +447,13 @@ body.no-delete .st-del{display:none!important}
         try {
           const me = await fs.collection('members').doc(uid).get();
           if(me.exists){ member = true; const r = (me.data() || {}).role; role = r === 'viewer' || r === 'timer' || r === 'admin' ? r : 'editor'; }
+          // logged in before the last "Log out all devices"? then ask for the password again
+          if(member){
+            try {
+              const sd = await fs.doc('meta/session').get();
+              if(await staleLogin(uid, sd.exists ? sd.data() : null)){ member = false; try { sessionStorage.setItem(KICK_FLAG, '1'); } catch(e) {} }
+            } catch(e) { if(e && e.code === 'permission-denied'){ member = false; try { sessionStorage.setItem(KICK_FLAG, '1'); } catch(x) {} } }
+          }
         } catch(e) { member = false; }
         if(!member){
           if(document.readyState === 'loading') await new Promise(r=> document.addEventListener('DOMContentLoaded', r, { once:true }));
@@ -446,7 +463,7 @@ body.no-delete .st-del{display:none!important}
         window.FALSEHOOD_ROLE = role;
         if(member && role === 'viewer') document.body.classList.add('viewonly');
         if(member && role === 'timer') document.body.classList.add('storage-ro');
-        if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); watchSession(); }
+        if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); watchSession(uid); }
         if(member && role !== 'admin') document.body.classList.add('no-delete');   // only the Admin deletes Storage items
         if(member && isOfficer()) await importOnce(uid);
         return member ? uid : null;

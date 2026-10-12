@@ -2,15 +2,26 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
     function secret() { return get(/databases/$(db)/documents/config/secret).data; }
-    function me() { return /databases/$(db)/documents/members/$(request.auth.uid); }
-    function member() { return request.auth != null && exists(me()); }
-    function role() { return get(me()).data.get('role', 'editor'); }
+    function mePath() { return /databases/$(db)/documents/members/$(request.auth.uid); }
+    function sessPath() { return /databases/$(db)/documents/meta/session; }
+    function signedIn() { return request.auth != null && exists(mePath()); }
+    // "Log out all devices": logins from before the latest reset stop working (except the Admin who pressed it)
+    function fresh() {
+      let s = get(sessPath()).data;
+      let j = get(mePath()).data.get('joinedAt', null);
+      return !(s.get('resetAt', null) is timestamp)
+        || s.get('by', '') == request.auth.uid
+        || (j is timestamp && j > s.resetAt);
+    }
+    function member() { return signedIn() && (!exists(sessPath()) || fresh()); }
+    function role() { return get(mePath()).data.get('role', 'editor'); }
     function admin() { return member() && role() == 'admin'; }
     function editor() { return member() && role() in ['editor', 'admin']; }
     function timer() { return member() && role() in ['editor', 'admin', 'timer']; }
     match /members/{uid} {
       allow get: if request.auth != null && request.auth.uid == uid;
-      allow create, update: if request.auth != null && request.auth.uid == uid && (
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.joinedAt == request.time && (
         (request.resource.data.role == 'admin' && request.resource.data.pass == secret().adminpass) ||
         (request.resource.data.role == 'editor' && request.resource.data.pass == secret().pass) ||
         (request.resource.data.role == 'timer' && request.resource.data.pass == secret().timerpass) ||
@@ -24,12 +35,14 @@ service cloud.firestore {
     match /mvps/{id} { allow write: if timer(); }
     match /cycle/{id} { allow write: if timer(); }
     match /loot/{id} { allow delete: if admin(); }
-    match /meta/{id} { allow write: if id == 'session' && admin(); }
+    match /meta/{id} {
+      allow create, update: if id == 'session' && admin() && request.resource.data.resetAt == request.time;
+    }
     match /{col}/{id} {
       allow read: if member() && !(col in ['members', 'config', 'names']);
       allow create, update: if editor() && !(col in ['members', 'config', 'names']) && !(col == 'meta' && id == 'session');
       allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot']);
-      allow write: if col in ['presence_editor', 'presence_timer', 'presence_viewer']
+      allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer']
         && member() && request.auth.uid == id;
     }
   }
