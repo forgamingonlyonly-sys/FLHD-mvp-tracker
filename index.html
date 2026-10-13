@@ -2130,7 +2130,7 @@ function renderNextUp(){
 
 
 /* ================= UNDO A KILL (per MVP) ================= */
-// After Killed it / Update, an Undo button shows on that MVP for 30 minutes and puts the previous timer back.
+// After Killed / Update, an Undo button shows on that MVP for 30 minutes and puts the previous timer back.
 const UNDO_MS = 30 * 60000;
 let undoLog = {};
 try { undoLog = JSON.parse(localStorage.getItem('falsehood-undo') || '{}') || {}; } catch(e) { undoLog = {}; }
@@ -2925,7 +2925,7 @@ function render(){
         ${m.lastDeath ? `<span class="sep">·</span><span>died ${formatTime(m.lastDeath)}</span>` : ''}
       </div>
       <div class="controls">
-        <button class="btn btn-primary kill" title="Log a kill at the current time" ${locked ? 'disabled' : ''}>Killed it</button>
+        <button class="btn btn-primary kill" title="Log a kill at the current time" ${locked ? 'disabled' : ''}>Killed</button>
         <button class="btn update" title="Log a kill that happened earlier" ${locked ? 'disabled' : ''}>Update</button>
         <button class="btn btn-icon reset" title="Reset timer" aria-label="Reset ${esc(m.name)}" ${locked ? 'disabled' : ''}>↺</button>
         <button class="btn btn-icon hide" title="Hide this MVP" aria-label="Hide ${esc(m.name)}">✕</button>
@@ -3037,7 +3037,7 @@ const A = {
   }
 };
 /* ================= SPAWN ALERTS ================= */
-// Banners that stay until dismissed, live countdowns, "Killed it", pre-alerts, repeat chime, voice.
+// Banners that stay until dismissed, live countdowns, "Killed", pre-alerts, repeat chime, voice.
 let alertsOn = (()=>{ try { return localStorage.getItem('falsehood-alerts') === '1'; } catch(e) { return false; } })();
 let alertCfg = { pre: 5, repeat: true, voice: false, banner: true, sound: true, desktop: true, title: true, mvp: true, mini: true, overdue: true, timer: true, voiceName: '', rate: 1.05, pitch: 1, vol: 1 };
 try { Object.assign(alertCfg, JSON.parse(localStorage.getItem('falsehood-alert-settings') || '{}')); } catch(e) {}
@@ -3168,7 +3168,7 @@ function showBanner(m, kind){
       </span>
     </button>
     <span class="ab-actions">
-      ${canKill ? '<button class="btn btn-primary ab-kill">Killed it</button>' : ''}
+      ${canKill ? '<button class="btn btn-primary ab-kill">Killed</button>' : ''}
       <button class="btn btn-icon ab-close" aria-label="Dismiss">✕</button>
     </span>`;
   el.querySelector('.ab-tag').textContent = m.type === 'mini' ? 'MINI MVP' : 'MVP';
