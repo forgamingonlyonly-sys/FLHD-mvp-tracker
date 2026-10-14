@@ -28,6 +28,10 @@ auto = root / 'autodetect.html'
 if auto.exists():
     i = src.rfind('</body>')
     src = src[:i] + auto.read_text() + '\n' + src[i:]
+dc = root / 'discord.html'
+if dc.exists():
+    i = src.rfind('</body>')
+    src = src[:i] + dc.read_text() + '\n' + src[i:]
 import time, json
 build_id = time.strftime('%Y%m%d%H%M%S', time.gmtime())
 upd = root / 'updater.html'
