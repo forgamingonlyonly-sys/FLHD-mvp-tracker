@@ -48,6 +48,9 @@ body.no-delete .st-del{display:none!important}
 .fb-menu button{display:block;width:100%;text-align:left;padding:8px 10px;margin-top:4px;border-radius:8px;border:1px solid #3b2d52;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
 .fb-menu button:hover{background:#3a3146}
 .fb-menu .m-out{color:#ff8a98}
+.fb-watch{display:inline-flex;align-items:center;gap:5px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;padding:3px 10px;border-radius:999px;border:1px solid rgba(47,191,113,.45);color:#2fbf71;white-space:nowrap;vertical-align:middle}
+.fb-watch.none{border-color:rgba(224,161,0,.5);color:#c98b00}
+.fb-watch.clickable{cursor:pointer}
 .fb-online{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;padding:3px 9px;border-radius:999px;border:1px solid rgba(127,110,150,.35);color:inherit;opacity:.9;vertical-align:middle;white-space:nowrap}
 .fb-online .dot{width:7px;height:7px;border-radius:50%;background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.18)}
 .fb-online b{font-weight:600}
@@ -192,7 +195,7 @@ body.no-delete .st-del{display:none!important}
     };
   }
   // Who's online: each open tracker checks in every 2 minutes; counts use cheap server-side count queries
-  const ONLINE_MS = 5 * 60000, BEAT_MS = 2 * 60000;
+  const ONLINE_MS = 5 * 60000, BEAT_MS = 2 * 60000, WATCH_MS = 3 * 60000;
   async function countSince(col, since){
     const token = await auth.currentUser.getIdToken();
     const url = 'https://firestore.googleapis.com/v1/projects/' + cfg.projectId + '/databases/(default)/documents:runAggregationQuery';
@@ -230,8 +233,63 @@ body.no-delete .st-del{display:none!important}
       ])
       .then(()=>{ beatErr = null; chip.classList.remove('err'); })
       .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
+    // 📡 who is running Auto-detect: everyone sees how many; only the Admin can see who
+    const wchip = document.createElement('span');
+    wchip.className = 'fb-watch';
+    wchip.innerHTML = '📡 <span class="n">–</span>';
+    chip.after(wchip);
+    let watching = false, wTimer = null;
+    const wBeat = ()=> watching ? Promise.all([
+        fs.collection('watchers').doc(PTOKEN).set({ at: Date.now() }),
+        fs.collection('watchers_who').doc(PTOKEN).set({ uid, name: myNick || null, at: Date.now() }),
+      ]).catch(()=>{}) : Promise.resolve();
+    const wPaint = n=>{
+      wchip.classList.toggle('none', n === 0);
+      wchip.innerHTML = n === 0 ? '⚠ No auto-detect' : `📡 <span class="n">${n}</span> watching`;
+      wchip.title = n === 0
+        ? 'Nobody is running Auto-detect right now, so kills must be logged by hand.' + (role !== 'viewer' ? ' Start it with the Auto-detect button.' : '')
+        : `${n} guildmate${n === 1 ? ' is' : 's are'} running Auto-detect, so kills in chat are logged automatically.` + (role === 'admin' ? ' Click to see who.' : '');
+    };
+    const wRefresh = async ()=>{ try { wPaint(await countSince('watchers', Date.now() - WATCH_MS)); } catch(x) {} };
+    window.FALSEHOOD_WATCH = {
+      start(){ watching = true; wBeat().then(wRefresh); clearInterval(wTimer); wTimer = setInterval(wBeat, 60000); },
+      stop(){ watching = false; clearInterval(wTimer);
+        Promise.all([fs.collection('watchers').doc(PTOKEN).delete(), fs.collection('watchers_who').doc(PTOKEN).delete()]).catch(()=>{}).then(wRefresh); },
+      refresh: wRefresh,
+    };
+    window.addEventListener('pagehide', ()=>{ if(watching){ try { fs.collection('watchers').doc(PTOKEN).delete(); fs.collection('watchers_who').doc(PTOKEN).delete(); } catch(e) {} } });
+    if(role === 'admin'){
+      wchip.classList.add('clickable'); wchip.setAttribute('role', 'button'); wchip.tabIndex = 0;
+      const wpop = document.createElement('div');
+      wpop.className = 'fb-menu fb-who'; wpop.hidden = true;
+      document.body.appendChild(wpop);
+      const escW = v=> String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const agoW = t=>{ const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? 'now' : m + 'm ago'; };
+      wchip.onclick = async e=>{
+        e.stopPropagation();
+        if(!wpop.hidden){ wpop.hidden = true; return; }
+        const r = wchip.getBoundingClientRect();
+        wpop.innerHTML = '<div class="m-info">Loading…</div>'; wpop.hidden = false;
+        wpop.style.top = (r.bottom + 6) + 'px';
+        wpop.style.left = Math.max(8, Math.min(r.left, innerWidth - wpop.offsetWidth - 8)) + 'px';
+        try {
+          const snap = await fs.collection('watchers_who').where('at', '>', Date.now() - WATCH_MS).get();
+          const seen = new Set();
+          const list = snap.docs.map(d=> d.data() || {}).filter(w=>{ if(seen.has(w.uid)) return false; seen.add(w.uid); return true; })
+            .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'));
+          wpop.innerHTML = `<div class="m-info w-top"><span>Running Auto-detect</span></div><div class="w-grp">${list.length
+            ? list.map(w=> `<div class="w-row"><span>${w.name ? escW(w.name) : '<i>Unnamed</i>'}${w.uid === uid ? ' <em>(you)</em>' : ''}</span><small>${agoW(w.at)}</small></div>`).join('')
+            : '<div class="w-none">Nobody</div>'}</div>`;
+          wpop.style.left = Math.max(8, Math.min(r.left, innerWidth - wpop.offsetWidth - 8)) + 'px';
+        } catch(x) { wpop.innerHTML = '<div class="m-info">Couldn’t load the list right now.</div>'; }
+      };
+      wchip.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); wchip.onclick(e); } };
+      wpop.onclick = e=> e.stopPropagation();
+      document.addEventListener('click', ()=>{ wpop.hidden = true; });
+    }
     const refresh = async ()=>{
       const since = Date.now() - ONLINE_MS;
+      wRefresh();
       try {
         const [a, e, t, v] = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(r=> countSince('presence_' + r, since)));
         chip.querySelector('.o-a .n').textContent = a;
@@ -808,6 +866,7 @@ h1 small { font-family: var(--font-body); font-size: 11px; letter-spacing: .14em
 .b-overdue { color: var(--overdue); background: var(--overdue-bg); }
 .b-unknown { color: var(--unknown); background: var(--unknown-bg); }
 .b-killed { color: var(--text-2); background: var(--unknown-bg); }
+.auto-mark { font-size: 11px; cursor: help; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .b-window::before { animation: none; } .item { transition: none; } }
 
@@ -1517,7 +1576,7 @@ let writeChain = Promise.resolve();
 function persist(m){
   if(mode === 'local'){ saveLocalTimers(); return; }
   if(mode !== 'live') return;
-  const body = { lastDeath: m.lastDeath, by: m.by || null, location: m.location || '', updatedAt: Date.now() };
+  const body = { lastDeath: m.lastDeath, by: m.by || null, location: m.location || '', updatedAt: Date.now(), auto: !!m.auto };
   if(m.id === 'boss_event'){ body.ev = m.ev || null; body.killer = m.killer || ''; }
   writeChain = writeChain.then(()=> db.collection('mvps').doc(m.id).set(body)).catch(handleWriteError);
 }
@@ -1571,6 +1630,7 @@ function applySnapshot(snap){
       if(!firstSnapshot && m.ev === 'spawn' && m.lastDeath && m.lastDeath !== was && Date.now() - m.lastDeath < 120000) prevStatus[m.id] = 'waiting';
     }
     m.by = typeof b.by === 'string' ? b.by : null;
+    m.auto = b.auto === true;
     m.location = (typeof b.location === 'string' && b.location) ? b.location : m.defaultLocation;
   });
   if(firstSnapshot){
@@ -2203,6 +2263,7 @@ function undoKill(m){
   if(!u || m.lastDeath !== u.setTo) return;
   m.lastDeath = u.prev;
   m.by = u.prevBy;
+  m.auto = !!u.prevAuto;
   if(m.id === 'boss_event'){ m.ev = u.prevEv || (u.prev ? 'dead' : null); m.killer = u.prevKiller || ''; }
   persist(m);
   delete undoLog[m.id]; saveUndo();
@@ -2940,11 +3001,13 @@ function requestRender(){
 }
 
 function logKill(m, minutesAgo){
-  const prev = m.lastDeath, prevBy = m.by, prevEv = m.ev, prevKiller = m.killer;
+  const prev = m.lastDeath, prevBy = m.by, prevEv = m.ev, prevKiller = m.killer, prevAuto = !!m.auto;
+  m.auto = !!m._auto; m._auto = null;   // logged by Auto-detect (📡) or by a person
   if(m.id === 'boss_event'){ m.ev = m._ev || 'dead'; m.killer = m._killer || ''; m._ev = m._killer = null; }
   m.lastDeath = Date.now() - minutesAgo*60000;
   m.by = myId;
   recordUndo(m, prev, prevBy);
+  undoLog[m.id].prevAuto = prevAuto; saveUndo();
   if(m.id === 'boss_event'){ undoLog[m.id].prevEv = prevEv || null; undoLog[m.id].prevKiller = prevKiller || ''; saveUndo(); }
   prefs.input[m.id] = 0; savePrefs();
   prevStatus[m.id] = getStatus(m);
@@ -2953,6 +3016,7 @@ function logKill(m, minutesAgo){
 }
 function clearKill(m){
   m.lastDeath = null;
+  m.auto = false;
   if(m.id === 'boss_event'){ m.ev = null; m.killer = ''; }
   m.by = myId;
   prefs.input[m.id] = 0; savePrefs();
@@ -2960,6 +3024,7 @@ function clearKill(m){
   persist(m);
 }
 
+const autoMark = m=> m.auto ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat. If it’s wrong, Undo or Reset it.">📡</span>' : '';
 function render(){
   pendingRender = false;
   const list = document.getElementById('mvpList');
@@ -2982,8 +3047,8 @@ function render(){
         <span class="loc" spellcheck="false"></span>
         <span class="sep">·</span>
         ${m.id === 'boss_event'
-          ? (m.lastDeath ? `<span>${m.ev === 'spawn' ? 'spawned' : 'killed'} ${formatTime(m.lastDeath)}</span>` : '<span>random, about hourly</span>')
-          : `<span>${m.min}~${m.max}m</span>${m.lastDeath ? `<span class="sep">·</span><span>died ${formatTime(m.lastDeath)}</span>` : ''}`}
+          ? (m.lastDeath ? `<span>${m.ev === 'spawn' ? 'spawned' : 'killed'} ${formatTime(m.lastDeath)}${autoMark(m)}</span>` : '<span>random, about hourly</span>')
+          : `<span>${m.min}~${m.max}m</span>${m.lastDeath ? `<span class="sep">·</span><span>died ${formatTime(m.lastDeath)}${autoMark(m)}</span>` : ''}`}
       </div>
       <div class="controls">
         <button class="btn btn-primary kill" title="Log a kill at the current time" ${locked ? 'disabled' : ''}>Killed</button>
@@ -3892,10 +3957,25 @@ setInterval(()=>{
   }
 
   // find each line of kill-green text and return it as a clean black-on-white picture, one line per picture
+  function buildMasks(img){
+    const d = img.data, n = img.width * img.height;
+    const k = new Uint8Array(n), r = new Uint8Array(n), y = new Uint8Array(n);
+    for(let p = 0, i = 0; p < n; p++, i += 4){
+      const R = d[i], G = d[i+1], B = d[i+2];
+      const L = 0.299*R + 0.587*G + 0.114*B;
+      if(L < 68 || (L > 84 && L < 197) || L > 233) continue;          // not the brightness of any kill / event text
+      const cb = (B - L)*0.564 + 128, cr = (R - L)*0.713 + 128;
+      if(L <= 84){ if(cr >= 150 && cb >= 80 && cb <= 122) r[p] = 1; }
+      else if(L <= 213){ if(cb <= 120 && cr <= 120) k[p] = 1; }
+      else if(L >= 217 && cb <= 100 && cr >= 128) y[p] = 1;
+    }
+    return { k, r, y };
+  }
   function findLines(img, isAnn, keepShort){
     const W = img.width, H = img.height, d = img.data;
-    const mask = new Uint8Array(W * H);
-    for(let y = 0, i = 0; y < H; y++) for(let x = 0; x < W; x++, i += 4) if(isAnn(d[i], d[i+1], d[i+2])) mask[y*W + x] = 1;
+    let mask;
+    if(isAnn instanceof Uint8Array) mask = isAnn;
+    else { mask = new Uint8Array(W * H); for(let y = 0, i = 0; y < H; y++) for(let x = 0; x < W; x++, i += 4) if(isAnn(d[i], d[i+1], d[i+2])) mask[y*W + x] = 1; }
     // rows that hold at least 2 matching pixels between columns c0..c1, split into runs at blank rows
     const rowRuns = (c0, c1, r0, r1)=>{
       const runs = []; let y0 = -1;
@@ -4145,7 +4225,7 @@ setInterval(()=>{
     ok.onclick = ()=>{
       area = { x: sel.x / cv.width, y: sel.y / cv.height, w: sel.w / cv.width, h: sel.h / cv.height };
       try { localStorage.setItem(AREA_KEY, JSON.stringify(area)); } catch(e) {}
-      seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; warm = false;      // whatever is in chat right now counts as old
+      seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; hot = []; warm = false;      // whatever is in chat right now counts as old
       ov.remove();
       addLog('ok', 'Chat area set', 'Only kills in your chat box are read');
       status = 'Watching'; paintBtn();
@@ -4154,7 +4234,7 @@ setInterval(()=>{
   const diag = { size: '', black: false, lines: 0, lastLineAt: 0, lastText: '', lastTextAt: 0, outside: 0, frozenSince: 0, sum: -1, frozen: false };
   // small copy of the last frame, for the preview in the panel
   const thumb = document.createElement('canvas');
-  let scanN = 0;
+  let scanN = 0, hot = [], hotAt = 0;
 
   function addLog(kind, title, sub){
     log.unshift({ kind, title, sub, at: Date.now() });
@@ -4189,32 +4269,61 @@ setInterval(()=>{
       const ax = Math.max(0, Math.round(area.x * W)), ay = Math.max(0, Math.round(area.y * H));
       const aw = Math.min(W - ax, Math.round(area.w * W)), ah = Math.min(H - ay, Math.round(area.h * H));
       if(aw < 40 || ah < 10){ status = 'The marked chat area is too small. Mark it again.'; return; }
-      const img = cx.getImageData(ax, ay, aw, ah);
-      // a fully black picture usually means Ragnarok is in full-screen mode
-      let lit = 0; for(let i = 0; i < img.data.length; i += 4 * 97) if(img.data[i] + img.data[i+1] + img.data[i+2] > 30) lit++;
-      diag.size = W + '×' + H + ' · reading chat area ' + aw + '×' + ah; diag.black = lit < 20;
-      const lines = findLines(img, isAnn, true);
-      diag.lines = lines.filter(l=> !l.short).length; if(diag.lines) diag.lastLineAt = Date.now();
+      diag.size = W + '×' + H + (areaIsDefault() ? '' : ' · marked area ' + aw + '×' + ah);
+      const t0 = performance.now();
       scanN++;
-      // is the picture changing at all? (a minimized game sends one frozen picture)
+      // after a full look finds the chat lines, only the strips around them are read (much less work);
+      // the whole area is looked at again every 8th check, and whenever no strips are known
+      const doFull = !hot.length || scanN % 8 === 0 || Date.now() - hotAt > 10 * 60000;
+      const rects = doFull ? [{ x: 0, y: 0, w: aw, h: ah }] : hot;
+      const lines = [], evLines = [];
+      for(const rc of rects){
+        const im = cx.getImageData(ax + rc.x, ay + rc.y, rc.w, rc.h);
+        const mk = buildMasks(im);
+        const shift = l=>{ l.x0 += rc.x; l.x1 += rc.x; l.y0 += rc.y; l.y1 += rc.y; return l; };
+        lines.push(...findLines(im, mk.k, true).map(shift));
+        evLines.push(...findLines(im, mk.r, true).map(l=> (l.sig = 'e0' + l.sig, shift(l))));
+        evLines.push(...findLines(im, mk.y, true).map(l=> (l.sig = 'e1' + l.sig, shift(l))));
+      }
+      lines.sort((p, q)=> p.y0 - q.y0 || p.x0 - q.x0);
+      evLines.sort((p, q)=> p.y0 - q.y0 || p.x0 - q.x0);
+      if(doFull){
+        // strips: bands of rows holding coloured lines (with room below for new lines), full width
+        const all = lines.concat(evLines).filter(l=> !l.short).sort((p, q)=> p.y0 - q.y0);
+        if(all.length){
+          const bands = [];
+          for(const l of all){
+            const b = bands[bands.length - 1];
+            if(b && l.y0 - b.y1 < 150) b.y1 = Math.max(b.y1, l.y1); else bands.push({ y0: l.y0, y1: l.y1 });
+          }
+          hot = bands.map(b=>{ const y = Math.max(0, b.y0 - 40), y2 = Math.min(ah, b.y1 + 140); return { x: 0, y, w: aw, h: y2 - y }; });
+          hotAt = Date.now();
+        }
+      }
+      diag.strips = doFull ? 'whole area' : hot.length + ' strip' + (hot.length > 1 ? 's' : '') + ' (' + Math.round(100 * hot.reduce((n, r)=> n + r.h, 0) / ah) + '% of the area)';
+      diag.lines = lines.filter(l=> !l.short).length; if(diag.lines) diag.lastLineAt = Date.now();
+      // is the picture changing at all? (a minimized game sends one frozen picture) — checked on the small preview copy
       {
-        const full = cx.getImageData(0, 0, W, H).data;
-        let sum = 0; for(let i = 0; i < full.length; i += 4 * 37) sum = (sum * 31 + full[i] + full[i+1] * 3 + full[i+2] * 7) % 2147483647;
+        const tw = 300, th = Math.round(H * tw / W);
+        thumb.width = tw; thumb.height = th;
+        const tctx = thumb.getContext('2d', { willReadFrequently: true });
+        tctx.drawImage(cv, 0, 0, tw, th);
+        const full = tctx.getImageData(0, 0, tw, th).data;
+        // a fully black picture usually means Ragnarok is in full-screen mode
+        let lit = 0; for(let i = 0; i < full.length; i += 4 * 7) if(full[i] + full[i+1] + full[i+2] > 30) lit++;
+        diag.black = lit < 20;
+        let sum = 0; for(let i = 0; i < full.length; i += 4 * 3) sum = (sum * 31 + full[i] + full[i+1] * 3 + full[i+2] * 7) % 2147483647;
         if(sum === diag.sum){ if(!diag.frozenSince) diag.frozenSince = Date.now(); }
         else { diag.frozenSince = 0; diag.sum = sum; }
         diag.frozen = !!diag.frozenSince && Date.now() - diag.frozenSince > 60000;
         // nothing readable inside a marked area: is there kill / event text elsewhere in the window?
-        if(!areaIsDefault() && !diag.lines && scanN % 4 === 0){
-          const whole = cx.getImageData(0, 0, W, H);
-          const outside = l=> l.y1 + ay < ay || l.y0 >= ay + ah || l.x1 < ax || l.x0 >= ax + aw;
+        if(!areaIsDefault() && !diag.lines && !evLines.length && scanN % 4 === 0){
+          const whole = cx.getImageData(0, 0, W, H), wm = buildMasks(whole);
           const inArea = l=> !(l.y1 < ay || l.y0 >= ay + ah || l.x1 < ax || l.x0 >= ax + aw);
-          diag.outside = [isAnn].concat(EV_COLORS).reduce((n, fn)=> n + findLines(whole, fn).filter(l=> !inArea(l)).length, 0);
-        } else if(diag.lines) diag.outside = 0;
-        const tw = 300, th = Math.round(H * tw / W);
-        thumb.width = tw; thumb.height = th;
-        thumb.getContext('2d').drawImage(cv, 0, 0, tw, th);
+          diag.outside = [wm.k, wm.r, wm.y].reduce((n, mk)=> n + findLines(whole, mk).filter(l=> !inArea(l)).length, 0);
+        } else if(diag.lines || evLines.length) diag.outside = 0;
       }
-      const evLines = EV_COLORS.flatMap((fn, ci)=> findLines(img, fn, true).map(l=> (l.sig = 'e' + ci + l.sig, l))).sort((p, q)=> p.y0 - q.y0 || p.x0 - q.x0);
+      diag.ms = Math.round(performance.now() - t0); diag.msFull = doFull ? diag.ms : diag.msFull; diag.msPart = doFull ? diag.msPart : diag.ms;
       const now = Date.now();
       for(const [k, v] of seenSig) if(now - v.at > 10 * 60000) seenSig.delete(k);
       for(const [k, t] of missSeen) if(now - t > 10 * 60000) missSeen.delete(k);
@@ -4357,7 +4466,7 @@ setInterval(()=>{
     try { can = A.canKill(); } catch(e) {}
     if(!can){ addLog('miss', `${m.name}: you can’t log kills`, who); return; }
     recent.set(m.id, now);
-    try { logKill(m, 0); } catch(e) { addLog('miss', `${m.name}: couldn’t log`, String(e && e.message || e)); return; }
+    try { m._auto = true; logKill(m, 0); } catch(e) { addLog('miss', `${m.name}: couldn’t log`, String(e && e.message || e)); return; }
     addLog('ok', `${m.name} logged`, [p.map, who].filter(Boolean).join(' · '));
     try { showToast(`📡 Auto-logged ${m.name}${p.killer ? ' — killed by ' + p.killer : ''}`); } catch(e) {}
   }
@@ -4431,7 +4540,7 @@ setInterval(()=>{
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
       m._ev = 'dead'; m._killer = e.killer || '';
-      logKill(m, 0);
+      m._auto = true; logKill(m, 0);
     } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
     addLog('ok', `Boss Event killed: ${e.boss || 'MVP'}`, [e.map, who].filter(Boolean).join(' · '));
     try { showToast(`📡 Boss Event: ${e.boss || 'MVP'} defeated in ${e.map || '?'}${e.killer ? ' by ' + e.killer : ''}`); } catch(x) {}
@@ -4452,7 +4561,7 @@ setInterval(()=>{
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
       m._ev = 'spawn'; m._killer = '';
-      logKill(m, 0);
+      m._auto = true; logKill(m, 0);
       if(typeof prevStatus !== 'undefined') prevStatus[m.id] = 'waiting';   // ring the spawn alert here too
     } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
     addLog('ok', `Boss Event spawned: ${e.boss || 'MVP'}`, e.map || '');
@@ -4467,7 +4576,7 @@ setInterval(()=>{
       stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 2, max: 5 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
     } catch(e) { return; }   // they cancelled the share box
     track = stream.getVideoTracks()[0];
-    warm = false; seenKill.clear(); seenSig.clear(); seenEvt.clear(); linePos.clear(); prevGroups = [];
+    warm = false; seenKill.clear(); seenSig.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; hot = [];
     track.addEventListener('ended', stop);
     grabber = (typeof ImageCapture !== 'undefined') ? new ImageCapture(track) : null;
     if(!grabber){ video = document.createElement('video'); video.muted = true; video.srcObject = stream; video.play().catch(()=>{}); }
@@ -4480,6 +4589,7 @@ setInterval(()=>{
     ticker = new Worker(URL.createObjectURL(blob));
     ticker.onmessage = scan;
     addLog('ok', 'Auto-detect started', 'Sharing: ' + (track.label || 'screen'));
+    try { window.FALSEHOOD_WATCH && window.FALSEHOOD_WATCH.start(); } catch(e) {}
   }
   function stop(){
     if(ticker){ ticker.terminate(); ticker = null; }
@@ -4488,6 +4598,7 @@ setInterval(()=>{
     stream = track = grabber = null;
     if(video){ video.srcObject = null; video = null; }
     status = '';
+    try { window.FALSEHOOD_WATCH && window.FALSEHOOD_WATCH.stop(); } catch(e) {}
     addLog('skip', 'Auto-detect stopped', '');
     paintBtn();
   }
@@ -4513,7 +4624,7 @@ setInterval(()=>{
       <p>${on ? 'Keep Ragnarok and this tab open, with your chat box visible. New <i>“… has killed [MVP] at …”</i> lines in chat are logged for everyone.'
               : 'Share your <b>Ragnarok game window</b>. It reads the whole game window, so your chat box can be anywhere; you can mark just the chat box if you like. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. The <b>[PW2 Boss Event]</b> “has spawned” (red) and “has been defeated” (yellow) lines update the Boss Event row. Nothing touches the game; it only reads the picture.'}</p>
       <div class="kd-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
-      ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
+      ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · reading ${esc(diag.strips || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
       <div class="kd-log">${log.length ? log.slice(0, 12).map(e=>`<div class="kd-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="kd-none">Nothing detected yet.</div>'}</div>
       ${on && thumb.width ? '<div class="kd-prev"><span>What it sees (green box = area read)</span><canvas class="kd-thumb"></canvas></div>' : ''}
       ${on ? `<div class="kd-area">${areaIsDefault() ? '✓ Reading the whole game window' : '✓ Reading your marked chat box'} <span><button type="button" class="kd-mark">${areaIsDefault() ? 'Mark chat box' : 'Change'}</button>${areaIsDefault() ? '' : ' <button type="button" class="kd-reset">Reset</button>'}</span></div>` : ''}
@@ -4529,7 +4640,7 @@ setInterval(()=>{
     if(go) go.onclick = ()=>{ start(); };
     if(st) st.onclick = ()=>{ stop(); };
     const rs = pop.querySelector('.kd-reset');
-    if(rs) rs.onclick = ()=>{ area = DEFAULT_AREA; try { localStorage.removeItem(AREA_KEY); } catch(e) {} seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; warm = false; addLog('ok', 'Reading the whole game window', ''); paintPop(); };
+    if(rs) rs.onclick = ()=>{ area = DEFAULT_AREA; try { localStorage.removeItem(AREA_KEY); } catch(e) {} seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; hot = []; warm = false; addLog('ok', 'Reading the whole game window', ''); paintPop(); };
     const mk = pop.querySelector('.kd-mark'); if(mk) mk.onclick = ()=>{ pop.hidden = true; pickArea(); };
   }
   function mount(){
@@ -4598,7 +4709,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014212342';
+  const BUILD = '20261014214107';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';

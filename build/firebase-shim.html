@@ -39,6 +39,9 @@ body.no-delete .st-del{display:none!important}
 .fb-menu button{display:block;width:100%;text-align:left;padding:8px 10px;margin-top:4px;border-radius:8px;border:1px solid #3b2d52;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
 .fb-menu button:hover{background:#3a3146}
 .fb-menu .m-out{color:#ff8a98}
+.fb-watch{display:inline-flex;align-items:center;gap:5px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;padding:3px 10px;border-radius:999px;border:1px solid rgba(47,191,113,.45);color:#2fbf71;white-space:nowrap;vertical-align:middle}
+.fb-watch.none{border-color:rgba(224,161,0,.5);color:#c98b00}
+.fb-watch.clickable{cursor:pointer}
 .fb-online{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;padding:3px 9px;border-radius:999px;border:1px solid rgba(127,110,150,.35);color:inherit;opacity:.9;vertical-align:middle;white-space:nowrap}
 .fb-online .dot{width:7px;height:7px;border-radius:50%;background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.18)}
 .fb-online b{font-weight:600}
@@ -183,7 +186,7 @@ body.no-delete .st-del{display:none!important}
     };
   }
   // Who's online: each open tracker checks in every 2 minutes; counts use cheap server-side count queries
-  const ONLINE_MS = 5 * 60000, BEAT_MS = 2 * 60000;
+  const ONLINE_MS = 5 * 60000, BEAT_MS = 2 * 60000, WATCH_MS = 3 * 60000;
   async function countSince(col, since){
     const token = await auth.currentUser.getIdToken();
     const url = 'https://firestore.googleapis.com/v1/projects/' + cfg.projectId + '/databases/(default)/documents:runAggregationQuery';
@@ -221,8 +224,63 @@ body.no-delete .st-del{display:none!important}
       ])
       .then(()=>{ beatErr = null; chip.classList.remove('err'); })
       .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
+    // 📡 who is running Auto-detect: everyone sees how many; only the Admin can see who
+    const wchip = document.createElement('span');
+    wchip.className = 'fb-watch';
+    wchip.innerHTML = '📡 <span class="n">–</span>';
+    chip.after(wchip);
+    let watching = false, wTimer = null;
+    const wBeat = ()=> watching ? Promise.all([
+        fs.collection('watchers').doc(PTOKEN).set({ at: Date.now() }),
+        fs.collection('watchers_who').doc(PTOKEN).set({ uid, name: myNick || null, at: Date.now() }),
+      ]).catch(()=>{}) : Promise.resolve();
+    const wPaint = n=>{
+      wchip.classList.toggle('none', n === 0);
+      wchip.innerHTML = n === 0 ? '⚠ No auto-detect' : `📡 <span class="n">${n}</span> watching`;
+      wchip.title = n === 0
+        ? 'Nobody is running Auto-detect right now, so kills must be logged by hand.' + (role !== 'viewer' ? ' Start it with the Auto-detect button.' : '')
+        : `${n} guildmate${n === 1 ? ' is' : 's are'} running Auto-detect, so kills in chat are logged automatically.` + (role === 'admin' ? ' Click to see who.' : '');
+    };
+    const wRefresh = async ()=>{ try { wPaint(await countSince('watchers', Date.now() - WATCH_MS)); } catch(x) {} };
+    window.FALSEHOOD_WATCH = {
+      start(){ watching = true; wBeat().then(wRefresh); clearInterval(wTimer); wTimer = setInterval(wBeat, 60000); },
+      stop(){ watching = false; clearInterval(wTimer);
+        Promise.all([fs.collection('watchers').doc(PTOKEN).delete(), fs.collection('watchers_who').doc(PTOKEN).delete()]).catch(()=>{}).then(wRefresh); },
+      refresh: wRefresh,
+    };
+    window.addEventListener('pagehide', ()=>{ if(watching){ try { fs.collection('watchers').doc(PTOKEN).delete(); fs.collection('watchers_who').doc(PTOKEN).delete(); } catch(e) {} } });
+    if(role === 'admin'){
+      wchip.classList.add('clickable'); wchip.setAttribute('role', 'button'); wchip.tabIndex = 0;
+      const wpop = document.createElement('div');
+      wpop.className = 'fb-menu fb-who'; wpop.hidden = true;
+      document.body.appendChild(wpop);
+      const escW = v=> String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const agoW = t=>{ const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? 'now' : m + 'm ago'; };
+      wchip.onclick = async e=>{
+        e.stopPropagation();
+        if(!wpop.hidden){ wpop.hidden = true; return; }
+        const r = wchip.getBoundingClientRect();
+        wpop.innerHTML = '<div class="m-info">Loading…</div>'; wpop.hidden = false;
+        wpop.style.top = (r.bottom + 6) + 'px';
+        wpop.style.left = Math.max(8, Math.min(r.left, innerWidth - wpop.offsetWidth - 8)) + 'px';
+        try {
+          const snap = await fs.collection('watchers_who').where('at', '>', Date.now() - WATCH_MS).get();
+          const seen = new Set();
+          const list = snap.docs.map(d=> d.data() || {}).filter(w=>{ if(seen.has(w.uid)) return false; seen.add(w.uid); return true; })
+            .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'));
+          wpop.innerHTML = `<div class="m-info w-top"><span>Running Auto-detect</span></div><div class="w-grp">${list.length
+            ? list.map(w=> `<div class="w-row"><span>${w.name ? escW(w.name) : '<i>Unnamed</i>'}${w.uid === uid ? ' <em>(you)</em>' : ''}</span><small>${agoW(w.at)}</small></div>`).join('')
+            : '<div class="w-none">Nobody</div>'}</div>`;
+          wpop.style.left = Math.max(8, Math.min(r.left, innerWidth - wpop.offsetWidth - 8)) + 'px';
+        } catch(x) { wpop.innerHTML = '<div class="m-info">Couldn’t load the list right now.</div>'; }
+      };
+      wchip.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); wchip.onclick(e); } };
+      wpop.onclick = e=> e.stopPropagation();
+      document.addEventListener('click', ()=>{ wpop.hidden = true; });
+    }
     const refresh = async ()=>{
       const since = Date.now() - ONLINE_MS;
+      wRefresh();
       try {
         const [a, e, t, v] = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(r=> countSince('presence_' + r, since)));
         chip.querySelector('.o-a .n').textContent = a;

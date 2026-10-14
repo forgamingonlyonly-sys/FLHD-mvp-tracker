@@ -46,9 +46,18 @@ service cloud.firestore {
       allow create, update: if member() && request.resource.data.uid == request.auth.uid;
       allow delete: if member();
     }
+    // Auto-detect: anyone signed in can count the watchers; only the Admin can see who
+    match /watchers/{t} {
+      allow write: if timer() && (request.resource == null || request.resource.data.keys().hasOnly(['at']));
+    }
+    match /watchers_who/{t} {
+      allow read: if admin();
+      allow create, update: if timer() && request.resource.data.uid == request.auth.uid;
+      allow delete: if timer();
+    }
     match /{col}/{id} {
-      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who']);
-      allow create, update: if editor() && !(col in ['members', 'config', 'names']) && !(col == 'meta' && id == 'session');
+      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who']);
+      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who']) && !(col == 'meta' && id == 'session');
       allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot']);
       allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer'] && member()
         && (request.resource == null || request.resource.data.keys().hasOnly(['at']));

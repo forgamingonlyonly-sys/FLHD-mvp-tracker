@@ -224,6 +224,7 @@ h1 small { font-family: var(--font-body); font-size: 11px; letter-spacing: .14em
 .b-overdue { color: var(--overdue); background: var(--overdue-bg); }
 .b-unknown { color: var(--unknown); background: var(--unknown-bg); }
 .b-killed { color: var(--text-2); background: var(--unknown-bg); }
+.auto-mark { font-size: 11px; cursor: help; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .b-window::before { animation: none; } .item { transition: none; } }
 
@@ -933,7 +934,7 @@ let writeChain = Promise.resolve();
 function persist(m){
   if(mode === 'local'){ saveLocalTimers(); return; }
   if(mode !== 'live') return;
-  const body = { lastDeath: m.lastDeath, by: m.by || null, location: m.location || '', updatedAt: Date.now() };
+  const body = { lastDeath: m.lastDeath, by: m.by || null, location: m.location || '', updatedAt: Date.now(), auto: !!m.auto };
   if(m.id === 'boss_event'){ body.ev = m.ev || null; body.killer = m.killer || ''; }
   writeChain = writeChain.then(()=> db.collection('mvps').doc(m.id).set(body)).catch(handleWriteError);
 }
@@ -987,6 +988,7 @@ function applySnapshot(snap){
       if(!firstSnapshot && m.ev === 'spawn' && m.lastDeath && m.lastDeath !== was && Date.now() - m.lastDeath < 120000) prevStatus[m.id] = 'waiting';
     }
     m.by = typeof b.by === 'string' ? b.by : null;
+    m.auto = b.auto === true;
     m.location = (typeof b.location === 'string' && b.location) ? b.location : m.defaultLocation;
   });
   if(firstSnapshot){
@@ -1619,6 +1621,7 @@ function undoKill(m){
   if(!u || m.lastDeath !== u.setTo) return;
   m.lastDeath = u.prev;
   m.by = u.prevBy;
+  m.auto = !!u.prevAuto;
   if(m.id === 'boss_event'){ m.ev = u.prevEv || (u.prev ? 'dead' : null); m.killer = u.prevKiller || ''; }
   persist(m);
   delete undoLog[m.id]; saveUndo();
@@ -2354,11 +2357,13 @@ function requestRender(){
 }
 
 function logKill(m, minutesAgo){
-  const prev = m.lastDeath, prevBy = m.by, prevEv = m.ev, prevKiller = m.killer;
+  const prev = m.lastDeath, prevBy = m.by, prevEv = m.ev, prevKiller = m.killer, prevAuto = !!m.auto;
+  m.auto = !!m._auto; m._auto = null;   // logged by Auto-detect (📡) or by a person
   if(m.id === 'boss_event'){ m.ev = m._ev || 'dead'; m.killer = m._killer || ''; m._ev = m._killer = null; }
   m.lastDeath = Date.now() - minutesAgo*60000;
   m.by = myId;
   recordUndo(m, prev, prevBy);
+  undoLog[m.id].prevAuto = prevAuto; saveUndo();
   if(m.id === 'boss_event'){ undoLog[m.id].prevEv = prevEv || null; undoLog[m.id].prevKiller = prevKiller || ''; saveUndo(); }
   prefs.input[m.id] = 0; savePrefs();
   prevStatus[m.id] = getStatus(m);
@@ -2367,6 +2372,7 @@ function logKill(m, minutesAgo){
 }
 function clearKill(m){
   m.lastDeath = null;
+  m.auto = false;
   if(m.id === 'boss_event'){ m.ev = null; m.killer = ''; }
   m.by = myId;
   prefs.input[m.id] = 0; savePrefs();
@@ -2374,6 +2380,7 @@ function clearKill(m){
   persist(m);
 }
 
+const autoMark = m=> m.auto ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat. If it’s wrong, Undo or Reset it.">📡</span>' : '';
 function render(){
   pendingRender = false;
   const list = document.getElementById('mvpList');
@@ -2396,8 +2403,8 @@ function render(){
         <span class="loc" spellcheck="false"></span>
         <span class="sep">·</span>
         ${m.id === 'boss_event'
-          ? (m.lastDeath ? `<span>${m.ev === 'spawn' ? 'spawned' : 'killed'} ${formatTime(m.lastDeath)}</span>` : '<span>random, about hourly</span>')
-          : `<span>${m.min}~${m.max}m</span>${m.lastDeath ? `<span class="sep">·</span><span>died ${formatTime(m.lastDeath)}</span>` : ''}`}
+          ? (m.lastDeath ? `<span>${m.ev === 'spawn' ? 'spawned' : 'killed'} ${formatTime(m.lastDeath)}${autoMark(m)}</span>` : '<span>random, about hourly</span>')
+          : `<span>${m.min}~${m.max}m</span>${m.lastDeath ? `<span class="sep">·</span><span>died ${formatTime(m.lastDeath)}${autoMark(m)}</span>` : ''}`}
       </div>
       <div class="controls">
         <button class="btn btn-primary kill" title="Log a kill at the current time" ${locked ? 'disabled' : ''}>Killed</button>
