@@ -2167,8 +2167,17 @@ let beSig = null;
 function renderBossBar(){
   const m = byId.boss_event, now = Date.now();
   const mm = m && /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
-  const map = mm ? mm[1] : '', boss = mm ? mm[2] : 'Boss';
+  let map = mm ? mm[1] : '';
+  const boss = mm ? mm[2] : 'Boss';
   const state = !m || !m.lastDeath ? 'none' : m.ev === 'spawn' ? 'up' : 'dead';
+  // a map name saved before a reading fix (e.g. crad_fild051): correct it, and save the fix once
+  if(map && window.falsehoodFixMap){
+    const fixed = window.falsehoodFixMap(map);
+    if(fixed && fixed !== map){
+      map = fixed;
+      if(A.canKill() && mode === 'live' && renderBossBar.fixedFor !== m.lastDeath + fixed){ renderBossBar.fixedFor = m.lastDeath + fixed; m.location = fixed + ' (' + boss + ')'; persist(m); }
+    }
+  }
   const can = A.canKill() && mode !== 'connecting';
   const undo = m && canUndo(m);
   const sig = state + (m && m.lastDeath) + (m && m.location) + (m && m.killer) + can + undo;
@@ -4702,6 +4711,7 @@ setInterval(()=>{
 
   window.__adLog = (k, t, sub)=> addLog(k, t, sub);
   window.__adEvent = t=> parseEvent(t);
+  window.falsehoodFixMap = m=> fixMap(String(m || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm'));
   window.__adDiag = ()=> diag;
   window.__adEventLog = t=>{ const e = parseEvent(t); if(e) handleEvent(e); return e; };
   window.__adParse = t=>{ const p = parseLine(t); if(!p) return null; const m = matchMvp(p.mvp, p.map) || (p.loose ? findInWords(p.after || p.text, p.map) : null) || byMap(p.map); return { mvp: p.mvp, map: p.map, killer: p.killer, loose: !!p.loose, id: m ? m.id : null }; };
@@ -4969,7 +4979,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014223228';
+  const BUILD = '20261014223433';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
