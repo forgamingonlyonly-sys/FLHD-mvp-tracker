@@ -179,7 +179,7 @@
       if(ch && !rules.isNew(it.text) && !rules.isDone(ch.map(x=> x.text).join(' '))) ch.push(it);
       else { if(ch) ch.done = true; if(!it.ln.short) chains.push([it]); }
     }
-    return chains.map(c=>({ text: c.map(x=> x.text).join(' '), key: c.map(x=> x.ln.sig).join('|') }));
+    return chains.map(c=>({ text: c.map(x=> x.text).join(' '), key: c.map(x=> x.ln.sig).join('|'), y: c[c.length - 1].ln.y1, x0: c[0].ln.x0 }));
   }
 
   // "[Name] of Guild [Guild] has killed [Maya] at Ant Hell F2."
@@ -267,7 +267,37 @@
   // ---------- capture loop ----------
   let stream = null, track = null, grabber = null, video = null, ticker = null, busy = false;
   const seenSig = new Map(), recent = new Map(), log = [], seenKill = new Map(), seenEvt = new Map(), missSeen = new Map();
-  const GONE_MS = 3 * 60000;    // a kill line must be gone this long before the same line counts again
+  const seenLine = new Set(), scrollNoted = new Set();
+  const byIdSafe = id=> (typeof byId !== 'undefined' && byId) ? byId[id] : null;
+  // the same kill line counts again only after that MVP could have respawned (scrolling back to it isn't a new kill)
+  const killMemMs = m=> Math.max(25, (m && m.min ? m.min : 60) - 2) * 60000;
+  const EVENT_MEM_MS = 50 * 60000;
+  // where each coloured chat line was last seen, to tell new messages from older ones shown by scrolling
+  const linePos = new Map();
+  let prevGroups = [];
+  function scrolledLines(chains, now){
+    const groups = [];        // one group per chat window (lines share a left edge)
+    for(const c of chains){ let g = groups.find(x=> Math.abs(x.x0 - c.x0) <= 30); if(!g){ g = { x0: c.x0, list: [] }; groups.push(g); } g.list.push(c); }
+    const older = new Set();
+    for(const g of groups){
+      const before = prevGroups.find(x=> Math.abs(x.x0 - g.x0) <= 30);
+      const wasHere = before ? before.keys : new Map();
+      const stayed = g.list.filter(c=> wasHere.has(c.key));
+      // new chat pushes lines up; scrolling up pushes them down
+      const movedDown = stayed.some(c=> c.y > wasHere.get(c.key) + 3);
+      // every line that was showing is gone at once: the chat jumped (scrolled far)
+      const jumped = wasHere.size > 0 && stayed.length === 0;
+      for(const c of g.list){
+        if(linePos.has(c.key)) continue;                 // seen before: not new either way
+        const knownBelow = g.list.some(o=> o !== c && linePos.has(o.key) && o.y > c.y);
+        if(movedDown || jumped || knownBelow) older.add(c.key);
+      }
+    }
+    for(const c of chains) linePos.set(c.key, { y: c.y, at: now });
+    prevGroups = groups.map(g=>({ x0: g.x0, keys: new Map(g.list.map(c=> [c.key, c.y])) }));
+    for(const [k, v] of linePos) if(now - v.at > 65 * 60000) linePos.delete(k);
+    return older;
+  }
   let warm = false;             // the first read after Start only notes what's already in chat
   let lastScan = 0, status = '', lastFrameSize = null;
   const AREA_KEY = 'falsehood-kd-chat';
@@ -303,7 +333,7 @@
     ok.onclick = ()=>{
       area = { x: sel.x / cv.width, y: sel.y / cv.height, w: sel.w / cv.width, h: sel.h / cv.height };
       try { localStorage.setItem(AREA_KEY, JSON.stringify(area)); } catch(e) {}
-      seenSig.clear(); seenKill.clear(); seenEvt.clear(); warm = false;      // whatever is in chat right now counts as old
+      seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; warm = false;      // whatever is in chat right now counts as old
       ov.remove();
       addLog('ok', 'Chat area set', 'Only kills in your chat box are read');
       status = 'Watching'; paintBtn();
@@ -396,20 +426,6 @@
         hit.at = now;
         if(hit.text) items.push({ ln, text: hit.text });
       }
-      const visible = [];
-      for(const { text: txt, key } of joinWrapped(items)){
-        diag.lastText = txt; diag.lastTextAt = now;
-        const p = parseLine(txt);
-        const m = p ? resolve(p) : null;
-        if(!m){
-          if(!missSeen.has(key) && /k\S{0,3}ed\b|o[ft]\s+gu/i.test(txt)){
-            missSeen.set(key, now);
-            addLog('miss', p ? `Couldn’t match “${p.mvp}”` : 'Saw a message but couldn’t read it', p ? [p.map, p.killer && 'by ' + p.killer].filter(Boolean).join(' · ') : txt.slice(0, 90));
-          }
-          continue;
-        }
-        visible.push({ m, p });
-      }
       const evItems = [];
       for(const ln of evLines){
         let hit = seenSig.get(ln.sig);
@@ -423,28 +439,55 @@
         hit.at = now;
         if(hit.text) evItems.push({ ln, text: hit.text });
       }
+      const killChains = joinWrapped(items), evChains = joinWrapped(evItems, EV_RULES);
+      // which lines are new messages, and which are older ones brought into view by scrolling the chat
+      const fresh = new Set(), older = scrolledLines(killChains.concat(evChains), now);
+      for(const c of killChains.concat(evChains)) if(!older.has(c.key) && !seenLine.has(c.key)) fresh.add(c.key);
+      for(const c of killChains.concat(evChains)) seenLine.add(c.key);
+      const visible = [];
+      for(const { text: txt, key } of killChains){
+        diag.lastText = txt; diag.lastTextAt = now;
+        const p = parseLine(txt);
+        const m = p ? resolve(p) : null;
+        if(!m){
+          if(!missSeen.has(key) && fresh.has(key) && /k\S{0,3}ed\b|o[ft]\s+gu/i.test(txt)){
+            missSeen.set(key, now);
+            addLog('miss', p ? `Couldn’t match “${p.mvp}”` : 'Saw a message but couldn’t read it', p ? [p.map, p.killer && 'by ' + p.killer].filter(Boolean).join(' · ') : txt.slice(0, 90));
+          }
+          continue;
+        }
+        visible.push({ m, p, key });
+      }
       const evVisible = [];
-      for(const { text } of joinWrapped(evItems, EV_RULES)){
+      for(const { text, key } of evChains){
         const e = parseEvent(text);
         if(!e || (e.kind !== 'dead' && e.kind !== 'spawn') || !e.map || e.map.length < 4) continue;
         diag.lastText = text; diag.lastTextAt = now;
-        evVisible.push(e);
+        evVisible.push(Object.assign(e, { key }));
       }
-      for(const [k, t] of seenEvt) if(now - t >= GONE_MS) seenEvt.delete(k);
+      for(const [k, t] of seenEvt) if(now - t >= EVENT_MEM_MS) seenEvt.delete(k);
       for(const e of evVisible){
-        const key = e.kind + ':' + norm(e.map || e.boss);
-        if(seenEvt.has(key)){ seenEvt.set(key, now); continue; }
-        seenEvt.set(key, now);
+        const k = e.kind + ':' + norm(e.map || e.boss);
+        const isNew = fresh.has(e.key) && !seenEvt.has(k);
+        seenEvt.set(k, now);
+        if(!isNew){
+          if(older.has(e.key) && warm && !scrollNoted.has(e.key)){ scrollNoted.add(e.key); addLog('skip', `Boss event: ${evTitle(e)} — older line (chat scrolled), not logged`, ''); }
+          continue;
+        }
         if(warm) handleEvent(e);
         else addLog('skip', `Boss event: ${evTitle(e)} — already in chat when you started`, '');
       }
-      // a kill line stays in chat for a while: only a line we haven't been seeing counts as a new kill
-      for(const [id, arr] of seenKill){ const keep = arr.filter(e=> now - e.seen < GONE_MS); keep.length ? seenKill.set(id, keep) : seenKill.delete(id); }
-      for(const { m, p } of visible){
+      // the same MVP + killer counts again only after that MVP could have respawned
+      for(const [id, arr] of seenKill){ const keep = arr.filter(e=> now - e.seen < killMemMs(byIdSafe(id))); keep.length ? seenKill.set(id, keep) : seenKill.delete(id); }
+      for(const { m, p, key } of visible){
         const arr = seenKill.get(m.id) || [];
         const same = arr.find(e=> (!e.killer && !p.killer) || sim(e.killer, p.killer) >= 0.5);
-        if(same){ same.seen = now; continue; }
-        arr.push({ killer: p.killer, seen: now }); seenKill.set(m.id, arr);
+        if(same) same.seen = now; else arr.push({ killer: p.killer, seen: now });
+        seenKill.set(m.id, arr);
+        if(!fresh.has(key) || same){
+          if(older.has(key) && warm && !scrollNoted.has(key)){ scrollNoted.add(key); addLog('skip', `${m.name}: older kill line (chat scrolled), not logged`, p.killer ? 'by ' + p.killer : ''); }
+          continue;
+        }
         if(warm) handleKill(p, m);
         else addLog('skip', `${m.name}: already in chat when you started`, p.killer ? 'by ' + p.killer : '');
       }
@@ -516,8 +559,10 @@
     const mapAt = (txt, re)=>{ const mm = re.exec(txt); if(!mm) return ''; const toks = txt.slice(mm.index + mm[0].length).trim().split(/\s+/); return toks[0] && toks[0].length < 4 && toks[1] ? toks[0] + toks[1] : (toks[0] || ''); };
     if((m = /^(.+?)\s+ha[s5]\s+[s5]pawn\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'spawn', boss: canonBoss(m[1]), map: word(mapAt(body, /[s5]pawn\S*\s+[il1]n\s+/i)) };
     if((m = /gather\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'gather', boss: '', map: word(m[1]) };
-    if((m = /^(.+?)\s+ha[s5]\s+been\s+defeat\S*\s+[il1]n\s+([A-Za-z0-9_]+)(?:\s+by\s+(.+?))?(?:\s+o[ft]\s+[\[\(].*)?$/i.exec(body)))
-      return { kind: 'dead', boss: canonBoss(m[1]), map: word(m[2]), killer: (m[3] || '').replace(/[\[\]\(\)!.,]+$/g, '').trim() };
+    if((m = /^(.+?)\s+ha[s5]\s+been\s+defeat\S*\s+[il1]n\s+\S/i.exec(body))){
+      const by = /\sby\s+(.+?)(?:\s+o[ft]\s+[\[\(].*)?$/i.exec(body);
+      return { kind: 'dead', boss: canonBoss(m[1]), map: word(mapAt(body, /defeat\S*\s+[il1]n\s+/i)), killer: by ? by[1].replace(/[\[\]\(\)!.,]+$/g, '').trim() : '' };
+    }
     return null;
   }
   // map codes: snap a misread name part to a known Ragnarok map name (antheli01 → anthell01)
@@ -527,15 +572,18 @@
     const lower = m.toLowerCase();
     // the number after the name: fix look-alike letters, and keep at most 2 digits (a trailing "!" is often read as l/1)
     const num = r=>{ const n = r.replace(/[od]/g, '0').replace(/[il|]/g, '1').replace(/s/g, '5').replace(/z/g, '2').replace(/b/g, '8'); return /^\d+$/.test(n) ? n.slice(0, 2) : n; };
+    // try the whole thing, and also with the last 1-2 characters taken as the number (cd_fild0S → cd_fild + 05)
+    const cands = [[lower, '']];
+    for(const k of [1, 2]) if(lower.length > k + 3){ const t = num(lower.slice(-k)); if(/^\d+$/.test(t)) cands.push([lower.slice(0, -k), t]); }
     let best = null, bs = 0;
-    for(const st of MAP_STEMS){
-      const head = lower.slice(0, st.length).replace(/1/g, 'l').replace(/0/g, 'o');
-      if(head === st) return st + num(lower.slice(st.length));
-      const sc = sim1(head, st);
-      if(sc > bs){ bs = sc; best = st; }
+    for(const [name, tail] of cands) for(const st of MAP_STEMS){
+      const head = name.slice(0, st.length).replace(/1/g, 'l').replace(/0/g, 'o');
+      const sc = head === st ? 1.01 : sim1(head, st);
+      if(sc > bs){ bs = sc; best = st + num(name.slice(st.length) + tail); }
     }
-    return bs >= 0.8 ? best + num(lower.slice(best.length)) : m;
+    return bs >= 0.8 ? best : m;
   }
+
   // tidy the boss name: the tracker's own name when it's one we know (Baphomet, Moonlight Flower, …)
   function canonBoss(raw){
     const n = String(raw || '').replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '').trim();
@@ -602,7 +650,7 @@
       stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 2, max: 5 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
     } catch(e) { return; }   // they cancelled the share box
     track = stream.getVideoTracks()[0];
-    warm = false; seenKill.clear(); seenSig.clear(); seenEvt.clear();
+    warm = false; seenKill.clear(); seenSig.clear(); seenEvt.clear(); linePos.clear(); prevGroups = [];
     track.addEventListener('ended', stop);
     grabber = (typeof ImageCapture !== 'undefined') ? new ImageCapture(track) : null;
     if(!grabber){ video = document.createElement('video'); video.muted = true; video.srcObject = stream; video.play().catch(()=>{}); }
@@ -664,7 +712,7 @@
     if(go) go.onclick = ()=>{ start(); };
     if(st) st.onclick = ()=>{ stop(); };
     const rs = pop.querySelector('.kd-reset');
-    if(rs) rs.onclick = ()=>{ area = DEFAULT_AREA; try { localStorage.removeItem(AREA_KEY); } catch(e) {} seenSig.clear(); seenKill.clear(); seenEvt.clear(); warm = false; addLog('ok', 'Reading the whole game window', ''); paintPop(); };
+    if(rs) rs.onclick = ()=>{ area = DEFAULT_AREA; try { localStorage.removeItem(AREA_KEY); } catch(e) {} seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; warm = false; addLog('ok', 'Reading the whole game window', ''); paintPop(); };
     const mk = pop.querySelector('.kd-mark'); if(mk) mk.onclick = ()=>{ pop.hidden = true; pickArea(); };
   }
   function mount(){
