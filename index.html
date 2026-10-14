@@ -124,7 +124,16 @@ body.no-delete .st-del{display:none!important}
   // admin = everything FLHD can do, plus deleting Storage items
   const RANK = { viewer: 0, timer: 1, editor: 2, admin: 3 };   // admin only: delete Storage items, log out all devices
   const isOfficer = ()=> role === 'editor' || role === 'admin';
-  const presCol = ()=> 'presence_' + role;   // presence_admin / _editor / _timer / _viewer
+  const presCol = ()=> 'presence_' + role;   // presence_admin / _editor / _timer / _viewer (counts; no names)
+  // each device checks in under a random token, so the counts can't be tied back to a person;
+  // the token → nickname link sits in presence_who, which only the Admin can read
+  const PTOKEN = (()=>{ let t = null; try { t = localStorage.getItem('falsehood-ptoken'); } catch(e) {}
+    if(!t){ t = Array.from(crypto.getRandomValues(new Uint8Array(12)), b=> b.toString(16).padStart(2, '0')).join(''); try { localStorage.setItem('falsehood-ptoken', t); } catch(e) {} }
+    return t; })();
+  const dropPresence = async ()=>{
+    try { await fs.collection(presCol()).doc(PTOKEN).delete(); } catch(e) {}
+    try { await fs.collection('presence_who').doc(PTOKEN).delete(); } catch(e) {}
+  };
   // Editor password first, then the view-only one; the security rules decide which matches
   async function join(uid, pass, roles){
     for(const r of roles || ['admin', 'editor', 'timer', 'viewer']){
@@ -177,7 +186,7 @@ body.no-delete .st-del{display:none!important}
     if(up) up.onclick = ()=>{ menu.hidden = true; window.falsehoodUnlock(); };
     menu.querySelector('.m-out').onclick = async ()=>{
       if(!confirm('Log out of the Falsehood tracker on this device? You’ll need a password to get back in.')) return;
-      try { await fs.collection(presCol()).doc(auth.currentUser.uid).delete(); } catch(e) {}
+      await dropPresence();
       try { await auth.signOut(); } catch(e) {}
       location.reload();
     };
@@ -212,13 +221,16 @@ body.no-delete .st-del{display:none!important}
     chip.title = 'Guildmates with the tracker open in the last 5 minutes';
     chip.innerHTML = '<span class="dot"></span>Online <b class="o-a" title="Admin">' + icn('a','–') + '</b><b class="o-e" title="FLHD">' + icn('e','–') + '</b><b class="o-t" title="Timers">' + icn('t','–') + '</b><b class="o-v" title="View only">' + icn('v','–') + '</b>';
     // only the Admin sees the Online badge and list; everyone still checks in so they're counted
-    if(role === 'admin') (document.getElementById('fbRole') || sync).after(chip);
+    // everyone sees how many are online; only the Admin can open the list of who
+    (document.getElementById('fbRole') || sync).after(chip);
     let beatErr = null;
-    const beat = ()=> fs.collection(presCol()).doc(uid).set({ at: Date.now(), name: myNick || null, admin: role === 'admin' || null })
+    const beat = ()=> Promise.all([
+        fs.collection(presCol()).doc(PTOKEN).set({ at: Date.now() }),
+        fs.collection('presence_who').doc(PTOKEN).set({ uid, name: myNick || null, role, at: Date.now() }),
+      ])
       .then(()=>{ beatErr = null; chip.classList.remove('err'); })
       .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
     const refresh = async ()=>{
-      if(role !== 'admin') return;
       const since = Date.now() - ONLINE_MS;
       try {
         const [a, e, t, v] = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(r=> countSince('presence_' + r, since)));
@@ -252,7 +264,8 @@ body.no-delete .st-del{display:none!important}
         try {
           const groups = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(async rl=>{
             const snap = await fs.collection('presence_' + rl).where('at', '>', since).get();
-            return [rl, snap.docs.map(d=>({ id: d.id, at: (d.data() || {}).at || 0, name: (d.data() || {}).name || names[d.id] || '', admin: !!(d.data() || {}).admin }))
+            const who = await Promise.all(snap.docs.map(d=> fs.collection('presence_who').doc(d.id).get().then(w=> w.exists ? (w.data() || {}) : {}).catch(()=> ({}))));
+            return [rl, snap.docs.map((d, i)=>({ id: who[i].uid || d.id, at: (d.data() || {}).at || 0, name: who[i].name || names[who[i].uid] || '' }))
               .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'))];
           }));
           // someone who switched access level shows only under their current (highest) level
@@ -283,7 +296,7 @@ body.no-delete .st-del{display:none!important}
     const r = await askPassword(uid, true);
     if(r){
       // drop the old access level's online entry so you aren't listed twice
-      try { await fs.collection(presCol()).doc(uid).delete(); } catch(e) {}
+      await dropPresence();
       location.reload();
     }
   };
@@ -340,7 +353,7 @@ body.no-delete .st-del{display:none!important}
   const markActive = ()=>{ const n = Date.now(); if(n - actWritten > 30000){ actWritten = n; lsSetX(ACT_KEY, String(n)); } };
   async function idleLogout(){
     try { sessionStorage.setItem(IDLE_FLAG, '1'); } catch(e) {}
-    try { if(auth.currentUser) await fs.collection(presCol()).doc(auth.currentUser.uid).delete(); } catch(e) {}
+    await dropPresence();
     try { await auth.signOut(); } catch(e) {}
     location.reload();
   }
@@ -422,7 +435,7 @@ body.no-delete .st-del{display:none!important}
   const LOGIN_KEY = 'falsehood-login-at', KICK_FLAG = 'falsehood-kicked';
   async function forcedLogout(){
     try { sessionStorage.setItem(KICK_FLAG, '1'); } catch(e) {}
-    try { if(auth.currentUser) await fs.collection(presCol()).doc(auth.currentUser.uid).delete(); } catch(e) {}
+    await dropPresence();
     try { await auth.signOut(); } catch(e) {}
     location.reload();
   }

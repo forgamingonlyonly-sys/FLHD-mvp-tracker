@@ -39,13 +39,18 @@ service cloud.firestore {
     match /meta/{id} {
       allow create, update: if id == 'session' && admin() && request.resource.data.resetAt == request.time;
     }
+    // who is online (nicknames): only the Admin can read it
+    match /presence_who/{t} {
+      allow read: if admin();
+      allow create, update: if member() && request.resource.data.uid == request.auth.uid;
+      allow delete: if member();
+    }
     match /{col}/{id} {
-      allow read: if member() && !(col in ['members', 'config', 'names'])
-        && (!(col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer']) || admin());
+      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who']);
       allow create, update: if editor() && !(col in ['members', 'config', 'names']) && !(col == 'meta' && id == 'session');
       allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot']);
-      allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer']
-        && member() && request.auth.uid == id;
+      allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer'] && member()
+        && (request.resource == null || request.resource.data.keys().hasOnly(['at']));
     }
   }
 }
