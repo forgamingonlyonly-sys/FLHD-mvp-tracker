@@ -287,10 +287,15 @@
       const movedDown = stayed.some(c=> c.y > wasHere.get(c.key) + 3);
       // every line that was showing is gone at once: the chat jumped (scrolled far)
       const jumped = wasHere.size > 0 && stayed.length === 0;
+      // lines seen before (earlier this session) tell us where in the chat history we are
+      const knownNow = g.list.filter(c=> linePos.has(c.key));
       for(const c of g.list){
         if(linePos.has(c.key)) continue;                 // seen before: not new either way
-        const knownBelow = g.list.some(o=> o !== c && linePos.has(o.key) && o.y > c.y);
-        if(movedDown || jumped || knownBelow) older.add(c.key);
+        const knownBelow = knownNow.some(o=> o.y > c.y);
+        const knownAbove = knownNow.some(o=> o.y < c.y);
+        // a jump with nothing familiar on screen = scrolled far up into old history;
+        // a jump back down shows familiar lines above, and anything below them is new
+        if(movedDown || knownBelow || (jumped && !knownAbove)) older.add(c.key);
       }
     }
     for(const c of chains) linePos.set(c.key, { y: c.y, at: now });
