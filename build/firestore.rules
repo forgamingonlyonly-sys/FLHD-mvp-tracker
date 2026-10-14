@@ -35,6 +35,7 @@ service cloud.firestore {
     }
     match /mvps/{id} { allow write: if timer(); }
     match /cycle/{id} { allow write: if timer(); }
+    match /bossevent/{id} { allow write: if timer(); }
     match /loot/{id} { allow delete: if admin(); }
     match /meta/{id} {
       allow create, update: if id == 'session' && admin() && request.resource.data.resetAt == request.time;

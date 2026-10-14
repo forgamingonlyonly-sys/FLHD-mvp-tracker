@@ -54,6 +54,13 @@
   // Poring World kill lines are one exact green: about rgb(140, 255, 123). Matching that shade tightly
   // ignores grass, trees and other green things on screen.
   const isAnn = (r, g, b)=> g >= 225 && r >= 110 && r <= 170 && b >= 95 && b <= 150 && g - r >= 75;
+  // "[PW2 Boss Event]" lines: orange = gathering, red = PvP on / has spawned, yellow = has been defeated.
+  // Each colour is read on its own so neighbouring event lines don't run together.
+  const EV_COLORS = [
+    (r, g, b)=> r >= 235 && g <= 45 && b <= 45,
+    (r, g, b)=> r >= 235 && g >= 130 && g <= 180 && b <= 45,
+    (r, g, b)=> r >= 235 && g >= 235 && b <= 45,
+  ];
   const SCALE = 4;
   let tessP = null, worker = null;
   function loadOCR(){
@@ -73,7 +80,7 @@
   }
 
   // find each line of kill-green text and return it as a clean black-on-white picture, one line per picture
-  function findLines(img){
+  function findLines(img, isAnn){
     const W = img.width, H = img.height, d = img.data;
     const mask = new Uint8Array(W * H), rows = new Uint32Array(H);
     for(let y = 0, i = 0; y < H; y++){
@@ -202,7 +209,7 @@
 
   // ---------- capture loop ----------
   let stream = null, track = null, grabber = null, video = null, ticker = null, busy = false;
-  const seenSig = new Map(), recent = new Map(), log = [], seenKill = new Map();
+  const seenSig = new Map(), recent = new Map(), log = [], seenKill = new Map(), seenEvt = new Map();
   const GONE_MS = 3 * 60000;    // a kill line must be gone this long before the same line counts again
   let warm = false;             // the first read after Start only notes what's already in chat
   let lastScan = 0, status = '', lastFrameSize = null;
@@ -239,7 +246,7 @@
     ok.onclick = ()=>{
       area = { x: sel.x / cv.width, y: sel.y / cv.height, w: sel.w / cv.width, h: sel.h / cv.height };
       try { localStorage.setItem(AREA_KEY, JSON.stringify(area)); } catch(e) {}
-      seenSig.clear(); seenKill.clear(); warm = false;      // whatever is in chat right now counts as old
+      seenSig.clear(); seenKill.clear(); seenEvt.clear(); warm = false;      // whatever is in chat right now counts as old
       ov.remove();
       addLog('ok', 'Chat area set', 'Only kills in your chat box are read');
       status = 'Watching'; paintBtn();
@@ -284,8 +291,9 @@
       // a fully black picture usually means Ragnarok is in full-screen mode
       let lit = 0; for(let i = 0; i < img.data.length; i += 4 * 97) if(img.data[i] + img.data[i+1] + img.data[i+2] > 30) lit++;
       diag.size = W + '×' + H + ' · reading chat area ' + aw + '×' + ah; diag.black = lit < 20;
-      const lines = findLines(img);
+      const lines = findLines(img, isAnn);
       diag.lines = lines.length; if(lines.length) diag.lastLineAt = Date.now();
+      const evLines = EV_COLORS.flatMap((fn, ci)=> findLines(img, fn).map(l=> (l.sig = 'e' + ci + l.sig, l)));
       const now = Date.now();
       for(const [k, v] of seenSig) if(now - v.at > 10 * 60000) seenSig.delete(k);
       const visible = [];
@@ -310,6 +318,33 @@
         }
         hit.at = now;
         visible.push(...hit.items);
+      }
+      const evVisible = [];
+      for(const ln of evLines){
+        let hit = seenSig.get(ln.sig);
+        if(!hit){
+          await loadOCR();
+          const { data } = await worker.recognize(ln.canvas);
+          const items = [];
+          for(const row of String((data && data.text) || '').split(/\n+/)){
+            const txt = row.replace(/\s+/g, ' ').trim();
+            if(!txt) continue;
+            const e = parseEvent(txt);
+            if(e){ diag.lastText = txt; diag.lastTextAt = Date.now(); items.push(e); }
+          }
+          hit = { items, at: now };
+          seenSig.set(ln.sig, hit);
+        }
+        hit.at = now;
+        evVisible.push(...hit.items);
+      }
+      for(const [k, t] of seenEvt) if(now - t >= GONE_MS) seenEvt.delete(k);
+      for(const e of evVisible){
+        const key = e.kind + ':' + norm(e.map || e.boss);
+        if(seenEvt.has(key)){ seenEvt.set(key, now); continue; }
+        seenEvt.set(key, now);
+        if(warm) handleEvent(e);
+        else addLog('skip', `Boss event: ${evTitle(e)} — already in chat when you started`, '');
       }
       // a kill line stays in chat for a while: only a line we haven't been seeing counts as a new kill
       for(const [id, arr] of seenKill){ const keep = arr.filter(e=> now - e.seen < GONE_MS); keep.length ? seenKill.set(id, keep) : seenKill.delete(id); }
@@ -373,6 +408,50 @@
     try { showToast(`📡 Auto-logged ${m.name}${p.killer ? ' — killed by ' + p.killer : ''}`); } catch(e) {}
   }
 
+  // ---------- hourly boss event ----------
+  function parseEvent(raw){
+    const t = String(raw || '').replace(/\s+/g, ' ').trim();
+    if(!/PW2|Bo[s5]{2}\s*Ev|spawned|defeated|gathering/i.test(t)) return null;
+    const body = t.replace(/^.*?Ev[ae]nt\s*[\]\)|lI1}]?\s*/i, '');
+    // map codes like cmd_fild05: fix "rn" read for "m", and O/S/l read for 0/5/1 in the number at the end
+    const word = s=> String(s || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm')
+      .replace(/[0-9OoSsIl]+$/, d=> /\d/.test(d) ? d.replace(/[Oo]/g, '0').replace(/[Ss]/g, '5').replace(/[Il]/g, '1') : d);
+    let m;
+    if((m = /^(.+?)\s+ha[s5]\s+[s5]pawn\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'spawn', boss: canonBoss(m[1]), map: word(m[2]) };
+    if((m = /gather\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'gather', boss: '', map: word(m[1]) };
+    if((m = /^(.+?)\s+ha[s5]\s+been\s+defeat\S*\s+[il1]n\s+([A-Za-z0-9_]+)(?:\s+by\s+(.+?))?(?:\s+o[ft]\s+[\[\(].*)?$/i.exec(body)))
+      return { kind: 'dead', boss: canonBoss(m[1]), map: word(m[2]), killer: (m[3] || '').replace(/[\[\]\(\)!.,]+$/g, '').trim() };
+    return null;
+  }
+  // tidy the boss name: the tracker's own name when it's one we know (Baphomet, Moonlight Flower, …)
+  function canonBoss(raw){
+    const n = String(raw || '').replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '').trim();
+    const list = (typeof mvps !== 'undefined' ? mvps : []);
+    let best = '', bs = 0;
+    for(const m of list){
+      const fam = FAMILY_OF[m.id];
+      const names = [m.name].concat(ALIASES[m.id] || [], fam !== undefined ? FAMILIES[fam].names : []);
+      for(const x of names){ const sc = sim(n, x); if(sc > bs){ bs = sc; best = fam !== undefined ? FAMILIES[fam].names[0] : (norm(x).length >= norm(m.name) .length ? x : m.name).replace(/\s*\(.*\)\s*$/, ''); } }
+    }
+    return bs >= 0.72 ? best : n.replace(/\b[a-z]/g, c=> c.toUpperCase());
+  }
+  const evTitle = e=> e.kind === 'gather' ? `gathering in ${e.map || '?'}` : `${e.boss || 'MVP'} ${e.kind === 'dead' ? 'defeated' : 'spawned'} in ${e.map || '?'}`;
+  function handleEvent(e){
+    const api = window.FALSEHOOD_EVENT;
+    if(!api){ addLog('miss', 'Boss event: tracker not ready', evTitle(e)); return; }
+    if(!api.canLog()){ addLog('miss', `Boss event: you can’t log events`, evTitle(e)); return; }
+    if(e.kind === 'dead'){
+      const r = api.killed(e.boss, e.map, e.killer);
+      if(r === 'dup') addLog('skip', `Boss event: ${e.boss} already marked killed`, e.killer ? 'by ' + e.killer : '');
+      else if(r) { addLog('ok', `Boss event: ${e.boss} killed`, [e.map, e.killer && 'by ' + e.killer].filter(Boolean).join(' · ')); try { showToast(`📡 Boss event: ${e.boss} killed${e.killer ? ' by ' + e.killer : ''}`); } catch(x) {} }
+      return;
+    }
+    if(api.report(e.kind, e.boss, e.map)){
+      addLog('ok', 'Boss event: ' + evTitle(e), 'logged for everyone');
+      try { showToast('📡 Boss event: ' + evTitle(e)); } catch(x) {}
+    } else addLog('skip', 'Boss event already logged', evTitle(e));
+  }
+
   async function start(){
     if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
       alert('Auto-detect needs Chrome or Edge on a computer.'); return;
@@ -381,7 +460,7 @@
       stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 2, max: 5 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
     } catch(e) { return; }   // they cancelled the share box
     track = stream.getVideoTracks()[0];
-    warm = false; seenKill.clear(); seenSig.clear();
+    warm = false; seenKill.clear(); seenSig.clear(); seenEvt.clear();
     track.addEventListener('ended', stop);
     grabber = (typeof ImageCapture !== 'undefined') ? new ImageCapture(track) : null;
     if(!grabber){ video = document.createElement('video'); video.muted = true; video.srcObject = stream; video.play().catch(()=>{}); }
@@ -425,10 +504,10 @@
     const ago = t=>{ const s = Math.floor((Date.now() - t) / 1000); return s < 60 ? s + 's ago' : Math.floor(s / 60) + 'm ago'; };
     pop.innerHTML = `<h4>📡 Auto-detect kills</h4>
       <p>${on ? 'Keep Ragnarok and this tab open, with your chat box visible. New <i>“… has killed [MVP] at …”</i> lines in chat are logged for everyone.'
-              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box along the bottom</b> of the game (left, middle or right); you can adjust the area. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. Nothing touches the game; it only reads the picture.'}</p>
+              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box along the bottom</b> of the game (left, middle or right); you can adjust the area. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. The <b>[PW2 Boss Event]</b> lines (gathering, spawned, defeated) go to the BOSS EVENT tab. Nothing touches the game; it only reads the picture.'}</p>
       <div class="kd-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
       ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
-      <div class="kd-log">${log.length ? log.slice(0, 12).map(e=>`<div class="kd-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="kd-none">No kills detected yet.</div>'}</div>
+      <div class="kd-log">${log.length ? log.slice(0, 12).map(e=>`<div class="kd-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="kd-none">Nothing detected yet.</div>'}</div>
       ${on ? `<div class="kd-area">${areaIsDefault() ? '✓ Reading the bottom of the game window' : '✓ Reading your marked chat box'} <button type="button" class="kd-mark">${areaIsDefault() ? 'Adjust' : 'Change'}</button></div>` : ''}
       <div class="kd-acts">${on ? '<button type="button" class="kd-stop">■ Stop auto-detect</button>' : '<button type="button" class="kd-go">▶ Start: share game window</button>'}</div>`;
     const go = pop.querySelector('.kd-go'), st = pop.querySelector('.kd-stop');
@@ -461,16 +540,20 @@
   const wait = setInterval(()=>{ if(document.getElementById('fbRole')){ clearInterval(wait); setTimeout(mount, 300); } }, 500);
 
   window.__adLog = (k, t, sub)=> addLog(k, t, sub);
+  window.__adEvent = t=> parseEvent(t);
   window.__adParse = t=>{ const p = parseLine(t); if(!p) return null; const m = matchMvp(p.mvp, p.map) || (p.loose ? findInWords(p.after || p.text, p.map) : null) || byMap(p.map); return { mvp: p.mvp, map: p.map, killer: p.killer, loose: !!p.loose, id: m ? m.id : null }; };
   // for testing: window.__adTest(imageOrCanvas) runs one frame through the reader
-  window.__adTest = async (src)=>{
+  window.__adTest = async (src, whole)=>{
     const W = src.width || src.naturalWidth, H = src.height || src.naturalHeight;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const cx = cv.getContext('2d'); cx.drawImage(src, 0, 0);
-    const ax = Math.round(area.x * W), ay = Math.round(area.y * H), aw = Math.round(area.w * W), ah = Math.round(area.h * H);
-    const lines = findLines(cx.getImageData(ax, ay, aw, ah));
+    const ar = whole ? { x: 0, y: 0, w: 1, h: 1 } : area;
+    const ax = Math.round(ar.x * W), ay = Math.round(ar.y * H), aw = Math.round(ar.w * W), ah = Math.round(ar.h * H);
+    const im = cx.getImageData(ax, ay, aw, ah);
+    const lines = findLines(im, isAnn);
     await loadOCR();
     const res = [];
+    for(const fn of EV_COLORS) for(const ln of findLines(im, fn)){ const { data } = await worker.recognize(ln.canvas); for(const row of data.text.split(/\n+/)){ const t = row.trim(); if(!t) continue; const e = parseEvent(t); res.push({ text: t, match: e ? JSON.stringify(e) : null }); } }
     for(const ln of lines){ const { data } = await worker.recognize(ln.canvas); for(const row of data.text.split(/\n+/)){ const t = row.trim(); if(!t) continue; const p = parseLine(t); const m = p ? resolve(p) : null; res.push({ text: t, match: m ? m.id : null }); } }
     return res;
   };

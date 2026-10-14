@@ -627,6 +627,48 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
 .cyc-ring-txt { display: grid; font-size: 12.5px; color: var(--text-2); }
 .cyc-ring-txt b { font-size: 15px; color: var(--text); }
 .ap-timer-row[hidden] { display: none !important; }
+/* ---- BOSS EVENT tab ---- */
+.ev { display: grid; gap: 12px; }
+.ev[hidden] { display: none !important; }
+.ev-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 18px; display: grid; justify-items: center; gap: 8px; text-align: center; box-shadow: var(--shadow); }
+.ev-now { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13.5px; color: var(--text-2); max-width: 100%; box-sizing: border-box; }
+.ev-now b { color: var(--text); }
+.ev-now.up { border-color: var(--overdue); color: var(--overdue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--overdue) 18%, transparent); }
+.ev-now.up b { color: var(--overdue); }
+.ev-now.gather { border-color: var(--waiting); color: var(--waiting); }
+.ev-now.dead { border-color: var(--window); }
+.ev-phase { font: 700 12px var(--font-body, Inter, sans-serif); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); margin-top: 4px; }
+.ev-clock { font: 700 clamp(48px, 11vw, 84px)/1 var(--font-display, Cinzel, serif); font-variant-numeric: tabular-nums; color: var(--waiting); }
+.ev-card.is-due .ev-clock, .ev-card.is-due .ev-phase { color: var(--window); }
+.ev-card.is-none .ev-clock { color: var(--text-3); }
+.ev-sub { color: var(--text-2); font-size: 13px; max-width: 560px; }
+.ev-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.ev-acts:empty { display: none; }
+.ev-form { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; padding: 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); width: min(640px, 100%); box-sizing: border-box; }
+.ev-form[hidden] { display: none !important; }
+.ev-form input { min-width: 0; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg, var(--surface)); color: var(--text); font: inherit; font-size: 13px; }
+.ev-form #evBoss { flex: 1 1 150px; } .ev-form #evMap { flex: 1 1 110px; } .ev-form #evTime { flex: 0 0 auto; }
+.ev-form .btn { font-size: 13px; padding: 6px 12px; }
+.ev-list { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
+.ev-list h3 { margin: 0 0 6px; font: 700 12px var(--font-body, Inter, sans-serif); letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.ev-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.ev-row:first-child { border-top: 0; }
+.ev-row .ev-t { flex: none; width: 76px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.ev-row .ev-w { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ev-row .ev-w small { color: var(--text-3); }
+.ev-row .ev-k { flex: none; font-size: 12px; color: var(--text-3); text-align: right; max-width: 40%; }
+.ev-row.gather .ev-w { color: var(--text-3); font-style: italic; }
+.ev-row button { flex: none; font: 600 12px var(--font-body, Inter, sans-serif); padding: 3px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); cursor: pointer; }
+.ev-row button.ev-x { padding: 3px 7px; color: var(--text-3); }
+.ev-empty { color: var(--text-3); font-size: 13px; padding: 6px 0; }
+@media (max-width: 560px) {
+  .ev-row { flex-wrap: wrap; row-gap: 4px; }
+  .ev-row .ev-t { width: auto; order: 0; }
+  .ev-row .ev-w { flex: 1 1 100%; order: -1; }
+  .ev-row .ev-k { flex: 1 1 auto; max-width: none; text-align: left; }
+  .tabs { flex-wrap: wrap; max-width: 100%; box-sizing: border-box; }
+  .tab { white-space: nowrap; padding: 6px 10px; }
+}
 
 .st-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .st-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
@@ -1227,16 +1269,20 @@ async function fillNames(){
 const MINI_IDS = ['angel_toy','angel_mjolnir','ghost_poring','angel_poring','angel_magma','devil_magma','arch_magma','ghost_sunken','Ghost','Angel','Ghost_sun'];
 mvps.forEach(m=>{ m.type = MINI_IDS.includes(m.id) ? 'mini' : 'mvp'; });
 let tabSig = '';
-let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); return t === 'mini' || t === 'storage' || t === 'timer' ? t : 'mvp'; } catch(e) { return 'mvp'; } })();
+let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); return t === 'mini' || t === 'storage' || t === 'timer' || t === 'event' ? t : 'mvp'; } catch(e) { return 'mvp'; } })();
 const inTab = m => m.type === currentTab;
-function tabSignature(){ return currentTab + ['mvp','mini'].map(t=>mvps.some(m=>m.type===t && getStatus(m)==='window')).join(); }
-const TAB_LABEL = { mvp:'MVP', mini:'MINI MVP', storage:'STORAGE', timer:'TIMER' };
+function tabSignature(){ return currentTab + ['mvp','mini'].map(t=>mvps.some(m=>m.type===t && getStatus(m)==='window')).join() + (typeof evUp === 'function' && evUp() ? 'E' : ''); }
+const TAB_LABEL = { mvp:'MVP', mini:'MINI MVP', storage:'STORAGE', timer:'TIMER', event:'BOSS EVENT' };
 function renderTabs(){
   tabSig = tabSignature();
   const box = document.getElementById('tabs');
-  const tabList = ['mvp','mini','storage'];
+  const tabList = ['mvp','mini','event','storage'];
   try { if(typeof cycleAllowed === 'function' && cycleAllowed()) tabList.push('timer'); } catch(e) {}
   box.innerHTML = tabList.map(t=>{
+    if(t === 'event'){
+      const up = typeof evUp === 'function' && evUp();
+      return `<button class="tab tab-event${t === currentTab ? ' active' : ''}" data-tab="event" role="tab" aria-selected="${t === currentTab}">${up ? '<span class="live-dot" title="Event boss is up"></span>' : ''}BOSS EVENT</button>`;
+    }
     if(t === 'timer'){
       const run = typeof cycle !== 'undefined' && cycle.startedAt;
       return `<button class="tab tab-timer${t === currentTab ? ' active' : ''}" data-tab="timer" role="tab" aria-selected="${t === currentTab}">${run ? '<span class="live-dot" title="Timer running"></span>' : ''}TIMER</button>`;
@@ -2294,11 +2340,13 @@ function openEditModal(x){
 /* Show storage instead of the MVP list when its tab is selected */
 function applyStorageView(){
   try { if(typeof paintAlertEmpty === 'function') paintAlertEmpty(); } catch(e) {}   // re-filter alerts for the open tab
-  const tOn = currentTab === 'timer';
+  const eOn = currentTab === 'event';
+  const tOn = currentTab === 'timer' || eOn;
   const on = currentTab === 'storage';
   document.getElementById('mvpList').hidden = on || tOn;
   storageView.hidden = !on;
-  try { timerView.hidden = !tOn; if(tOn) paintCycle(); } catch(e) {}
+  try { timerView.hidden = currentTab !== 'timer'; if(currentTab === 'timer') paintCycle(); } catch(e) {}
+  try { evView.hidden = !eOn; if(eOn) paintEvent(); } catch(e) {}
   if(tOn){
     const hb0 = document.getElementById('hiddenBox'); if(hb0) hb0.hidden = true;
     const r0 = document.querySelector('.toolbar-right'); if(r0) r0.hidden = true;
@@ -3148,6 +3196,266 @@ setInterval(()=>{
   if(currentTab === 'timer' && !cycleAllowed() && mode !== 'connecting'){ currentTab = 'mvp'; render(); }
   cycleTick();
 }, 1000);
+
+/* ================= BOSS EVENT TAB (the hourly random "[PW2 Boss Event]" MVP) ================= */
+// Shared through the bossevent collection: { kind: 'spawn'|'gather', at, boss, map, by, src: 'auto'|'manual', killedAt, killer }
+// Everyone can see it; Admin, FLHD and Timers can log it (by hand, or through Auto-detect reading the red event lines).
+const EV_EVERY = 60;               // minutes between events, until the log has enough history to tell
+const EV_UP_MS = 60 * 60000;       // an unkilled event boss counts as "up" for this long
+let evList = [];                   // newest first
+let evLive = false, evSeenIds = null, evWarned = '';
+try { if(mode !== 'live') evList = JSON.parse(localStorage.getItem('falsehood-bossevent') || '[]'); } catch(e) {}
+let ecfg = { on: false, sound: true, voice: true, pre: true };
+try { Object.assign(ecfg, JSON.parse(localStorage.getItem('falsehood-event-alarm') || '{}')); } catch(e) {}
+const saveEcfg = ()=>{ try { localStorage.setItem('falsehood-event-alarm', JSON.stringify(ecfg)); } catch(e) {} };
+const evCanLog = ()=> cycleAllowed();
+
+const evView = document.createElement('section');
+evView.className = 'ev';
+evView.hidden = true;
+evView.setAttribute('aria-label', 'Hourly boss event');
+evView.innerHTML = `
+  <div class="ev-card" id="evCard">
+    <div class="ev-now" id="evNow">No boss event logged yet</div>
+    <div class="ev-phase" id="evPhase">Next boss event</div>
+    <div class="ev-clock" id="evClock">--:--</div>
+    <div class="ev-sub" id="evSub"></div>
+    <div class="ev-acts" id="evActs"></div>
+    <div class="ev-form" id="evForm">
+      <input id="evBoss" list="evBossList" placeholder="Boss name" autocomplete="off" maxlength="40">
+      <input id="evMap" list="evMapList" placeholder="Map" autocomplete="off" maxlength="30">
+      <input id="evTime" type="time" title="Time it spawned (leave as is for now)">
+      <button class="btn btn-primary" id="evLog" type="button">Log spawn</button>
+      <button class="btn" id="evGather" type="button" title="“A dark presence is gathering in …”">Gathering</button>
+      <datalist id="evBossList"></datalist><datalist id="evMapList"></datalist>
+    </div>
+    <div class="cyc-alarm" id="evAlarm">
+      <span class="cyc-alarm-lbl">My alert</span>
+      <button type="button" class="cyc-tg" data-k="on">🔔 Alert</button>
+      <button type="button" class="cyc-tg" data-k="sound">Sound</button>
+      <button type="button" class="cyc-tg" data-k="voice">Voice</button>
+      <button type="button" class="cyc-tg" data-k="pre">2 min warning</button>
+    </div>
+  </div>
+  <div class="ev-list"><h3>Recent boss events</h3><div id="evRows"></div></div>`;
+document.getElementById('mvpList').after(evView);
+
+const evSpawns = ()=> evList.filter(e=> e.kind === 'spawn');
+const evLast = ()=> evSpawns()[0] || null;
+// the boss from the latest spawn, while nobody has killed it and it's under an hour old
+function evUp(){ const e = evLast(); return !!e && !e.killedAt && Date.now() - e.at < EV_UP_MS ? e : null; }
+// usual gap between events, from the log (falls back to 60 min)
+function evGap(){
+  const sp = evSpawns().slice(0, 8), gaps = [];
+  for(let i = 0; i + 1 < sp.length; i++){ const g = (sp[i].at - sp[i+1].at) / 60000; /* skip gaps where an event was missed */ if(g >= 40 && g <= 90) gaps.push(g); }
+  if(gaps.length < 2) return EV_EVERY;
+  gaps.sort((a, b)=> a - b);
+  return Math.round(gaps[Math.floor(gaps.length / 2)]);
+}
+function evNext(){ const e = evLast(); return e ? e.at + evGap() * 60000 : null; }
+const evWho = id=> !id ? '' : id === meId() ? 'you' : ((typeof nickNames !== 'undefined' && nickNames[id]) || 'a guildmate');
+const evAgo = ms=>{ const m = Math.floor(ms / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm ago'; };
+
+function paintEvent(){
+  const $ = id=> document.getElementById(id);
+  const now = Date.now(), last = evLast(), up = evUp(), next = evNext(), allowed = evCanLog();
+  const g = evList[0] && evList[0].kind === 'gather' && now - evList[0].at < 15 * 60000 ? evList[0] : null;
+  const card = $('evCard'), nowEl = $('evNow');
+  nowEl.className = 'ev-now';
+  if(g){
+    nowEl.classList.add('gather');
+    nowEl.innerHTML = `⚠ A dark presence is gathering in <b>${esc(g.map || '?')}</b> · ${evAgo(now - g.at)}`;
+  } else if(up){
+    nowEl.classList.add('up');
+    nowEl.innerHTML = `🔥 <b>${esc(up.boss || 'MVP')}</b> is up in <b>${esc(up.map || '?')}</b> · spawned ${formatTime(up.at)} (${evAgo(now - up.at)})`;
+  } else if(last && last.killedAt){
+    nowEl.classList.add('dead');
+    nowEl.innerHTML = `✓ <b>${esc(last.boss || 'MVP')}</b> in ${esc(last.map || '?')} killed ${formatTime(last.killedAt)}${last.killer ? ' by ' + esc(last.killer) : ''}`;
+  } else if(last){
+    nowEl.innerHTML = `Last: <b>${esc(last.boss || 'MVP')}</b> in ${esc(last.map || '?')} at ${formatTime(last.at)}`;
+  } else nowEl.textContent = 'No boss event logged yet';
+  card.classList.toggle('is-none', !next);
+  card.classList.toggle('is-due', !!next && now >= next);
+  if(!next){
+    $('evPhase').textContent = 'Next boss event';
+    $('evClock').textContent = '--:--';
+    $('evSub').textContent = allowed ? 'When the red “[PW2 Boss Event] … has spawned in …” line shows up, log it below (or let Auto-detect do it). The next one is counted from there.' : 'Nothing logged yet. The countdown starts after the first event is logged.';
+  } else if(now < next){
+    $('evPhase').textContent = 'Next boss event in';
+    $('evClock').textContent = fmtClock(next - now);
+    $('evSub').textContent = `Around ${formatTime(next)} · events come about every ${evGap()} min` + (evGap() === EV_EVERY && evSpawns().length < 3 ? ' (it learns the real gap as more events are logged)' : '');
+  } else {
+    $('evPhase').textContent = 'Due now · late by';
+    $('evClock').textContent = fmtClock(now - next);
+    $('evSub').textContent = `Expected around ${formatTime(next)}. Watch chat for “A dark presence is gathering…”.`;
+  }
+  const acts = $('evActs');
+  acts.innerHTML = up && allowed ? `<button class="btn btn-primary" type="button" id="evKill">Killed</button>` : '';
+  if(up && allowed) $('evKill').onclick = ()=> evMarkKilled(up.id, '');
+  $('evForm').hidden = !allowed;
+  // suggestions: every boss on the board, and maps seen before
+  const bl = $('evBossList'), ml = $('evMapList');
+  const names = [...new Set(mvps.map(m=> m.name))].sort();
+  if(bl.childElementCount !== names.length) bl.innerHTML = names.map(n=> `<option value="${esc(n)}">`).join('');
+  const maps = [...new Set(evList.map(e=> e.map).filter(Boolean))];
+  const mh = maps.map(n=> `<option value="${esc(n)}">`).join('');
+  if(ml.innerHTML !== mh) ml.innerHTML = mh;
+  paintEcfg();
+  const rows = evList.slice(0, 25);
+  const rsig = JSON.stringify(rows) + allowed + Math.floor(now / 60000);
+  if(paintEvent.rsig === rsig) return;
+  paintEvent.rsig = rsig;
+  $('evRows').innerHTML = rows.length ? rows.map(e=>{
+    const t = new Date(e.at), day = t.toDateString() === new Date().toDateString() ? '' : t.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ';
+    const src = e.src === 'auto' ? '📡 auto' : evWho(e.by) ? 'by ' + esc(evWho(e.by)) : '';
+    if(e.kind === 'gather') return `<div class="ev-row gather"><span class="ev-t">${day}${formatTime(e.at)}</span><span class="ev-w">Gathering in ${esc(e.map || '?')}</span><span class="ev-k">${src}</span>${allowed ? `<button type="button" class="ev-x" data-del="${esc(e.id)}" title="Remove">✕</button>` : ''}</div>`;
+    const st = e.killedAt ? `killed ${formatTime(e.killedAt)}${e.killer ? ' · ' + esc(e.killer) : ''}` : (now - e.at < EV_UP_MS ? '<b style="color:var(--overdue)">up</b>' : 'not logged');
+    return `<div class="ev-row"><span class="ev-t">${day}${e.guess ? '' : formatTime(e.at)}</span><span class="ev-w"><b>${esc(e.boss || 'MVP')}</b> <small>${e.guess ? 'spawn time not seen · ' : ''}in ${esc(e.map || '?')}${src ? ' · ' + src : ''}</small></span><span class="ev-k">${st}</span>`
+      + (allowed && !e.killedAt && now - e.at < EV_UP_MS ? `<button type="button" data-kill="${esc(e.id)}">Killed</button>` : '')
+      + (allowed ? `<button type="button" class="ev-x" data-del="${esc(e.id)}" title="Remove">✕</button>` : '') + '</div>';
+  }).join('') : '<div class="ev-empty">No events yet.</div>';
+  $('evRows').querySelectorAll('[data-kill]').forEach(b=> b.onclick = ()=> evMarkKilled(b.dataset.kill, ''));
+  $('evRows').querySelectorAll('[data-del]').forEach(b=> b.onclick = ()=>{
+    openModal('Remove this entry?', 'It is removed for everyone.', ()=> evRemove(b.dataset.del));
+    confirmBtn.textContent = 'Remove';
+  });
+}
+function paintEcfg(){
+  const box = document.getElementById('evAlarm');
+  box.classList.toggle('off', !ecfg.on);
+  box.querySelectorAll('.cyc-tg').forEach(b=>{
+    const k = b.dataset.k, v = !!ecfg[k];
+    b.setAttribute('aria-pressed', String(v));
+    b.disabled = k !== 'on' && !ecfg.on;
+    if(k === 'on') b.textContent = v ? '🔔 Alert on' : '🔕 Alert off';
+  });
+}
+document.querySelectorAll('#evAlarm .cyc-tg').forEach(b=>{
+  b.onclick = ()=>{
+    ecfg[b.dataset.k] = !ecfg[b.dataset.k]; saveEcfg();
+    try { if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    paintEcfg();
+  };
+});
+
+// ---- saving ----
+function evSaveLocal(){ try { localStorage.setItem('falsehood-bossevent', JSON.stringify(evList.slice(0, 60))); } catch(e) {} }
+function evPut(e){
+  if(!evCanLog()) return false;
+  const body = { kind: e.kind, at: e.at, boss: e.boss || '', map: e.map || '', by: meId() || null, src: e.src || 'manual', killedAt: e.killedAt || null, killer: e.killer || '', guess: !!e.guess };
+  const i = evList.findIndex(x=> x.id === e.id);
+  if(i >= 0) evList[i] = Object.assign({ id: e.id }, body); else evList.push(Object.assign({ id: e.id }, body));
+  evList.sort((a, b)=> b.at - a.at);
+  if(evLive) db.collection('bossevent').doc(e.id).set(body).catch(err=>{ if(typeof handleWriteError === 'function') handleWriteError(err); });
+  else evSaveLocal();
+  paintEvent(); renderTabs();
+  return true;
+}
+function evRemove(id){
+  if(!evCanLog()) return;
+  evList = evList.filter(e=> e.id !== id);
+  if(evLive) db.collection('bossevent').doc(id).delete().catch(()=>{});
+  else evSaveLocal();
+  paintEvent(); renderTabs();
+}
+function evMarkKilled(id, killer){
+  const e = evList.find(x=> x.id === id);
+  if(!e || e.killedAt) return false;
+  return evPut(Object.assign({}, e, { killedAt: Date.now(), killer: killer || '' }));
+}
+const evNorm = s=> String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+// the same event read twice (two people running Auto-detect, or a hand log + auto) is only kept once
+function evDuplicate(kind, boss, map, at){
+  return evList.find(e=> e.kind === kind && Math.abs(e.at - at) < 20 * 60000
+    && (kind === 'gather' ? true : (!boss || !e.boss || evNorm(e.boss) === evNorm(boss) || evNorm(e.map) === evNorm(map))));
+}
+function evLog(kind, boss, map, at, src){
+  at = at || Date.now();
+  const dup = evDuplicate(kind, boss, map, at);
+  if(dup){
+    // a gather line followed by the spawn line: keep both; a repeat of the same line: skip
+    if(kind === 'spawn' && dup.src === 'auto' && src !== 'auto' && (boss !== dup.boss || map !== dup.map)) return evPut(Object.assign({}, dup, { boss, map }));
+    return false;
+  }
+  return evPut({ id: newId(), kind, at, boss, map, src });
+}
+document.getElementById('evLog').onclick = ()=>{
+  const boss = document.getElementById('evBoss').value.trim(), map = document.getElementById('evMap').value.trim();
+  if(!boss){ showToast('Type which boss spawned.'); document.getElementById('evBoss').focus(); return; }
+  const tv = document.getElementById('evTime').value;
+  let at = Date.now();
+  if(tv){ const [h, mi] = tv.split(':').map(Number); const d = new Date(); d.setHours(h, mi, 0, 0); if(d.getTime() > Date.now() + 60000) d.setDate(d.getDate() - 1); at = d.getTime(); }
+  const dup = evDuplicate('spawn', boss, map, at);
+  if(dup && evNorm(dup.boss) === evNorm(boss)){ showToast(`${boss} was already logged at ${formatTime(dup.at)}.`); return; }
+  evPut({ id: newId(), kind: 'spawn', at, boss, map, src: 'manual' });
+  document.getElementById('evBoss').value = ''; document.getElementById('evTime').value = '';
+  showToast(`Logged ${boss}${map ? ' in ' + map : ''}.`);
+};
+document.getElementById('evGather').onclick = ()=>{
+  const map = document.getElementById('evMap').value.trim();
+  if(!evLog('gather', '', map, Date.now(), 'manual')) showToast('A gathering was already logged in the last 20 minutes.');
+};
+
+// ---- alerts (each person turns their own on) ----
+function evAlert(title, say){
+  if(!ecfg.on) return;
+  try { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
+  if(ecfg.sound){ playChime(); setTimeout(playChime, 900); }
+  if(ecfg.voice) speakNow(say);
+  showToast(title);
+  if(alertCfg.desktop) notify(title, 'Falsehood MVP Tracker', 'boss-event');
+  if(alertCfg.title) flashTitle('⚔ ' + title);
+}
+function evOnNew(list){
+  const ids = new Set(list.map(e=> e.id));
+  if(evSeenIds){
+    for(const e of list){
+      if(evSeenIds.has(e.id) || Date.now() - e.at > 5 * 60000) continue;
+      if(e.kind === 'spawn') evAlert(`Boss event: ${e.boss || 'MVP'} spawned${e.map ? ' in ' + e.map : ''}`, `Boss event. ${e.boss || 'An MVP'} has spawned${e.map ? ' in ' + e.map.replace(/_/g, ' ') : ''}`);
+      else evAlert(`Boss event gathering${e.map ? ' in ' + e.map : ''}`, 'Boss event. A dark presence is gathering');
+    }
+  }
+  evSeenIds = ids;
+}
+function startEventLive(){
+  if(!db || evLive) return;
+  evLive = true;
+  db.collection('bossevent').orderBy('at', 'desc').limit(40).onSnapshot(snap=>{
+    const list = [];
+    (snap.docs || []).forEach(d=>{ const x = d.data() || {}; if(typeof x.at === 'number') list.push(Object.assign({}, x, { id: d.id })); });
+    list.sort((a, b)=> b.at - a.at);
+    evOnNew(list);
+    evList = list;
+    if(currentTab === 'event') paintEvent();
+    renderTabs();
+  }, ()=>{});
+}
+evOnNew(evList);
+setInterval(()=>{
+  if(mode === 'live' && db && !evLive) startEventLive();
+  if(currentTab === 'event') paintEvent();
+  // "2 min warning" before the next event is expected
+  const next = evNext();
+  if(ecfg.on && ecfg.pre && next && !evUp() && next - Date.now() <= 120000 && next - Date.now() > 110000 && evWarned !== String(next)){
+    evWarned = String(next);
+    evAlert('Boss event in about 2 minutes', 'Boss event in about 2 minutes');
+  }
+}, 1000);
+
+// Auto-detect hooks: report what was read from the red "[PW2 Boss Event]" lines, and claim kills of the event boss
+window.FALSEHOOD_EVENT = {
+  canLog: evCanLog,
+  report(kind, boss, map){ return evLog(kind, boss, map, Date.now(), 'auto'); },
+  // "[PW2 Boss Event] X has been defeated in map by Y": mark the matching spawn killed (or add it, when the spawn wasn't seen)
+  killed(boss, map, killer){
+    const now = Date.now();
+    const e = evSpawns().find(x=> now - x.at < 2 * 3600000 && ((map && evNorm(x.map) === evNorm(map)) || (boss && evNorm(x.boss) === evNorm(boss))));
+    if(e){ if(e.killedAt) return 'dup'; return evMarkKilled(e.id, killer) ? 'ok' : 'no'; }
+    return evPut({ id: newId(), kind: 'spawn', at: now, boss, map, src: 'auto', killedAt: now, killer, guess: true }) ? 'new' : 'no';
+  },
+  up: ()=> evUp(),
+  markKilled: (id, killer)=> evMarkKilled(id, killer),
+};
 
 /* ================= START ================= */
 setSync();
