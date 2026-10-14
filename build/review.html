@@ -1,0 +1,83 @@
+<!-- Admin review list: the last 20 things Auto-detect logged, what it read, and an Undo for each -->
+<style>
+.rv-ov{position:fixed;inset:0;z-index:9999;background:rgba(10,6,18,.7);display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,system-ui,sans-serif}
+.rv-card{width:min(640px,100%);max-height:calc(100vh - 32px);box-sizing:border-box;background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 14px 40px rgba(0,0,0,.45)}
+.rv-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rv-head h4{margin:0;font:700 16px Cinzel,serif}
+.rv-head button,.rv-row button{padding:5px 11px;border-radius:8px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 12px Inter,system-ui,sans-serif;cursor:pointer}
+.rv-card p{margin:0;color:#b9aecb;font-size:12.5px;line-height:1.45}
+.rv-list{overflow-y:auto;overflow-x:hidden;display:grid;gap:8px;padding-right:2px}
+.rv-row{border:1px solid #3b2d52;border-radius:10px;padding:9px 11px;display:grid;gap:4px;font-size:12.5px}
+.rv-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rv-top b{font-size:13.5px}
+.rv-tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:99px;background:#2a2233;color:#cfc4df}
+.rv-tag.kill{background:#3a1f29;color:#ffb3c0}.rv-tag.spawn{background:#4a2a14;color:#f6b37a}.rv-tag.dead{background:#21302a;color:#9fe1cb}
+.rv-when{margin-left:auto;color:#8f82a6;font-size:11.5px;white-space:nowrap}
+.rv-read{color:#b9aecb;overflow-wrap:anywhere}
+.rv-read i{color:#8f82a6;font-style:normal}
+.rv-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#8f82a6;font-size:11.5px}
+.rv-foot .rv-st{margin-right:auto}
+.rv-st.ok{color:#7be0a5}.rv-st.old{color:#8f82a6}.rv-st.undone{color:#e0c27a}
+.rv-none{color:#8f82a6;font-size:12.5px;padding:8px 0}
+</style>
+<script>
+(function(){
+  if(!window.FALSEHOOD_FIREBASE) return;
+  const esc = v=> String(v == null ? '' : v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const when = t=>{ const d = new Date(t), m = Math.floor((Date.now() - t) / 60000);
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · ' + (m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm ago'); };
+  const who = id=> (id && typeof nickNames !== 'undefined' && nickNames[id]) || (id === window.FALSEHOOD_UID ? 'you' : 'a guildmate');
+  const KIND = { kill: 'KILL', spawn: 'EVENT SPAWN', dead: 'EVENT KILL' };
+
+  window.falsehoodReview = async ()=>{
+    const fs = window.FALSEHOOD_FS;
+    if(window.FALSEHOOD_ROLE !== 'admin' || !fs) return;
+    const ov = document.createElement('div'); ov.className = 'rv-ov';
+    ov.innerHTML = `<div class="rv-card" role="dialog" aria-label="Auto-detect log">
+      <div class="rv-head"><h4>📋 Auto-detect log</h4><span><button type="button" class="rv-ref">↻ Refresh</button> <button type="button" class="rv-x">Close</button></span></div>
+      <p>The last 20 things Auto-detect logged, with what it read from the game chat. If one is wrong, press <b>Undo</b> to put that MVP back the way it was.</p>
+      <div class="rv-list"><div class="rv-none">Loading…</div></div></div>`;
+    document.body.appendChild(ov);
+    const list = ov.querySelector('.rv-list');
+    ov.querySelector('.rv-x').onclick = ()=> ov.remove();
+    ov.onclick = e=>{ if(e.target === ov) ov.remove(); };
+    const load = async ()=>{
+      let docs = [];
+      try { docs = (await fs.collection('autolog').orderBy('at', 'desc').limit(20).get()).docs; }
+      catch(e) { list.innerHTML = '<div class="rv-none">Couldn’t load the log (' + esc((e && e.code) || 'error') + '). Update the Firebase rules first.</div>'; return; }
+      if(!docs.length){ list.innerHTML = '<div class="rv-none">Nothing logged by Auto-detect yet.</div>'; return; }
+      list.innerHTML = docs.map(d=>{
+        const x = d.data() || {}, m = byId[x.mvp];
+        // still the current state of that MVP? then it can be undone
+        const current = m && !x.undone && m.lastDeath === x.setTo;
+        const what = x.kind === 'kill'
+          ? `<b>${esc(x.name)}</b> killed${x.killer ? ' by ' + esc(x.killer) : ''}${x.map ? ' · ' + esc(x.map) : ''}`
+          : `<b>${esc(x.boss || 'Boss')}</b> ${x.kind === 'spawn' ? 'spawned' : 'killed' + (x.killer ? ' by ' + esc(x.killer) : '')}${x.map ? ' · ' + esc(x.map) : ''}`;
+        const st = x.undone ? '<span class="rv-st undone">↶ Undone</span>'
+          : current ? '<span class="rv-st ok">✓ On the tracker now</span>'
+          : '<span class="rv-st old">Changed since (a newer kill or edit)</span>';
+        return `<div class="rv-row"><div class="rv-top"><span class="rv-tag ${esc(x.kind)}">${KIND[x.kind] || 'LOG'}</span>${what}<span class="rv-when">${when(x.at)}</span></div>
+          <div class="rv-read"><i>Read:</i> “${esc(x.read || '—')}”</div>
+          <div class="rv-foot">${st}<span>by ${esc(who(x.by))}'s Auto-detect</span>${current ? `<button type="button" data-undo="${esc(d.id)}">↶ Undo</button>` : ''}</div></div>`;
+      }).join('');
+      list.querySelectorAll('[data-undo]').forEach(b=> b.onclick = async ()=>{
+        const d = docs.find(z=> z.id === b.dataset.undo), x = d && d.data(), m = x && byId[x.mvp];
+        if(!m || m.lastDeath !== x.setTo){ load(); return; }
+        if(!confirm(`Undo this for everyone? ${m.id === 'boss_event' ? 'The Boss Event' : m.name} goes back to how it was before Auto-detect logged it.`)) return;
+        const p = x.prev || {};
+        m.lastDeath = p.lastDeath || null; m.by = p.by || null; m.auto = !!p.auto;
+        if(m.id === 'boss_event'){ m.ev = p.ev || null; m.killer = p.killer || ''; }
+        if(p.location) m.location = p.location;
+        try { prevStatus[m.id] = getStatus(m); } catch(e) {}
+        persist(m);
+        try { await fs.collection('autolog').doc(d.id).set(Object.assign({}, x, { undone: true, undoneAt: Date.now() })); } catch(e) {}
+        try { render(); } catch(e) {}
+        try { showToast(`↶ Undone: ${m.id === 'boss_event' ? 'Boss Event' : m.name} restored.`); } catch(e) {}
+        load();
+      });
+    };
+    ov.querySelector('.rv-ref').onclick = load;
+    load();
+  };
+})();
+</script>

@@ -955,7 +955,7 @@ function handleWriteError(e){
   const code = e && e.code;
   if(code === 'invalid_argument' || code === 'revoked' || code === 'not_granted'){
     canWrite = false;
-    showNotice('You can see the guild’s timers but can’t log kills. Ask the page owner to invite you as an <b>Editor</b>.');
+    showNotice('<b>View only.</b> You can see the timers and storage but can’t make changes.<button class="unlock" onclick="falsehoodUnlock()">🔑 Enter editor password</button>');
     requestRender();
   } else if(code === 'quota_exceeded'){
     showToast('The shared board is full and couldn’t save. Ask the page owner to check it.');
@@ -1026,7 +1026,7 @@ async function connect(){
     loadStorageLocal();
     loadLogLocal();
     mvps.forEach(m=> prevStatus[m.id] = getStatus(m));
-    showNotice('Not connected to the shared board. Kills you log here are saved in this browser only. <b>Open the page while signed in to Claude</b> to see and update the guild’s timers.');
+    showNotice((window.FALSEHOOD_FB_ERROR ? '<b>Firebase error: ' + window.FALSEHOOD_FB_ERROR + '.</b> ' : '') + 'Not connected to the shared board. Kills you log here are saved in this browser only. <b>Reload the page and enter the guild password</b> to see and update the guild’s timers.');
     setSync();
     render();
     return;
@@ -1038,7 +1038,7 @@ async function connect(){
       const w = await userApi.can('data.write');
       if(w === false){
         canWrite = false;
-        showNotice('You can see the guild’s timers but can’t log kills. Ask the page owner to invite you as an <b>Editor</b>.');
+        showNotice('<b>View only.</b> You can see the timers and storage but can’t make changes.<button class="unlock" onclick="falsehoodUnlock()">🔑 Enter editor password</button>');
       }
     } catch(e) {}
   }
@@ -1718,7 +1718,7 @@ const GUILD_CUT = 0.10, TRADE_TAX = 0.10;
 let storageItems = [];
 let storageLive = false;
 let storageFilter = 'storage';            // 'storage' | 'sold'
-const canEditStorage = ()=>{ try { return A.canKill(); } catch(e) { return true; } };
+const canEditStorage = ()=>{ if(window.FALSEHOOD_ROLE === 'timer') return false; try { return A.canKill(); } catch(e) { return true; } };
 const zeny = n => Math.round(n).toLocaleString('en-US');
 
 function loadStorageLocal(){
@@ -1972,13 +1972,15 @@ function paintMyName(){
   box.hidden = !(storageLive && me);
   if(box.hidden) return;
   const mine = nickNames[me];
-  box.innerHTML = `Guildmates see you as <b>${mine ? escX(mine) : 'your Claude name'}</b> <button class="btn st-me-btn" type="button">${mine ? 'Change' : 'Set in-game name'}</button>`;
+  box.innerHTML = `Guildmates see you as <b>${mine ? escX(mine) : 'a guildmate (no name set)'}</b> <button class="btn st-me-btn" type="button">${mine ? 'Change' : 'Set in-game name'}</button>`;
   box.querySelector('.st-me-btn').onclick = ()=>{
     openModal('Your in-game name', `
       <label class="mm-label" for="stMeName">Name guildmates see in Storage history</label>
       <input id="stMeName" class="st-modal-input" maxlength="24" placeholder="e.g. Scrumzilla" value="${escX(mine || '')}">`,
       ()=>{
         const v = document.getElementById('stMeName').value.trim().slice(0, 24);
+        const nErr = window.falsehoodNickError ? window.falsehoodNickError(v) : '';
+        if(nErr){ showToast(nErr); return; }
         const ref = db.collection('names').doc(me);
         (v ? ref.set({ name: v }) : ref.delete()).catch(lootError);
         if(v) nickNames[me] = v; else delete nickNames[me];

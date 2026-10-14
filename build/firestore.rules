@@ -35,7 +35,6 @@ service cloud.firestore {
     }
     match /mvps/{id} { allow write: if timer(); }
     match /cycle/{id} { allow write: if timer(); }
-    match /bossevent/{id} { allow write: if timer(); }
     match /loot/{id} { allow delete: if admin(); }
     match /meta/{id} {
       allow create, update: if id == 'session' && admin() && request.resource.data.resetAt == request.time;
@@ -66,10 +65,15 @@ service cloud.firestore {
     match /discordboard/{d} {
       allow read, write: if timer();
     }
+    // Auto-detect review log: watchers add entries; only the Admin reads them and marks them undone
+    match /autolog/{k} {
+      allow create: if timer();
+      allow read, update: if admin();
+    }
     match /{col}/{id} {
-      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard']);
-      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard']) && !(col == 'meta' && id == 'session');
-      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard']);
+      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog']);
+      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog']) && !(col == 'meta' && id == 'session');
+      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog']);
       allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer'] && member()
         && (request.resource == null || request.resource.data.keys().hasOnly(['at']));
     }

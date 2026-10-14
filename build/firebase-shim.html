@@ -158,6 +158,7 @@ body.no-delete .st-del{display:none!important}
         : 'You have <b>view-only access</b> on this device: you can see everything but can’t make changes.'}</div>
       ${role !== 'admin' ? '<button type="button" class="m-up">🔑 Enter another password</button>' : ''}
       <button type="button" class="m-out">⎋ Log out of this device</button>
+      ${role === 'admin' ? '<button type="button" class="m-rv">📋 Auto-detect log…</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-dc">💬 Discord posts…</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-out m-all">⎋ Log out all devices</button>' : ''}`;
     document.body.appendChild(menu);
@@ -177,6 +178,8 @@ body.no-delete .st-del{display:none!important}
       try { await logoutAll(); alert('Done. All other devices are being logged out now.'); }
       catch(e) { alert('Couldn’t log everyone out (' + ((e && e.code) || 'error') + '). Check your connection and try again.'); }
     };
+    const rv = menu.querySelector('.m-rv');
+    if(rv) rv.onclick = ()=>{ menu.hidden = true; if(window.falsehoodReview) window.falsehoodReview(); };
     const dc = menu.querySelector('.m-dc');
     if(dc) dc.onclick = ()=>{ menu.hidden = true; if(window.falsehoodDiscordSetup) window.falsehoodDiscordSetup(); };
     const up = menu.querySelector('.m-up');

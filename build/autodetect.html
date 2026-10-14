@@ -1,4 +1,10 @@
-<!-- Auto-detect: share the Ragnarok window; the tracker reads "… has killed [MVP] at Map." announcements and logs the kill -->
+<!-- Auto-detect: share the Ragnarok window and the tracker reads the game chat.
+     Green  "[Name] of Guild [G] has killed [MVP] at Map."         -> logs that MVP's kill
+     Red    "[PW2 Boss Event] X has spawned in map"                 -> Boss Event spawned
+     Yellow "[PW2 Boss Event] X has been defeated in map by Y"      -> Boss Event killed
+     Text is found by brightness + colour direction (survives screen-share compression), read with Tesseract,
+     and each line is identified by what it says so scrolling or a moving scene behind the chat doesn't re-log it.
+     The colour rules live in two places that must match: isAnn / EV_COLORS and buildMasks(). -->
 <style>
 .kd-btn{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;letter-spacing:.04em;padding:3px 10px;border-radius:999px;border:1px solid rgba(127,110,150,.45);background:transparent;color:inherit;cursor:pointer;vertical-align:middle;white-space:nowrap}
 .kd-btn:hover{border-color:#b77ee8}
@@ -515,7 +521,7 @@
       for(const c of evChains){
         if(!c.e) continue;
         diag.lastText = c.text; diag.lastTextAt = now;
-        evVisible.push(Object.assign(c.e, { key: c.key }));
+        evVisible.push(Object.assign(c.e, { key: c.key, text: c.text }));
       }
       for(const [k, t] of seenEvt) if(now - t >= EVENT_MEM_MS) seenEvt.delete(k);
       for(const e of evVisible){
@@ -580,6 +586,15 @@
     if(!m) m = byMap(p.map);
     return m;
   }
+  const snap = m=> ({ lastDeath: m.lastDeath || null, by: m.by || null, auto: !!m.auto, ev: m.ev || null, killer: m.killer || '', location: m.location || '' });
+  function record(kind, m, prev, info){
+    try {
+      const f = window.FALSEHOOD_FS; if(!f) return;
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      f.collection('autolog').doc(id).set({ at: Date.now(), kind, mvp: m.id, name: m.name, read: String(info.text || '').slice(0, 220),
+        killer: info.killer || '', map: info.map || '', boss: info.boss || '', setTo: m.lastDeath || null, prev, by: window.FALSEHOOD_UID || null }).catch(()=>{});
+    } catch(e) {}
+  }
   function handleKill(p, m){
     m = m || resolve(p);
     const who = p.killer ? `by ${p.killer}${p.guild ? ' (' + p.guild + ')' : ''}` : '';
@@ -594,7 +609,9 @@
     try { can = A.canKill(); } catch(e) {}
     if(!can){ addLog('miss', `${m.name}: you can’t log kills`, who); return; }
     recent.set(m.id, now);
+    const prevK = snap(m);
     try { m._auto = true; logKill(m, 0); } catch(e) { addLog('miss', `${m.name}: couldn’t log`, String(e && e.message || e)); return; }
+    record('kill', m, prevK, { text: p.text, killer: p.killer ? p.killer + (p.guild ? ' (' + p.guild + ')' : '') : '', map: p.map });
     addLog('ok', `${m.name} logged`, [p.map, who].filter(Boolean).join(' · '));
     try { showToast(`📡 Auto-logged ${m.name}${p.killer ? ' — killed by ' + p.killer : ''}`); } catch(e) {}
   }
@@ -668,11 +685,13 @@
     try { can = A.canKill(); } catch(x) {}
     if(!can){ addLog('miss', 'Boss Event: you can’t log kills', who); return; }
     recent.set(m.id, now);
+    const prevD = snap(m);
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
       m._ev = 'dead'; m._killer = e.killer || '';
       m._auto = true; logKill(m, 0);
     } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
+    record('dead', m, prevD, { text: e.text, killer: e.killer, map: e.map, boss: e.boss });
     addLog('ok', `Boss Event killed: ${e.boss || 'MVP'}`, [e.map, who].filter(Boolean).join(' · '));
     try { showToast(`📡 Boss Event: ${e.boss || 'MVP'} defeated in ${e.map || '?'}${e.killer ? ' by ' + e.killer : ''}`); } catch(x) {}
   }
@@ -689,12 +708,14 @@
     try { can = A.canKill(); } catch(x) {}
     if(!can){ addLog('miss', 'Boss Event: you can’t log it', evTitle(e)); return; }
     recent.set('boss_event_spawn', now);
+    const prevS = snap(m);
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
       m._ev = 'spawn'; m._killer = '';
       m._auto = true; logKill(m, 0);
       if(typeof prevStatus !== 'undefined') prevStatus[m.id] = 'waiting';   // ring the spawn alert here too
     } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
+    record('spawn', m, prevS, { text: e.text, map: e.map, boss: e.boss });
     addLog('ok', `Boss Event spawned: ${e.boss || 'MVP'}`, e.map || '');
     try { showToast(`📡 Boss Event: ${e.boss || 'MVP'} has spawned in ${e.map || '?'}`); } catch(x) {}
   }
@@ -802,7 +823,7 @@
   window.__adEvent = t=> parseEvent(t);
   window.falsehoodFixMap = m=> fixMap(String(m || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm'));
   window.__adDiag = ()=> diag;
-  window.__adEventLog = t=>{ const e = parseEvent(t); if(e) handleEvent(e); return e; };
+  window.__adEventLog = t=>{ const e = parseEvent(t); if(e){ e.text = t; handleEvent(e); } return e; };
   window.__adParse = t=>{ const p = parseLine(t); if(!p) return null; const m = matchMvp(p.mvp, p.map) || (p.loose ? findInWords(p.after || p.text, p.map) : null) || byMap(p.map); return { mvp: p.mvp, map: p.map, killer: p.killer, loose: !!p.loose, id: m ? m.id : null }; };
   // for testing: window.__adTest(imageOrCanvas) runs one frame through the reader
   window.__adTest = async (src, whole)=>{
