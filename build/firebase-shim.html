@@ -242,7 +242,7 @@ body.no-delete .st-del{display:none!important}
       wchip.innerHTML = n === 0 ? '⚠ No auto-detect' : `📡 <span class="n">${n}</span> watching`;
       wchip.title = n === 0
         ? 'Nobody is running Auto-detect right now, so kills must be logged by hand.' + (role !== 'viewer' ? ' Start it with the Auto-detect button.' : '')
-        : `${n} guildmate${n === 1 ? ' is' : 's are'} running Auto-detect, so kills in chat are logged automatically.` + (role === 'admin' ? ' Click to see who.' : '');
+        : `${n} guildmate${n === 1 ? ' is' : 's are'} running Auto-detect, so kills in chat are logged automatically.`;
     };
     const wRefresh = async ()=>{ try { wPaint(await countSince('watchers', Date.now() - WATCH_MS)); } catch(x) {} };
     window.FALSEHOOD_WATCH = {
