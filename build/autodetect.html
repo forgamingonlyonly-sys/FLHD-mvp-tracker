@@ -1,0 +1,306 @@
+<!-- Auto-detect: share the Ragnarok window; the tracker reads "… has killed [MVP] at Map." announcements and logs the kill -->
+<style>
+.ad-btn{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;letter-spacing:.04em;padding:3px 10px;border-radius:999px;border:1px solid rgba(127,110,150,.45);background:transparent;color:inherit;cursor:pointer;vertical-align:middle;white-space:nowrap}
+.ad-btn:hover{border-color:#b77ee8}
+.ad-btn .ad-dot{width:7px;height:7px;border-radius:50%;background:#8f82a6}
+.ad-btn.on{border-color:#2fbf71;color:#2fbf71}
+.ad-btn.on .ad-dot{background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.2);animation:adPulse 1.6s ease-in-out infinite}
+.ad-btn.busy .ad-dot{background:#e0a100}
+@keyframes adPulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.ad-btn.on .ad-dot{animation:none}}
+.ad-pop{position:fixed;z-index:9998;width:min(340px,calc(100vw - 16px));background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:12px;padding:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);font:13px Inter,system-ui,sans-serif}
+.ad-pop[hidden]{display:none!important}
+.ad-pop h4{margin:0 0 6px;font:700 14px Cinzel,serif;letter-spacing:.03em}
+.ad-pop p{margin:0 0 10px;color:#b9aecb;font-size:12.5px;line-height:1.45}
+.ad-pop .ad-status{font-size:12px;color:#9d8fb3;margin-bottom:8px}
+.ad-pop .ad-log{max-height:220px;overflow:auto;border-top:1px solid #3b2d52;padding-top:6px}
+.ad-pop .ad-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px}
+.ad-pop .ad-row small{color:#8f82a6;white-space:nowrap}
+.ad-pop .ad-row.ok b{color:#7be0a5}
+.ad-pop .ad-row.skip b{color:#e0c27a}
+.ad-pop .ad-row.miss b{color:#ff9aa8}
+.ad-pop .ad-none{color:#8f82a6;font-size:12px;padding:4px 0}
+.ad-pop .ad-acts{display:flex;gap:8px;margin-top:10px}
+.ad-pop button.ad-go{flex:1;padding:8px 12px;border-radius:9px;border:1px solid #c03bd6;background:#a02ab8;color:#fff;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+.ad-pop button.ad-stop{flex:1;padding:8px 12px;border-radius:9px;border:1px solid #6b3b4a;background:#3a1f29;color:#ffb3c0;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+</style>
+<script>
+(function(){
+  if(!window.FALSEHOOD_FIREBASE) return;
+  const TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  const SCAN_MS = 1500, SAME_KILL_MS = 5 * 60000;
+
+  // ---------- reading the announcement ----------
+  // Poring World announcements are bright green: about rgb(130, 245, 120)
+  const isAnn = (r, g, b)=> g > 200 && g - r > 60 && g - b > 70;
+
+  let tessP = null, worker = null;
+  function loadOCR(){
+    if(tessP) return tessP;
+    tessP = new Promise((res, rej)=>{
+      if(window.Tesseract) return res();
+      const s = document.createElement('script'); s.src = TESS_URL; s.onload = res; s.onerror = ()=> rej(new Error('Couldn’t load the text reader'));
+      document.head.appendChild(s);
+    }).then(async ()=>{
+      worker = await Tesseract.createWorker('eng');
+      await worker.setParameters({ tessedit_pageseg_mode: '7', preserve_interword_spaces: '1' });
+      return worker;
+    });
+    tessP.catch(()=>{ tessP = null; });
+    return tessP;
+  }
+
+  // find lines of announcement-green text in a frame; return black-on-white crops ready for OCR
+  function findLines(img){
+    const W = img.width, H = img.height, d = img.data;
+    const mask = new Uint8Array(W * H), rows = new Uint32Array(H);
+    for(let y = 0, i = 0; y < H; y++){
+      let c = 0;
+      for(let x = 0; x < W; x++, i += 4){
+        if(isAnn(d[i], d[i+1], d[i+2])){ mask[y*W + x] = 1; c++; }
+      }
+      rows[y] = c;
+    }
+    const bands = [];
+    let y0 = -1, gap = 0;
+    for(let y = 0; y <= H; y++){
+      const on = y < H && rows[y] >= 4;
+      if(on){ if(y0 < 0) y0 = y; gap = 0; }
+      else if(y0 >= 0){
+        if(++gap > 3 || y === H){ const y1 = y - gap; if(y1 - y0 >= 6 && y1 - y0 <= 60) bands.push([y0, y1]); y0 = -1; gap = 0; }
+      }
+    }
+    const out = [];
+    for(const [a, b] of bands){
+      let total = 0, x0 = W, x1 = -1;
+      for(let y = a; y <= b; y++) for(let x = 0; x < W; x++) if(mask[y*W + x]){ total++; if(x < x0) x0 = x; if(x > x1) x1 = x; }
+      if(total < 150 || x1 - x0 < 120) continue;           // too small to be a kill line
+      const pad = 8, cx0 = Math.max(0, x0 - pad), cy0 = Math.max(0, a - pad), cw = Math.min(W, x1 + pad) - cx0, ch = Math.min(H, b + pad) - cy0;
+      const S = 2, cv = document.createElement('canvas'); cv.width = cw * S; cv.height = ch * S;
+      const cx = cv.getContext('2d'), od = cx.createImageData(cw, ch);
+      let sig = '';
+      for(let y = 0; y < ch; y++) for(let x = 0; x < cw; x++){
+        const on = mask[(cy0 + y)*W + cx0 + x], j = (y*cw + x) * 4, v = on ? 0 : 255;
+        od.data[j] = od.data[j+1] = od.data[j+2] = v; od.data[j+3] = 255;
+      }
+      for(let x = 0; x < cw; x += 6){ let c = 0; for(let y = 0; y < ch; y++) c += mask[(cy0 + y)*W + cx0 + x]; sig += c.toString(36); }
+      const tmp = document.createElement('canvas'); tmp.width = cw; tmp.height = ch; tmp.getContext('2d').putImageData(od, 0, 0);
+      cx.imageSmoothingEnabled = false; cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(tmp, 0, 0, cv.width, cv.height);
+      out.push({ canvas: cv, sig: cw + 'x' + ch + ':' + sig });
+    }
+    return out;
+  }
+
+  // "[Name] of Guild [Guild] has killed [Maya] at Ant Hell F2."
+  function parseLine(raw){
+    const t = String(raw || '').replace(/\s+/g, ' ').trim();
+    const k = /has\s*k\s*[il1|!]{1,3}\s*[il1|!]?\s*e\s*d\s*(.+?)\s+at\s+(.+?)\s*[.,:;]*$/i.exec(t);
+    if(!k) return null;
+    const clean = s=> s.replace(/^[\[\]\(\)\{\}|<>"'`.:;,\s]+|[\[\]\(\)\{\}|<>"'`.:;,\s]+$/g, '');
+    const who = /^(.*?)\s+of\s+Guild\s+(.*?)\s+has\s/i.exec(t);
+    return { mvp: clean(k[1]), map: clean(k[2]), killer: who ? clean(who[1]) : '', guild: who ? clean(who[2]) : '', text: t };
+  }
+
+  // ---------- which MVP is it? ----------
+  const norm = s=> String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+  function sim(a, b){
+    a = norm(a); b = norm(b);
+    if(!a || !b) return 0;
+    if(a === b) return 1;
+    const m = a.length, n = b.length, dp = Array.from({ length: m + 1 }, (_, i)=> [i]);
+    for(let j = 1; j <= n; j++) dp[0][j] = j;
+    for(let i = 1; i <= m; i++) for(let j = 1; j <= n; j++)
+      dp[i][j] = Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    return 1 - dp[m][n] / Math.max(m, n);
+  }
+  const ALIASES = {
+    moonlight: ['Moonlight Flower', 'Moonlight'], lod: ['Lord of Death', 'Lord of the Dead'],
+    samurai: ['Incantation Samurai', 'Samurai Specter'], garm: ['Garm', 'Hatii'], amonra: ['Amon Ra', 'Amonra'],
+    gtb: ['Golden Thief Bug'], evil_snake: ['Evil Snake Lord'], doppel: ['Doppelganger'], stormy: ['Stormy Knight'],
+  };
+  // MVPs that share a name: pick by the map in the announcement
+  const FAMILIES = [
+    { names: ['Baphomet'], pick: map=> /glast|gl_|church|heim/i.test(map) ? 'bapho_gh' : 'bapho_maze' },
+    { names: ['Ghostring'], pick: map=> /sunken|ship|treasure/i.test(map) ? 'ghost_sunken' : 'ghost_poring' },
+    { names: ['Angeling'], pick: map=> /magma/i.test(map) ? 'angel_magma' : /toy/i.test(map) ? 'angel_toy' : /mjol|mjöl/i.test(map) ? 'angel_mjolnir' : 'angel_poring' },
+    { names: ['Deviling'], pick: ()=> 'devil_magma' },
+    { names: ['Archangeling', 'Arcangeling', 'Arcangel'], pick: ()=> 'arch_magma' },
+  ];
+  function matchMvp(name, map){
+    const list = (typeof mvps !== 'undefined' ? mvps : []);
+    const byIdLocal = id=> list.find(m=> m.id === id);
+    let best = null, score = 0;
+    for(const f of FAMILIES) for(const n of f.names){
+      const s = sim(name, n);
+      if(s > score){ score = s; best = byIdLocal(f.pick(map || '')); }
+    }
+    for(const m of list){
+      if(['bapho_maze','bapho_gh','ghost_sunken','ghost_poring','angel_magma','angel_toy','angel_mjolnir','angel_poring','devil_magma','arch_magma'].includes(m.id)) continue;
+      for(const n of [m.name].concat(ALIASES[m.id] || [])){
+        const s = sim(name, n);
+        if(s > score){ score = s; best = m; }
+      }
+    }
+    return score >= 0.72 ? best : null;
+  }
+
+  // ---------- capture loop ----------
+  let stream = null, track = null, grabber = null, video = null, ticker = null, busy = false;
+  const seenSig = new Map(), recent = new Map(), log = [];
+  let lastScan = 0, status = '';
+
+  function addLog(kind, title, sub){
+    log.unshift({ kind, title, sub, at: Date.now() });
+    if(log.length > 30) log.pop();
+    paintPop();
+  }
+  async function frame(){
+    if(grabber){ try { return await grabber.grabFrame(); } catch(e) {} }
+    if(video && video.videoWidth) return video;
+    return null;
+  }
+  async function scan(){
+    if(busy || !track || track.readyState !== 'live') return;
+    busy = true;
+    try {
+      const f = await frame();
+      if(!f) return;
+      const W = f.width || f.videoWidth, H = f.height || f.videoHeight;
+      if(!W || !H) return;
+      const cv = scan.cv || (scan.cv = document.createElement('canvas'));
+      cv.width = W; cv.height = H;
+      const cx = cv.getContext('2d', { willReadFrequently: true });
+      cx.drawImage(f, 0, 0, W, H);
+      if(f.close) f.close();
+      lastScan = Date.now();
+      const lines = findLines(cx.getImageData(0, 0, W, H));
+      const now = Date.now();
+      for(const [k, t] of seenSig) if(now - t > 20000) seenSig.delete(k);
+      for(const ln of lines){
+        if(seenSig.has(ln.sig)) continue;                      // same text still on screen
+        seenSig.set(ln.sig, now);
+        await loadOCR();
+        const { data } = await worker.recognize(ln.canvas);
+        const p = parseLine(data && data.text);
+        if(!p) continue;
+        handleKill(p);
+      }
+      status = 'Watching · last check ' + new Date(lastScan).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    } catch(e) {
+      status = 'Problem reading the screen: ' + ((e && e.message) || e);
+    } finally { busy = false; paintBtn(); }
+  }
+  function handleKill(p){
+    const m = matchMvp(p.mvp, p.map);
+    const who = p.killer ? `by ${p.killer}${p.guild ? ' (' + p.guild + ')' : ''}` : '';
+    if(!m){ addLog('miss', `Couldn’t match “${p.mvp}”`, [p.map, who].filter(Boolean).join(' · ')); return; }
+    const now = Date.now();
+    if((recent.get(m.id) || 0) > now - SAME_KILL_MS || (m.lastDeath && now - m.lastDeath < SAME_KILL_MS)){
+      recent.set(m.id, now);
+      addLog('skip', `${m.name} already logged`, who);
+      return;
+    }
+    let can = true;
+    try { can = A.canKill(); } catch(e) {}
+    if(!can){ addLog('miss', `${m.name}: you can’t log kills`, who); return; }
+    recent.set(m.id, now);
+    try { logKill(m, 0); } catch(e) { addLog('miss', `${m.name}: couldn’t log`, String(e && e.message || e)); return; }
+    addLog('ok', `${m.name} logged`, [p.map, who].filter(Boolean).join(' · '));
+    try { showToast(`📡 Auto-logged ${m.name}${p.killer ? ' — killed by ' + p.killer : ''}`); } catch(e) {}
+  }
+
+  async function start(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
+      alert('Auto-detect needs Chrome or Edge on a computer.'); return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 2, max: 5 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
+    } catch(e) { return; }   // they cancelled the share box
+    track = stream.getVideoTracks()[0];
+    track.addEventListener('ended', stop);
+    grabber = (typeof ImageCapture !== 'undefined') ? new ImageCapture(track) : null;
+    if(!grabber){ video = document.createElement('video'); video.muted = true; video.srcObject = stream; video.play().catch(()=>{}); }
+    status = 'Loading the text reader…';
+    paintBtn(); paintPop();
+    loadOCR().then(()=>{ status = 'Watching'; paintBtn(); paintPop(); }).catch(e=>{ status = e.message; paintPop(); });
+    // timers in a worker keep ticking even when this tab is in the background
+    const blob = new Blob([`setInterval(()=>postMessage(0), ${SCAN_MS});`], { type: 'text/javascript' });
+    ticker = new Worker(URL.createObjectURL(blob));
+    ticker.onmessage = scan;
+    addLog('ok', 'Auto-detect started', 'Sharing: ' + (track.label || 'screen'));
+  }
+  function stop(){
+    if(ticker){ ticker.terminate(); ticker = null; }
+    if(track){ try { track.stop(); } catch(e) {} }
+    if(stream) stream.getTracks().forEach(t=>{ try { t.stop(); } catch(e) {} });
+    stream = track = grabber = null;
+    if(video){ video.srcObject = null; video = null; }
+    status = '';
+    addLog('skip', 'Auto-detect stopped', '');
+    paintBtn();
+  }
+  window.addEventListener('beforeunload', ()=>{ if(track) stop(); });
+
+  // ---------- UI (FLHD and Admin only) ----------
+  let btn = null, pop = null;
+  const esc = v=> String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function paintBtn(){
+    if(!btn) return;
+    const on = !!track;
+    btn.classList.toggle('on', on);
+    btn.classList.toggle('busy', on && !worker);
+    btn.innerHTML = `<span class="ad-dot"></span>${on ? 'Auto-detect on' : 'Auto-detect'}`;
+    btn.title = on ? 'Reading kill announcements from the shared game window. Click for details.' : 'Share your Ragnarok window and kills are logged automatically';
+    const st = pop && pop.querySelector('.ad-status'); if(st) st.textContent = status;
+  }
+  function paintPop(){
+    if(!pop) return;
+    const on = !!track;
+    const ago = t=>{ const s = Math.floor((Date.now() - t) / 1000); return s < 60 ? s + 's ago' : Math.floor(s / 60) + 'm ago'; };
+    pop.innerHTML = `<h4>📡 Auto-detect kills</h4>
+      <p>${on ? 'Keep Ragnarok and this tab open. When the game announces <i>“… has killed [MVP] at …”</i>, the kill is logged for everyone.'
+              : 'Share your <b>Ragnarok game window</b>. When the game announces <i>“… has killed [MVP] at …”</i>, the tracker logs the kill for everyone. Nothing touches the game; it only reads the picture.'}</p>
+      <div class="ad-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
+      <div class="ad-log">${log.length ? log.slice(0, 12).map(e=>`<div class="ad-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="ad-none">No kills detected yet.</div>'}</div>
+      <div class="ad-acts">${on ? '<button type="button" class="ad-stop">■ Stop auto-detect</button>' : '<button type="button" class="ad-go">▶ Start: share game window</button>'}</div>`;
+    const go = pop.querySelector('.ad-go'), st = pop.querySelector('.ad-stop');
+    if(go) go.onclick = ()=>{ start(); };
+    if(st) st.onclick = ()=>{ stop(); };
+  }
+  function mount(){
+    const r = window.FALSEHOOD_ROLE;
+    if(r !== 'editor' && r !== 'admin') return;
+    const anchor = document.querySelector('.fb-online') || document.getElementById('fbRole');
+    if(!anchor || btn) return;
+    btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ad-btn';
+    anchor.after(btn);
+    pop = document.createElement('div'); pop.className = 'ad-pop'; pop.hidden = true;
+    document.body.appendChild(pop);
+    btn.onclick = e=>{
+      e.stopPropagation();
+      if(!pop.hidden){ pop.hidden = true; return; }
+      paintPop(); pop.hidden = false;
+      const rc = btn.getBoundingClientRect();
+      pop.style.top = (rc.bottom + 6) + 'px';
+      pop.style.left = Math.max(8, Math.min(rc.left, innerWidth - pop.offsetWidth - 8)) + 'px';
+    };
+    pop.onclick = e=> e.stopPropagation();
+    document.addEventListener('click', ()=>{ if(pop) pop.hidden = true; });
+    setInterval(()=>{ if(pop && !pop.hidden) paintPop(); }, 5000);
+    paintBtn();
+  }
+  const wait = setInterval(()=>{ if(document.getElementById('fbRole')){ clearInterval(wait); setTimeout(mount, 300); } }, 500);
+
+  // for testing: window.__adTest(imageOrCanvas) runs one frame through the reader
+  window.__adTest = async (src)=>{
+    const W = src.width || src.naturalWidth, H = src.height || src.naturalHeight;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const cx = cv.getContext('2d'); cx.drawImage(src, 0, 0);
+    const lines = findLines(cx.getImageData(0, 0, W, H));
+    await loadOCR();
+    const res = [];
+    for(const ln of lines){ const { data } = await worker.recognize(ln.canvas); const p = parseLine(data.text); res.push({ text: data.text.trim(), parsed: p, match: p ? (matchMvp(p.mvp, p.map) || {}).id : null }); if(p) handleKill(p); }
+    return res;
+  };
+})();
+</script>

@@ -22,5 +22,9 @@ fixes = {
 for a, b in fixes.items():
     assert a in src, a
     src = src.replace(a, b)
+auto = root / 'autodetect.html'
+if auto.exists():
+    i = src.rfind('</body>')
+    src = src[:i] + auto.read_text() + '\n' + src[i:]
 (root.parent / 'index.html').write_text(src)
 print('built', len(src))
