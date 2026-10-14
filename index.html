@@ -4074,7 +4074,7 @@ setInterval(()=>{
   // ---------- capture loop ----------
   let stream = null, track = null, grabber = null, video = null, ticker = null, busy = false;
   const seenSig = new Map(), recent = new Map(), log = [], seenKill = new Map(), seenEvt = new Map(), missSeen = new Map();
-  const seenLine = new Set(), scrollNoted = new Set();
+  const seenLine = new Set(), scrollNoted = new Set(), geoCache = [];
   const byIdSafe = id=> (typeof byId !== 'undefined' && byId) ? byId[id] : null;
   // the same kill line counts again only after that MVP could have respawned (scrolling back to it isn't a new kill)
   const killMemMs = m=> Math.max(25, (m && m.min ? m.min : 60) - 2) * 60000;
@@ -4203,18 +4203,12 @@ setInterval(()=>{
         if(sum === diag.sum){ if(!diag.frozenSince) diag.frozenSince = Date.now(); }
         else { diag.frozenSince = 0; diag.sum = sum; }
         diag.frozen = !!diag.frozenSince && Date.now() - diag.frozenSince > 60000;
-        // no kill-green inside the reading area: look for it in the rest of the window
-        if(!areaIsDefault() && !diag.lines && scanN % 3 === 0){
-          let out = 0;
-          for(let y = 0; y < H; y += 1){
-            const inA = y >= ay && y < ay + ah;
-            for(let x = 0, i = y * W * 4; x < W; x++, i += 4){
-              if(inA && x >= ax && x < ax + aw) continue;
-              const r = full[i], g = full[i+1], b = full[i+2];
-              if(isAnn(r, g, b) || EV_COLORS.some(fn=> fn(r, g, b))) out++;
-            }
-          }
-          diag.outside = out;
+        // nothing readable inside a marked area: is there kill / event text elsewhere in the window?
+        if(!areaIsDefault() && !diag.lines && scanN % 4 === 0){
+          const whole = cx.getImageData(0, 0, W, H);
+          const outside = l=> l.y1 + ay < ay || l.y0 >= ay + ah || l.x1 < ax || l.x0 >= ax + aw;
+          const inArea = l=> !(l.y1 < ay || l.y0 >= ay + ah || l.x1 < ax || l.x0 >= ax + aw);
+          diag.outside = [isAnn].concat(EV_COLORS).reduce((n, fn)=> n + findLines(whole, fn).filter(l=> !inArea(l)).length, 0);
         } else if(diag.lines) diag.outside = 0;
         const tw = 300, th = Math.round(H * tw / W);
         thumb.width = tw; thumb.height = th;
@@ -4224,62 +4218,71 @@ setInterval(()=>{
       const now = Date.now();
       for(const [k, v] of seenSig) if(now - v.at > 10 * 60000) seenSig.delete(k);
       for(const [k, t] of missSeen) if(now - t > 10 * 60000) missSeen.delete(k);
-      // read each green line (a picture already read is reused)
-      const items = [];
-      for(const ln of lines){
+      // read each line. A line that sits where a line sat last time (same spot, same length) is the
+      // same line even if the scenery behind a see-through chat box changed its pixels a little.
+      for(const g of geoCache) if(now - g.at > 5000) geoCache.splice(geoCache.indexOf(g), 1);
+      async function read(ln, color){
+        const g = geoCache.find(e=> e.color === color && Math.abs(e.y0 - ln.y0) <= 1 && Math.abs(e.x0 - ln.x0) <= 3 && Math.abs(e.x1 - ln.x1) <= 8);
+        if(g){ g.at = now; g.y0 = ln.y0; g.x0 = ln.x0; g.x1 = ln.x1; return g.text; }
         let hit = seenSig.get(ln.sig);
         if(!hit){
-          if(ln.short && !lines.some(p=> p !== ln && !p.short && ln.y0 - p.y1 >= 0 && ln.y0 - p.y1 <= 26 && Math.abs(ln.x0 - p.x0) <= 40)) continue;   // a stray bit on its own
           await loadOCR();
           const { data } = await worker.recognize(ln.canvas);
           hit = { text: String((data && data.text) || '').replace(/\s+/g, ' ').trim(), at: now };
           seenSig.set(ln.sig, hit);
         }
         hit.at = now;
-        if(hit.text) items.push({ ln, text: hit.text });
+        geoCache.push({ color, y0: ln.y0, x0: ln.x0, x1: ln.x1, text: hit.text, at: now });
+        return hit.text;
+      }
+      const nearAbove = (ln, list)=> list.some(p=> p !== ln && !p.short && ln.y0 - p.y1 >= 0 && ln.y0 - p.y1 <= 26 && Math.abs(ln.x0 - p.x0) <= 40);
+      const items = [];
+      for(const ln of lines){
+        if(ln.short && !nearAbove(ln, lines)) continue;              // a stray bit on its own
+        const text = await read(ln, 'k');
+        if(text) items.push({ ln, text });
       }
       const evItems = [];
       for(const ln of evLines){
-        let hit = seenSig.get(ln.sig);
-        if(!hit){
-          if(ln.short && !evLines.some(p=> p !== ln && !p.short && ln.y0 - p.y1 >= 0 && ln.y0 - p.y1 <= 26 && Math.abs(ln.x0 - p.x0) <= 40)) continue;
-          await loadOCR();
-          const { data } = await worker.recognize(ln.canvas);
-          hit = { text: String((data && data.text) || '').replace(/\s+/g, ' ').trim(), at: now };
-          seenSig.set(ln.sig, hit);
-        }
-        hit.at = now;
-        if(hit.text) evItems.push({ ln, text: hit.text });
+        if(ln.short && !nearAbove(ln, evLines)) continue;
+        const text = await read(ln, 'e');
+        if(text) evItems.push({ ln, text });
       }
       const killChains = joinWrapped(items), evChains = joinWrapped(evItems, EV_RULES);
-      // which lines are new messages, and which are older ones brought into view by scrolling the chat
-      const fresh = new Set(), older = scrolledLines(killChains.concat(evChains), now);
-      for(const c of killChains.concat(evChains)) if(!older.has(c.key) && !seenLine.has(c.key)) fresh.add(c.key);
-      for(const c of killChains.concat(evChains)) seenLine.add(c.key);
+      // what each line says: which MVP (kills) or which event; that's its identity
+      for(const c of killChains){ c.p = parseLine(c.text); c.m = c.p ? resolve(c.p) : null; c.sem = c.m ? 'k:' + c.m.id : null; }
+      for(const c of evChains){
+        c.e = parseEvent(c.text);
+        if(c.e && (c.e.kind !== 'dead' && c.e.kind !== 'spawn' || !c.e.map || c.e.map.length < 4)) c.e = null;
+        c.sem = c.e ? 'e:' + c.e.kind + ':' + norm(c.e.boss || c.e.map) : null;
+      }
+      const known = killChains.concat(evChains).filter(c=> c.sem);
+      for(const c of known) c.key = c.sem + '@' + Math.round(c.x0 / 50);    // the same message in another chat window is its own line
+      const fresh = new Set(), older = scrolledLines(known, now);
+      for(const c of known) if(!older.has(c.key) && !seenLine.has(c.key)) fresh.add(c.key);
+      for(const c of known) seenLine.add(c.key);
       const visible = [];
-      for(const { text: txt, key } of killChains){
-        diag.lastText = txt; diag.lastTextAt = now;
-        const p = parseLine(txt);
-        const m = p ? resolve(p) : null;
-        if(!m){
-          if(!missSeen.has(key) && fresh.has(key) && /k\S{0,3}ed\b|o[ft]\s+gu/i.test(txt)){
-            missSeen.set(key, now);
-            addLog('miss', p ? `Couldn’t match “${p.mvp}”` : 'Saw a message but couldn’t read it', p ? [p.map, p.killer && 'by ' + p.killer].filter(Boolean).join(' · ') : txt.slice(0, 90));
+      for(const c of killChains){
+        diag.lastText = c.text; diag.lastTextAt = now;
+        if(!c.m){
+          const mk = norm(c.text).slice(0, 40);
+          if(!missSeen.has(mk) && /k\S{0,3}ed\b|o[ft]\s+gu/i.test(c.text)){
+            missSeen.set(mk, now);
+            addLog('miss', c.p ? `Couldn’t match “${c.p.mvp}”` : 'Saw a message but couldn’t read it', c.p ? [c.p.map, c.p.killer && 'by ' + c.p.killer].filter(Boolean).join(' · ') : c.text.slice(0, 90));
           }
           continue;
         }
-        visible.push({ m, p, key });
+        visible.push({ m: c.m, p: c.p, key: c.key });
       }
       const evVisible = [];
-      for(const { text, key } of evChains){
-        const e = parseEvent(text);
-        if(!e || (e.kind !== 'dead' && e.kind !== 'spawn') || !e.map || e.map.length < 4) continue;
-        diag.lastText = text; diag.lastTextAt = now;
-        evVisible.push(Object.assign(e, { key }));
+      for(const c of evChains){
+        if(!c.e) continue;
+        diag.lastText = c.text; diag.lastTextAt = now;
+        evVisible.push(Object.assign(c.e, { key: c.key }));
       }
       for(const [k, t] of seenEvt) if(now - t >= EVENT_MEM_MS) seenEvt.delete(k);
       for(const e of evVisible){
-        const k = e.kind + ':' + norm(e.map || e.boss);
+        const k = e.kind + ':' + norm(e.boss || e.map);
         const isNew = fresh.has(e.key) && !seenEvt.has(k);
         seenEvt.set(k, now);
         if(!isNew){
@@ -4308,7 +4311,7 @@ setInterval(()=>{
         ? '⚠ The shared window is black. Run Ragnarok in windowed mode (Alt+Enter), then Stop and Start again.'
         : diag.frozen
         ? '⚠ The game picture hasn’t changed for a while. Is Ragnarok minimized? Restore it (it can sit behind other windows, just not minimized).'
-        : diag.outside > 150
+        : diag.outside > 0
         ? '⚠ Kill or boss event text is on screen but outside your marked area. Press Change and draw the box around your chat (or Reset to read the whole window).'
         : 'Watching · last check ' + new Date(lastScan).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
     } catch(e) {
@@ -4595,7 +4598,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014211249';
+  const BUILD = '20261014212342';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
