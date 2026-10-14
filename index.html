@@ -1211,29 +1211,38 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
 .cyc-ring-txt { display: grid; font-size: 12.5px; color: var(--text-2); }
 .cyc-ring-txt b { font-size: 15px; color: var(--text); }
 .ap-timer-row[hidden] { display: none !important; }
-/* ---- BOSS EVENT tab ---- */
-.ev { display: grid; gap: 12px; }
+/* ---- BOSS EVENT card (top of the MVP tab) ---- */
+.ev { display: grid; margin-bottom: 10px; }
 .ev[hidden] { display: none !important; }
-.ev-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 18px; display: grid; justify-items: center; gap: 8px; text-align: center; box-shadow: var(--shadow); }
-.ev-now { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13.5px; color: var(--text-2); max-width: 100%; box-sizing: border-box; }
+.ev-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--text-3); border-radius: 12px; padding: 8px 12px; box-shadow: var(--shadow); }
+.ev-card.is-up { border-left-color: var(--overdue); }
+.ev-card.is-gather { border-left-color: var(--waiting); }
+.ev-card.is-due:not(.is-up) { border-left-color: var(--window); }
+.ev-head { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.ev-tag { flex: none; font: 700 11px var(--font-body, Inter, sans-serif); letter-spacing: .12em; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+.ev-card.is-up .ev-tag { background: var(--overdue); border-color: var(--overdue); color: #fff; }
+.ev-now { flex: 1 1 220px; min-width: 0; font-size: 13.5px; color: var(--text-2); overflow-wrap: anywhere; }
 .ev-now b { color: var(--text); }
-.ev-now.up { border-color: var(--overdue); color: var(--overdue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--overdue) 18%, transparent); }
-.ev-now.up b { color: var(--overdue); }
-.ev-now.gather { border-color: var(--waiting); color: var(--waiting); }
-.ev-now.dead { border-color: var(--window); }
-.ev-phase { font: 700 12px var(--font-body, Inter, sans-serif); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); margin-top: 4px; }
-.ev-clock { font: 700 clamp(48px, 11vw, 84px)/1 var(--font-display, Cinzel, serif); font-variant-numeric: tabular-nums; color: var(--waiting); }
+.ev-now.up, .ev-now.up b { color: var(--overdue); }
+.ev-now.gather, .ev-now.gather b { color: var(--waiting); }
+.ev-count { flex: none; display: inline-flex; align-items: baseline; gap: 6px; }
+.ev-phase { font: 700 11px var(--font-body, Inter, sans-serif); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+.ev-clock { font: 700 20px/1 var(--font-display, Cinzel, serif); font-variant-numeric: tabular-nums; color: var(--waiting); min-width: 4.2ch; }
 .ev-card.is-due .ev-clock, .ev-card.is-due .ev-phase { color: var(--window); }
 .ev-card.is-none .ev-clock { color: var(--text-3); }
-.ev-sub { color: var(--text-2); font-size: 13px; max-width: 560px; }
-.ev-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.ev-acts { flex: none; display: flex; gap: 6px; }
 .ev-acts:empty { display: none; }
+.ev-acts .btn { font-size: 12.5px; padding: 4px 12px; }
+.ev-more { flex: none; font: 600 12px var(--font-body, Inter, sans-serif); padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); cursor: pointer; }
+.ev-body { display: grid; gap: 10px; justify-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ev-body[hidden] { display: none !important; }
+.ev-sub { color: var(--text-2); font-size: 12.5px; text-align: center; }
 .ev-form { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; padding: 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); width: min(640px, 100%); box-sizing: border-box; }
 .ev-form[hidden] { display: none !important; }
 .ev-form input { min-width: 0; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg, var(--surface)); color: var(--text); font: inherit; font-size: 13px; }
 .ev-form #evBoss { flex: 1 1 150px; } .ev-form #evMap { flex: 1 1 110px; } .ev-form #evTime { flex: 0 0 auto; }
 .ev-form .btn { font-size: 13px; padding: 6px 12px; }
-.ev-list { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
+.ev-list { width: 100%; }
 .ev-list h3 { margin: 0 0 6px; font: 700 12px var(--font-body, Inter, sans-serif); letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
 .ev-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13px; }
 .ev-row:first-child { border-top: 0; }
@@ -1853,20 +1862,16 @@ async function fillNames(){
 const MINI_IDS = ['angel_toy','angel_mjolnir','ghost_poring','angel_poring','angel_magma','devil_magma','arch_magma','ghost_sunken','Ghost','Angel','Ghost_sun'];
 mvps.forEach(m=>{ m.type = MINI_IDS.includes(m.id) ? 'mini' : 'mvp'; });
 let tabSig = '';
-let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); return t === 'mini' || t === 'storage' || t === 'timer' || t === 'event' ? t : 'mvp'; } catch(e) { return 'mvp'; } })();
+let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); return t === 'mini' || t === 'storage' || t === 'timer' ? t : 'mvp'; } catch(e) { return 'mvp'; } })();
 const inTab = m => m.type === currentTab;
 function tabSignature(){ return currentTab + ['mvp','mini'].map(t=>mvps.some(m=>m.type===t && getStatus(m)==='window')).join() + (typeof evUp === 'function' && evUp() ? 'E' : ''); }
-const TAB_LABEL = { mvp:'MVP', mini:'MINI MVP', storage:'STORAGE', timer:'TIMER', event:'BOSS EVENT' };
+const TAB_LABEL = { mvp:'MVP', mini:'MINI MVP', storage:'STORAGE', timer:'TIMER' };
 function renderTabs(){
   tabSig = tabSignature();
   const box = document.getElementById('tabs');
-  const tabList = ['mvp','mini','event','storage'];
+  const tabList = ['mvp','mini','storage'];
   try { if(typeof cycleAllowed === 'function' && cycleAllowed()) tabList.push('timer'); } catch(e) {}
   box.innerHTML = tabList.map(t=>{
-    if(t === 'event'){
-      const up = typeof evUp === 'function' && evUp();
-      return `<button class="tab tab-event${t === currentTab ? ' active' : ''}" data-tab="event" role="tab" aria-selected="${t === currentTab}">${up ? '<span class="live-dot" title="Event boss is up"></span>' : ''}BOSS EVENT</button>`;
-    }
     if(t === 'timer'){
       const run = typeof cycle !== 'undefined' && cycle.startedAt;
       return `<button class="tab tab-timer${t === currentTab ? ' active' : ''}" data-tab="timer" role="tab" aria-selected="${t === currentTab}">${run ? '<span class="live-dot" title="Timer running"></span>' : ''}TIMER</button>`;
@@ -2926,13 +2931,12 @@ function openEditModal(x){
 /* Show storage instead of the MVP list when its tab is selected */
 function applyStorageView(){
   try { if(typeof paintAlertEmpty === 'function') paintAlertEmpty(); } catch(e) {}   // re-filter alerts for the open tab
-  const eOn = currentTab === 'event';
-  const tOn = currentTab === 'timer' || eOn;
+  const tOn = currentTab === 'timer';
   const on = currentTab === 'storage';
   document.getElementById('mvpList').hidden = on || tOn;
   storageView.hidden = !on;
   try { timerView.hidden = currentTab !== 'timer'; if(currentTab === 'timer') paintCycle(); } catch(e) {}
-  try { evView.hidden = !eOn; if(eOn) paintEvent(); } catch(e) {}
+  try { evView.hidden = currentTab !== 'mvp'; if(currentTab === 'mvp') paintEvent(); } catch(e) {}
   if(tOn){
     const hb0 = document.getElementById('hiddenBox'); if(hb0) hb0.hidden = true;
     const r0 = document.querySelector('.toolbar-right'); if(r0) r0.hidden = true;
@@ -3802,29 +3806,40 @@ evView.hidden = true;
 evView.setAttribute('aria-label', 'Hourly boss event');
 evView.innerHTML = `
   <div class="ev-card" id="evCard">
-    <div class="ev-now" id="evNow">No boss event logged yet</div>
-    <div class="ev-phase" id="evPhase">Next boss event</div>
-    <div class="ev-clock" id="evClock">--:--</div>
-    <div class="ev-sub" id="evSub"></div>
-    <div class="ev-acts" id="evActs"></div>
-    <div class="ev-form" id="evForm">
-      <input id="evBoss" list="evBossList" placeholder="Boss name" autocomplete="off" maxlength="40">
-      <input id="evMap" list="evMapList" placeholder="Map" autocomplete="off" maxlength="30">
-      <input id="evTime" type="time" title="Time it spawned (leave as is for now)">
-      <button class="btn btn-primary" id="evLog" type="button">Log spawn</button>
-      <button class="btn" id="evGather" type="button" title="“A dark presence is gathering in …”">Gathering</button>
-      <datalist id="evBossList"></datalist><datalist id="evMapList"></datalist>
+    <div class="ev-head">
+      <span class="ev-tag">Boss event</span>
+      <div class="ev-now" id="evNow">No boss event logged yet</div>
+      <div class="ev-count"><span class="ev-phase" id="evPhase">Next</span><span class="ev-clock" id="evClock">--:--</span></div>
+      <div class="ev-acts" id="evActs"></div>
+      <button type="button" class="ev-more" id="evMore" aria-expanded="false">More ▾</button>
     </div>
-    <div class="cyc-alarm" id="evAlarm">
-      <span class="cyc-alarm-lbl">My alert</span>
-      <button type="button" class="cyc-tg" data-k="on">🔔 Alert</button>
-      <button type="button" class="cyc-tg" data-k="sound">Sound</button>
-      <button type="button" class="cyc-tg" data-k="voice">Voice</button>
-      <button type="button" class="cyc-tg" data-k="pre">2 min warning</button>
+    <div class="ev-body" id="evBody" hidden>
+      <div class="ev-sub" id="evSub"></div>
+      <div class="ev-form" id="evForm">
+        <input id="evBoss" list="evBossList" placeholder="Boss name" autocomplete="off" maxlength="40">
+        <input id="evMap" list="evMapList" placeholder="Map" autocomplete="off" maxlength="30">
+        <input id="evTime" type="time" title="Time it spawned (leave empty for now)">
+        <button class="btn btn-primary" id="evLog" type="button">Log spawn</button>
+        <button class="btn" id="evGather" type="button" title="“A dark presence is gathering in …”">Gathering</button>
+        <datalist id="evBossList"></datalist><datalist id="evMapList"></datalist>
+      </div>
+      <div class="cyc-alarm" id="evAlarm">
+        <span class="cyc-alarm-lbl">My alert</span>
+        <button type="button" class="cyc-tg" data-k="on">🔔 Alert</button>
+        <button type="button" class="cyc-tg" data-k="sound">Sound</button>
+        <button type="button" class="cyc-tg" data-k="voice">Voice</button>
+        <button type="button" class="cyc-tg" data-k="pre">2 min warning</button>
+      </div>
+      <div class="ev-list"><h3>Recent boss events</h3><div id="evRows"></div></div>
     </div>
-  </div>
-  <div class="ev-list"><h3>Recent boss events</h3><div id="evRows"></div></div>`;
-document.getElementById('mvpList').after(evView);
+  </div>`;
+document.getElementById('mvpList').before(evView);
+(function(){
+  const more = document.getElementById('evMore'), body = document.getElementById('evBody');
+  const set = open=>{ body.hidden = !open; more.setAttribute('aria-expanded', String(open)); more.textContent = open ? 'Less ▴' : 'More ▾'; };
+  try { set(localStorage.getItem('falsehood-ev-open') === '1'); } catch(e) { set(false); }
+  more.onclick = ()=>{ const open = body.hidden; set(open); try { localStorage.setItem('falsehood-ev-open', open ? '1' : '0'); } catch(e) {} if(open) paintEvent(); };
+})();
 
 const evSpawns = ()=> evList.filter(e=> e.kind === 'spawn');
 const evLast = ()=> evSpawns()[0] || null;
@@ -3861,17 +3876,19 @@ function paintEvent(){
     nowEl.innerHTML = `Last: <b>${esc(last.boss || 'MVP')}</b> in ${esc(last.map || '?')} at ${formatTime(last.at)}`;
   } else nowEl.textContent = 'No boss event logged yet';
   card.classList.toggle('is-none', !next);
+  card.classList.toggle('is-up', !g && !!up);
+  card.classList.toggle('is-gather', !!g);
   card.classList.toggle('is-due', !!next && now >= next);
   if(!next){
-    $('evPhase').textContent = 'Next boss event';
+    $('evPhase').textContent = 'Next';
     $('evClock').textContent = '--:--';
     $('evSub').textContent = allowed ? 'When the red “[PW2 Boss Event] … has spawned in …” line shows up, log it below (or let Auto-detect do it). The next one is counted from there.' : 'Nothing logged yet. The countdown starts after the first event is logged.';
   } else if(now < next){
-    $('evPhase').textContent = 'Next boss event in';
+    $('evPhase').textContent = 'Next in';
     $('evClock').textContent = fmtClock(next - now);
     $('evSub').textContent = `Around ${formatTime(next)} · events come about every ${evGap()} min` + (evGap() === EV_EVERY && evSpawns().length < 3 ? ' (it learns the real gap as more events are logged)' : '');
   } else {
-    $('evPhase').textContent = 'Due now · late by';
+    $('evPhase').textContent = 'Due · late';
     $('evClock').textContent = fmtClock(now - next);
     $('evSub').textContent = `Expected around ${formatTime(next)}. Watch chat for “A dark presence is gathering…”.`;
   }
@@ -4012,14 +4029,14 @@ function startEventLive(){
     list.sort((a, b)=> b.at - a.at);
     evOnNew(list);
     evList = list;
-    if(currentTab === 'event') paintEvent();
+    if(currentTab === 'mvp') paintEvent();
     renderTabs();
   }, ()=>{});
 }
 evOnNew(evList);
 setInterval(()=>{
   if(mode === 'live' && db && !evLive) startEventLive();
-  if(currentTab === 'event') paintEvent();
+  if(currentTab === 'mvp') paintEvent();
   // "2 min warning" before the next event is expected
   const next = evNext();
   if(ecfg.on && ecfg.pre && next && !evUp() && next - Date.now() <= 120000 && next - Date.now() > 110000 && evWarned !== String(next)){
@@ -4647,7 +4664,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014194137';
+  const BUILD = '20261014194522';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
