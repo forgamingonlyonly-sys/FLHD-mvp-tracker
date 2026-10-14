@@ -4214,15 +4214,35 @@ setInterval(()=>{
 #fbUpdate[hidden]{display:none!important}
 #fbUpdate b{font-weight:700}
 #fbUpdate button{padding:7px 14px;border-radius:9px;border:1px solid #c03bd6;background:#a02ab8;color:#fff;font:600 13px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+#fbVer{position:fixed;left:16px;bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:500;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font:600 11.5px Inter,system-ui,sans-serif;box-shadow:var(--shadow);cursor:default}
+#fbVer .v-dot{width:7px;height:7px;border-radius:50%;background:#8f82a6}
+#fbVer.ok .v-dot{background:#2fbf71}
+#fbVer.old{cursor:pointer;border-color:#c03bd6;color:var(--text)}
+#fbVer.old .v-dot{background:#e0a100}
 #fbUpdate .u-x{background:transparent;border-color:#4a3a63;color:#b9aecb;padding:7px 10px}
 </style>
 <script>
 (function(){
-  const BUILD = '20261014091624';
+  const BUILD = '20261014092045';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
   document.body.appendChild(bar);
+  // version label in the bottom-left corner: build date/time, plus whether it's the latest
+  const when = (()=>{ const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(BUILD); if(!m) return null;
+    return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])); })();
+  const label = when ? 'v' + when.getFullYear() + '.' + String(when.getMonth() + 1).padStart(2, '0') + '.' + String(when.getDate()).padStart(2, '0') + '.' + String(when.getHours()).padStart(2, '0') + String(when.getMinutes()).padStart(2, '0') : 'v?';
+  const ver = document.createElement('div');
+  ver.id = 'fbVer';
+  const paintVer = (state)=>{
+    ver.className = state || '';
+    ver.innerHTML = `<span class="v-dot"></span>${label}${state === 'ok' ? ' · Latest' : state === 'old' ? ' · Update available' : ''}`;
+    ver.title = (when ? 'This version was published ' + when.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) + '. ' : '') +
+      (state === 'ok' ? 'You have the latest version.' : state === 'old' ? 'A newer version is out. Click to refresh.' : 'Checking for updates…');
+  };
+  paintVer('');
+  ver.onclick = ()=>{ if(ver.classList.contains('old')) location.reload(); };
+  document.body.appendChild(ver);
   bar.querySelector('.u-go').onclick = ()=> location.reload();
   let snoozed = 0;
   bar.querySelector('.u-x').onclick = ()=>{ bar.hidden = true; snoozed = Date.now(); };
@@ -4232,10 +4252,13 @@ setInterval(()=>{
       const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
       if(!r.ok) return;
       const v = await r.json();
-      if(v && v.build && v.build !== BUILD && Date.now() - snoozed > 30 * 60000) bar.hidden = false;
+      if(v && v.build && v.build !== BUILD){
+        paintVer('old');
+        if(Date.now() - snoozed > 30 * 60000) bar.hidden = false;
+      } else if(v && v.build) paintVer('ok');
     } catch(e) {}
   }
-  setTimeout(check, 20000);
+  setTimeout(check, 3000);
   setInterval(check, 5 * 60000);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') check(); });
 })();
