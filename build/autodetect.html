@@ -54,13 +54,8 @@
   // Poring World kill lines are one exact green: about rgb(140, 255, 123). Matching that shade tightly
   // ignores grass, trees and other green things on screen.
   const isAnn = (r, g, b)=> g >= 225 && r >= 110 && r <= 170 && b >= 95 && b <= 150 && g - r >= 75;
-  // "[PW2 Boss Event]" lines: orange = gathering, red = PvP on / has spawned, yellow = has been defeated.
-  // Each colour is read on its own so neighbouring event lines don't run together.
-  const EV_COLORS = [
-    (r, g, b)=> r >= 235 && g <= 45 && b <= 45,
-    (r, g, b)=> r >= 235 && g >= 130 && g <= 180 && b <= 45,
-    (r, g, b)=> r >= 235 && g >= 235 && b <= 45,
-  ];
+  // "[PW2 Boss Event] X has been defeated in map by Y" is pure yellow: that line logs the Boss Event row
+  const EV_COLORS = [ (r, g, b)=> r >= 235 && g >= 235 && b <= 45 ];
   const SCALE = 4;
   let tessP = null, worker = null;
   function loadOCR(){
@@ -193,6 +188,7 @@
     const list = (typeof mvps !== 'undefined' ? mvps : []);
     let best = null, bestS = 0;
     for(const m of list){
+      if(m.id === 'boss_event') continue;
       const fam = FAMILY_OF[m.id];
       if(fam !== undefined && FAMILIES[fam].pick(map || '') !== m.id) continue;   // e.g. Baphomet at Glast Heim → Baphomet GH
       const names = [m.name].concat(ALIASES[m.id] || [], fam !== undefined ? FAMILIES[fam].names : []);
@@ -377,7 +373,7 @@
   // last resort: the map name alone, when only one MVP lives there
   function byMap(map){
     if(!map) return null;
-    const list = (typeof mvps !== 'undefined' ? mvps : []);
+    const list = (typeof mvps !== 'undefined' ? mvps : []).filter(m=> m.id !== 'boss_event');
     const scored = list.map(m=>({ m, s: sim(map, String(m.location || '').replace(/\s*\(.*$/, '')) })).sort((a, b)=> b.s - a.s);
     if(!scored.length || scored[0].s < 0.8) return null;
     if(scored[1] && scored[1].s >= scored[0].s - 0.02) return null;     // two MVPs share that map
@@ -429,6 +425,7 @@
     const list = (typeof mvps !== 'undefined' ? mvps : []);
     let best = '', bs = 0;
     for(const m of list){
+      if(m.id === 'boss_event') continue;
       const fam = FAMILY_OF[m.id];
       const names = [m.name].concat(ALIASES[m.id] || [], fam !== undefined ? FAMILIES[fam].names : []);
       for(const x of names){ const sc = sim(n, x); if(sc > bs){ bs = sc; best = fam !== undefined ? FAMILIES[fam].names[0] : (norm(x).length >= norm(m.name) .length ? x : m.name).replace(/\s*\(.*\)\s*$/, ''); } }
@@ -436,20 +433,26 @@
     return bs >= 0.72 ? best : n.replace(/\b[a-z]/g, c=> c.toUpperCase());
   }
   const evTitle = e=> e.kind === 'gather' ? `gathering in ${e.map || '?'}` : `${e.boss || 'MVP'} ${e.kind === 'dead' ? 'defeated' : 'spawned'} in ${e.map || '?'}`;
+  // the yellow "has been defeated" line: Boss Event row → died now, location = that map (and which boss it was)
   function handleEvent(e){
-    const api = window.FALSEHOOD_EVENT;
-    if(!api){ addLog('miss', 'Boss event: tracker not ready', evTitle(e)); return; }
-    if(!api.canLog()){ addLog('miss', `Boss event: you can’t log events`, evTitle(e)); return; }
-    if(e.kind === 'dead'){
-      const r = api.killed(e.boss, e.map, e.killer);
-      if(r === 'dup') addLog('skip', `Boss event: ${e.boss} already marked killed`, e.killer ? 'by ' + e.killer : '');
-      else if(r) { addLog('ok', `Boss event: ${e.boss} killed`, [e.map, e.killer && 'by ' + e.killer].filter(Boolean).join(' · ')); try { showToast(`📡 Boss event: ${e.boss} killed${e.killer ? ' by ' + e.killer : ''}`); } catch(x) {} }
-      return;
+    if(e.kind !== 'dead') return;
+    const m = (typeof byId !== 'undefined' && byId) ? byId.boss_event : null;
+    const who = e.killer ? 'by ' + e.killer : '';
+    if(!m){ addLog('miss', 'Boss Event row not found', evTitle(e)); return; }
+    const now = Date.now();
+    if((recent.get(m.id) || 0) > now - SAME_KILL_MS || (m.lastDeath && now - m.lastDeath < SAME_KILL_MS)){
+      recent.set(m.id, now); addLog('skip', `Boss Event (${e.boss}) already logged`, who); return;
     }
-    if(api.report(e.kind, e.boss, e.map)){
-      addLog('ok', 'Boss event: ' + evTitle(e), 'logged for everyone');
-      try { showToast('📡 Boss event: ' + evTitle(e)); } catch(x) {}
-    } else addLog('skip', 'Boss event already logged', evTitle(e));
+    let can = true;
+    try { can = A.canKill(); } catch(x) {}
+    if(!can){ addLog('miss', 'Boss Event: you can’t log kills', who); return; }
+    recent.set(m.id, now);
+    try {
+      if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
+      logKill(m, 0);
+    } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
+    addLog('ok', `Boss Event logged: ${e.boss || 'MVP'}`, [e.map, who].filter(Boolean).join(' · '));
+    try { showToast(`📡 Boss Event: ${e.boss || 'MVP'} defeated in ${e.map || '?'}${e.killer ? ' by ' + e.killer : ''}`); } catch(x) {}
   }
 
   async function start(){
@@ -504,7 +507,7 @@
     const ago = t=>{ const s = Math.floor((Date.now() - t) / 1000); return s < 60 ? s + 's ago' : Math.floor(s / 60) + 'm ago'; };
     pop.innerHTML = `<h4>📡 Auto-detect kills</h4>
       <p>${on ? 'Keep Ragnarok and this tab open, with your chat box visible. New <i>“… has killed [MVP] at …”</i> lines in chat are logged for everyone.'
-              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box along the bottom</b> of the game (left, middle or right); you can adjust the area. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. The <b>[PW2 Boss Event]</b> lines (gathering, spawned, defeated) go to the BOSS EVENT tab. Nothing touches the game; it only reads the picture.'}</p>
+              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box along the bottom</b> of the game (left, middle or right); you can adjust the area. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. The yellow <b>[PW2 Boss Event] … has been defeated in …</b> line logs the Boss Event row. Nothing touches the game; it only reads the picture.'}</p>
       <div class="kd-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
       ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
       <div class="kd-log">${log.length ? log.slice(0, 12).map(e=>`<div class="kd-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="kd-none">Nothing detected yet.</div>'}</div>
@@ -541,6 +544,7 @@
 
   window.__adLog = (k, t, sub)=> addLog(k, t, sub);
   window.__adEvent = t=> parseEvent(t);
+  window.__adEventLog = t=>{ const e = parseEvent(t); if(e) handleEvent(e); return e; };
   window.__adParse = t=>{ const p = parseLine(t); if(!p) return null; const m = matchMvp(p.mvp, p.map) || (p.loose ? findInWords(p.after || p.text, p.map) : null) || byMap(p.map); return { mvp: p.mvp, map: p.map, killer: p.killer, loose: !!p.loose, id: m ? m.id : null }; };
   // for testing: window.__adTest(imageOrCanvas) runs one frame through the reader
   window.__adTest = async (src, whole)=>{
