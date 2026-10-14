@@ -394,7 +394,7 @@
   }
   window.addEventListener('beforeunload', ()=>{ if(track) stop(); });
 
-  // ---------- UI (FLHD and Admin only) ----------
+  // ---------- UI (Admin, FLHD and Timers) ----------
   let btn = null, pop = null;
   const esc = v=> String(v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function paintBtn(){
@@ -425,7 +425,7 @@
   }
   function mount(){
     const r = window.FALSEHOOD_ROLE;
-    if(r !== 'editor' && r !== 'admin') return;
+    if(r !== 'editor' && r !== 'admin' && r !== 'timer') return;   // anyone who can log kills
     const anchor = document.querySelector('.fb-online') || document.getElementById('fbRole');
     if(!anchor || btn) return;
     btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ad-btn';
