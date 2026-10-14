@@ -3995,8 +3995,8 @@ setInterval(()=>{
   let warm = false;             // the first read after Start only notes what's already in chat
   let lastScan = 0, status = '', lastFrameSize = null;
   const AREA_KEY = 'falsehood-kd-chat';
-  // default: the whole bottom strip, so the chat box is found whether it's bottom-left, middle or right
-  const DEFAULT_AREA = { x: 0, y: 0.7, w: 1, h: 0.3 };
+  // default: the whole game window, so the chat box is found wherever it is (the colours matched are exact)
+  const DEFAULT_AREA = { x: 0, y: 0, w: 1, h: 1 };
   let area = (()=>{ try { const a = JSON.parse(localStorage.getItem(AREA_KEY) || 'null'); return a && a.w > 0 && a.h > 0 ? a : null; } catch(e) { return null; } })() || DEFAULT_AREA;
   const areaIsDefault = ()=> area === DEFAULT_AREA;
   // the watcher drags a box around their chat window once; only that part is read
@@ -4086,13 +4086,14 @@ setInterval(()=>{
         else { diag.frozenSince = 0; diag.sum = sum; }
         diag.frozen = !!diag.frozenSince && Date.now() - diag.frozenSince > 60000;
         // no kill-green inside the reading area: look for it in the rest of the window
-        if(!diag.lines && scanN % 3 === 0){
+        if(!areaIsDefault() && !diag.lines && scanN % 3 === 0){
           let out = 0;
           for(let y = 0; y < H; y += 1){
             const inA = y >= ay && y < ay + ah;
             for(let x = 0, i = y * W * 4; x < W; x++, i += 4){
               if(inA && x >= ax && x < ax + aw) continue;
-              if(isAnn(full[i], full[i+1], full[i+2])) out++;
+              const r = full[i], g = full[i+1], b = full[i+2];
+              if(isAnn(r, g, b) || EV_COLORS.some(fn=> fn(r, g, b))) out++;
             }
           }
           diag.outside = out;
@@ -4184,7 +4185,7 @@ setInterval(()=>{
         : diag.frozen
         ? '⚠ The game picture hasn’t changed for a while. Is Ragnarok minimized? Restore it (it can sit behind other windows, just not minimized).'
         : diag.outside > 150
-        ? '⚠ Green kill text is on screen but outside the area being read. Press Adjust and draw the box around your chat.'
+        ? '⚠ Kill or boss event text is on screen but outside your marked area. Press Change and draw the box around your chat (or Reset to read the whole window).'
         : 'Watching · last check ' + new Date(lastScan).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
     } catch(e) {
       status = 'Problem reading the screen: ' + ((e && e.message) || e);
@@ -4240,14 +4241,28 @@ setInterval(()=>{
     if(!/PW2|Bo[s5]{2}\s*Ev|spawned|defeated|gathering/i.test(t)) return null;
     const body = t.replace(/^.*?Ev[ae]nt\s*[\]\)|lI1}]?\s*/i, '');
     // map codes like cmd_fild05: fix "rn" read for "m", and O/S/l read for 0/5/1 in the number at the end
-    const word = s=> String(s || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm')
-      .replace(/[0-9OoSsIl]+$/, d=> /\d/.test(d) ? d.replace(/[Oo]/g, '0').replace(/[Ss]/g, '5').replace(/[Il]/g, '1') : d);
+    const word = s=> fixMap(String(s || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm')
+      .replace(/[0-9OoSsIl]+$/, d=> /\d/.test(d) ? d.replace(/[Oo]/g, '0').replace(/[Ss]/g, '5').replace(/[Il]/g, '1') : d));
     let m;
     if((m = /^(.+?)\s+ha[s5]\s+[s5]pawn\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'spawn', boss: canonBoss(m[1]), map: word(m[2]) };
     if((m = /gather\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'gather', boss: '', map: word(m[1]) };
     if((m = /^(.+?)\s+ha[s5]\s+been\s+defeat\S*\s+[il1]n\s+([A-Za-z0-9_]+)(?:\s+by\s+(.+?))?(?:\s+o[ft]\s+[\[\(].*)?$/i.exec(body)))
       return { kind: 'dead', boss: canonBoss(m[1]), map: word(m[2]), killer: (m[3] || '').replace(/[\[\]\(\)!.,]+$/g, '').trim() };
     return null;
+  }
+  // map codes: snap a misread name part to a known Ragnarok map name (antheli01 → anthell01)
+  const MAP_STEMS = ['anthell','prt_sewb','prt_maze','prt_fild','prt_gld','pay_fild','pay_dun','moc_fild','moc_pryd','gef_fild','gef_dun','gl_chyard','gl_church','gl_knt','gl_prison','gl_sew','gl_dun','gl_step','gl_cas','cmd_fild','mjolnir_','mjo_dun','treasure','xmas_dun','xmas_fild','tur_dun','in_sphinx','ama_dun','ama_fild','gon_dun','gon_fild','niflheim','nif_fild','iz_dun','orcsdun','alde_dun','c_tower','ein_fild','ein_dun','hu_fild','lou_fild','lou_dun','yuno_fild','ra_fild','ve_fild','um_fild','ice_dun','thor_v','abyss_','juperos_','kh_dun','lhz_dun','odin_tem','beach_dun','mag_dun','tha_t','ayo_fild','ayo_dun','abbey','spl_fild','bra_fild','dic_fild','mosk_fild','teg_dun','lhz_fild','hu_fild','ra_san','pay_arche','glast_'];
+  function fixMap(m){
+    if(!m) return m;
+    const lower = m.toLowerCase();
+    let best = null, bs = 0;
+    for(const st of MAP_STEMS){
+      const head = lower.slice(0, st.length);
+      if(head === st) return lower;
+      const sc = sim1(head, st);
+      if(sc > bs){ bs = sc; best = st; }
+    }
+    return bs >= 0.8 ? best + lower.slice(best.length) : m;
   }
   // tidy the boss name: the tracker's own name when it's one we know (Baphomet, Moonlight Flower, …)
   function canonBoss(raw){
@@ -4359,12 +4374,12 @@ setInterval(()=>{
     const ago = t=>{ const s = Math.floor((Date.now() - t) / 1000); return s < 60 ? s + 's ago' : Math.floor(s / 60) + 'm ago'; };
     pop.innerHTML = `<h4>📡 Auto-detect kills</h4>
       <p>${on ? 'Keep Ragnarok and this tab open, with your chat box visible. New <i>“… has killed [MVP] at …”</i> lines in chat are logged for everyone.'
-              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box along the bottom</b> of the game (left, middle or right); you can adjust the area. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. The <b>[PW2 Boss Event]</b> “has spawned” (red) and “has been defeated” (yellow) lines update the Boss Event row. Nothing touches the game; it only reads the picture.'}</p>
+              : 'Share your <b>Ragnarok game window</b>. It reads the whole game window, so your chat box can be anywhere; you can mark just the chat box if you like. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. The <b>[PW2 Boss Event]</b> “has spawned” (red) and “has been defeated” (yellow) lines update the Boss Event row. Nothing touches the game; it only reads the picture.'}</p>
       <div class="kd-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
       ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
       <div class="kd-log">${log.length ? log.slice(0, 12).map(e=>`<div class="kd-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="kd-none">Nothing detected yet.</div>'}</div>
       ${on && thumb.width ? '<div class="kd-prev"><span>What it sees (green box = area read)</span><canvas class="kd-thumb"></canvas></div>' : ''}
-      ${on ? `<div class="kd-area">${areaIsDefault() ? '✓ Reading the bottom of the game window' : '✓ Reading your marked chat box'} <button type="button" class="kd-mark">${areaIsDefault() ? 'Adjust' : 'Change'}</button></div>` : ''}
+      ${on ? `<div class="kd-area">${areaIsDefault() ? '✓ Reading the whole game window' : '✓ Reading your marked chat box'} <span><button type="button" class="kd-mark">${areaIsDefault() ? 'Mark chat box' : 'Change'}</button>${areaIsDefault() ? '' : ' <button type="button" class="kd-reset">Reset</button>'}</span></div>` : ''}
       <div class="kd-acts">${on ? '<button type="button" class="kd-stop">■ Stop auto-detect</button>' : '<button type="button" class="kd-go">▶ Start: share game window</button>'}</div>`;
     const tc = pop.querySelector('.kd-thumb');
     if(tc){
@@ -4376,6 +4391,8 @@ setInterval(()=>{
     const go = pop.querySelector('.kd-go'), st = pop.querySelector('.kd-stop');
     if(go) go.onclick = ()=>{ start(); };
     if(st) st.onclick = ()=>{ stop(); };
+    const rs = pop.querySelector('.kd-reset');
+    if(rs) rs.onclick = ()=>{ area = DEFAULT_AREA; try { localStorage.removeItem(AREA_KEY); } catch(e) {} seenSig.clear(); seenKill.clear(); seenEvt.clear(); warm = false; addLog('ok', 'Reading the whole game window', ''); paintPop(); };
     const mk = pop.querySelector('.kd-mark'); if(mk) mk.onclick = ()=>{ pop.hidden = true; pickArea(); };
   }
   function mount(){
@@ -4452,7 +4469,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014201446';
+  const BUILD = '20261014202501';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
