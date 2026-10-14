@@ -1157,6 +1157,15 @@ input[type=number]:focus { outline: none; border-color: var(--accent-2); }
 .nu-name { font-weight: 700; font-size: 16px; color: var(--text); }
 .nu-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 16px; color: var(--waiting); }
 .nu-empty { color: var(--text-3); }
+/* Boss Event strip (under Next up) */
+.bebar { border-left-color: var(--overdue); cursor: pointer; }
+.bebar.is-dead, .bebar.is-none { border-left-color: var(--text-3); cursor: default; }
+.bebar.is-dead { cursor: pointer; }
+.bebar .nu-label { background: #f0997b; color: #4a1b0c; }
+.bebar.is-dead .nu-label, .bebar.is-none .nu-label { background: var(--surface-2); color: var(--text-2); }
+.be-map { color: var(--text-2); }
+.be-up { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 16px; color: var(--overdue); }
+.be-ago { font-variant-numeric: tabular-nums; color: var(--text-3); }
 /* compact mode */
 .compact-btn { border-radius: 10px; padding: 7px 12px; color: var(--text-2); }
 .compact-btn[aria-pressed="true"] { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
@@ -2145,6 +2154,37 @@ nextUp.className = 'nextup';
 nextUp.setAttribute('aria-label', 'Next MVPs to float');
 document.querySelector('header').after(nextUp);
 let nextSig = null;   // null so the empty-state message draws on first load
+// Boss Event strip, right under Next up: what the hourly event is doing now
+const beBar = document.createElement('div');
+beBar.className = 'nextup bebar is-none';
+beBar.setAttribute('aria-label', 'Boss Event');
+beBar.title = 'Show the Boss Event row';
+nextUp.after(beBar);
+beBar.onclick = ()=>{
+  const m = byId.boss_event;
+  if(!m || !m.lastDeath) return;
+  if(searchQ){ const s = document.getElementById('mvpSearch'); s.value = ''; s.oninput(); }
+  A.goTo(m);
+};
+let beSig = null;
+function renderBossBar(){
+  const m = byId.boss_event, now = Date.now();
+  const mm = m && /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
+  const map = mm ? mm[1] : '', boss = mm ? mm[2] : 'Boss';
+  const state = !m || !m.lastDeath ? 'none' : m.ev === 'spawn' ? 'up' : 'dead';
+  const sig = state + (m && m.lastDeath) + (m && m.location) + (m && m.killer);
+  if(sig !== beSig){
+    beSig = sig;
+    beBar.className = 'nextup bebar' + (state === 'none' ? ' is-none' : state === 'dead' ? ' is-dead' : '');
+    beBar.innerHTML = '<span class="nu-label">Boss Event</span>' + (state === 'none'
+      ? '<span class="nu-empty">No event recorded yet · random, about hourly</span>'
+      : `<span class="nu-name">${escX(boss)}</span>${map ? `<span class="be-map">${escX(map)}</span>` : ''}<span class="sep">·</span>` + (state === 'up'
+        ? '<span class="be-up"></span>'
+        : `<span class="be-map">killed ${formatTime(m.lastDeath)}${m.killer ? ' by ' + escX(m.killer) : ''}</span><span class="sep">·</span><span class="be-ago"></span>`));
+  }
+  if(state === 'up') beBar.querySelector('.be-up').textContent = 'up for ' + fmtClock(now - m.lastDeath);
+  if(state === 'dead'){ const mins = Math.floor((now - m.lastDeath) / 60000); beBar.querySelector('.be-ago').textContent = mins < 1 ? 'just now' : mins < 60 ? mins + ' min ago' : Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm ago'; }
+}
 function renderNextUp(){
   const now = Date.now();
   const list = mvps
@@ -2170,6 +2210,7 @@ function renderNextUp(){
     const m = mvps.find(x=>x.id === b.dataset.id);
     if(m) b.querySelector('.nu-time').textContent = fmtClock(m.lastDeath + m.min*60000 - now);
   });
+  renderBossBar();
   if(tipAnchor && !document.body.contains(tipAnchor)) hideTip();
 }
 
@@ -4905,7 +4946,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014221914';
+  const BUILD = '20261014222413';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
