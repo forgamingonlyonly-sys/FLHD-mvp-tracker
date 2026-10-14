@@ -4,9 +4,6 @@ import pathlib
 root = pathlib.Path(__file__).resolve().parent
 src = (root / 'source.html').read_text()
 shim = (root / 'firebase-shim.html').read_text()
-imp = root / 'import.json'
-if imp.exists():
-    shim = '<script>window.FALSEHOOD_IMPORT = ' + imp.read_text().replace('</', '<\\/') + ';</script>\n' + shim
 icons = '<link rel="icon" type="image/png" sizes="192x192" href="favicon.png">\n<link rel="icon" href="favicon.ico" sizes="any">\n<link rel="apple-touch-icon" href="apple-touch-icon.png">\n'
 src = src.replace('</head>', icons + shim + '\n</head>', 1)
 fixes = {
