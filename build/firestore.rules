@@ -63,10 +63,13 @@ service cloud.firestore {
     match /discordlog/{k} {
       allow read, create: if timer();
     }
+    match /discordboard/{d} {
+      allow read, write: if timer();
+    }
     match /{col}/{id} {
-      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog']);
-      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog']) && !(col == 'meta' && id == 'session');
-      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog']);
+      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard']);
+      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard']) && !(col == 'meta' && id == 'session');
+      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard']);
       allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer'] && member()
         && (request.resource == null || request.resource.data.keys().hasOnly(['at']));
     }

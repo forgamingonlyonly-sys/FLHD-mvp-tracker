@@ -4675,6 +4675,8 @@ setInterval(()=>{
 .dc-card input{width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:13px Inter,system-ui,sans-serif}
 .dc-card .dc-st{font-size:12px;color:#9d8fb3;min-height:16px}
 .dc-card .dc-st.ok{color:#7be0a5}.dc-card .dc-st.bad{color:#ff9aa8}
+.dc-ck{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:#cfc4df;line-height:1.4;cursor:pointer}
+.dc-card .dc-ck input{width:auto;flex:none;margin-top:2px;padding:0;accent-color:#a02ab8}
 .dc-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .dc-acts button{padding:8px 12px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
 .dc-acts .dc-save{background:#a02ab8;border-color:#c03bd6}
@@ -4723,9 +4725,13 @@ setInterval(()=>{
     try { await send(cfg.url, content); } catch(e) {}
   }
 
+  const postsOn = ()=> cfg.posts === true;
+  const boardOn = ()=> cfg.board !== false;
   function tick(){
     watchCfg();
     if(!cfg || !cfg.on || !cfg.url || !canPost() || typeof mvps === 'undefined') return;
+    if(boardOn()) board();
+    if(!postsOn()) return;
     const now = Date.now(), since = +cfg.since || 0;
     for(const m of mvps){
       if(!m.lastDeath) continue;
@@ -4762,6 +4768,76 @@ setInterval(()=>{
   }
   setInterval(tick, 5000);
 
+  // ---------- live board: one message that edits itself ----------
+  const plain = loc=> String(loc || '').replace(/\s*\(.*\)\s*$/, '') || '?';
+  function boardBody(){
+    const now = Date.now();
+    const list = mvps.filter(m=> m.type !== 'mini' && m.id !== 'boss_event' && m.lastDeath);
+    const st = m=>{ const o = m.lastDeath + m.min * 60000, c = m.lastDeath + m.max * 60000; return now < o ? 'wait' : now <= c ? 'float' : 'over'; };
+    const close = m=> m.lastDeath + m.max * 60000, open = m=> m.lastDeath + m.min * 60000;
+    const floating = list.filter(m=> st(m) === 'float').sort((a, b)=> close(a) - close(b));
+    const overdue = list.filter(m=> st(m) === 'over' && now - close(m) < 3 * 3600000).sort((a, b)=> close(b) - close(a));
+    const next = list.filter(m=> st(m) === 'wait').sort((a, b)=> open(a) - open(b)).slice(0, 8);
+    const line = (m, txt)=> `**${m.name}** · ${plain(m.location)} · ${txt}`;
+    const sec = (title, rows, none)=> `**${title}**\n` + (rows.length ? rows.join('\n') : `*${none}*`);
+    const be = mvps.find(m=> m.id === 'boss_event');
+    let beTxt = '*No event recorded yet*';
+    if(be && be.lastDeath){
+      const mm = /^(\S+)\s*\((.+)\)\s*$/.exec(String(be.location || ''));
+      const map = mm ? mm[1] : '', boss = mm ? mm[2] : 'MVP';
+      beTxt = be.ev === 'spawn'
+        ? `**${boss}** · ${map || '?'} · spawned ${at(be.lastDeath)} (${at(be.lastDeath, 'R')})`
+        : `✓ **${boss}** killed${be.killer ? ' by ' + be.killer : ''} · ${map || '?'} · ${at(be.lastDeath)} (${at(be.lastDeath, 'R')})`;
+    }
+    const desc = [
+      sec('🟢 Floating now', floating.map(m=> line(m, m.min === m.max ? 'has spawned' : `ends ${at(close(m))} (${at(close(m), 'R')})`)), 'Nothing floating'),
+      sec('🔴 Overdue', overdue.map(m=> line(m, `since ${at(close(m))} (${at(close(m), 'R')})`)), 'Nothing overdue'),
+      sec('⏳ Next up', next.map(m=> line(m, m.min === m.max ? `spawns ${at(open(m))} (${at(open(m), 'R')})` : `${at(open(m))} – ${at(close(m))} (${at(open(m), 'R')})`)), 'No timers running'),
+      sec('🔥 Boss Event', [beTxt], ''),
+    ].join('\n\n');
+    // what the board says, without the times that tick by themselves: an edit is only needed when this changes
+    const sig = JSON.stringify([floating.map(m=> m.id + m.lastDeath), overdue.map(m=> m.id + m.lastDeath), next.map(m=> m.id + m.lastDeath + m.location), be ? [be.lastDeath, be.ev, be.location, be.killer] : 0, Math.floor(now / (10 * 60000))]);
+    return { sig, body: { username: 'Falsehood MVP Tracker', allowed_mentions: { parse: [] }, embeds: [{
+      title: 'Falsehood MVP board', color: 0x7F77DD, description: desc.slice(0, 4000),
+      footer: { text: 'Updates automatically while a guild tracker is open · last update' }, timestamp: new Date(now).toISOString() }] } };
+  }
+  let boardBusy = false, boardSeen = '';
+  async function board(){
+    if(boardBusy) return;
+    const { sig, body } = boardBody();
+    if(sig === boardSeen) return;
+    boardBusy = true;
+    const ref = fs().doc('discordboard/main');
+    try {
+      // one device edits at a time; skip if the board already shows this
+      const me = window.FALSEHOOD_UID || 'x';
+      const st = await fs().runTransaction(async tx=>{
+        const d = (await tx.get(ref)).data() || {};
+        if(d.url === cfg.url && d.sig === sig && d.id){ return { skip: true, d }; }
+        if(d.lockUntil > Date.now() && d.lockBy !== me) return { skip: true, busy: true, d };
+        tx.set(ref, Object.assign({}, d, { lockUntil: Date.now() + 20000, lockBy: me }));
+        return { skip: false, d };
+      });
+      if(st.skip){ if(!st.busy) boardSeen = sig; return; }
+      const d = st.d;
+      let id = d.url === cfg.url ? d.id : null;     // a new webhook (another channel) starts a new board
+      let ok = false;
+      if(id){
+        const r = await fetch(cfg.url + '/messages/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        ok = r.ok;
+        if(r.status === 404) id = null;              // someone deleted the board: post a new one
+      }
+      if(!id){
+        const r = await fetch(cfg.url + (cfg.url.includes('?') ? '&' : '?') + 'wait=true', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if(r.ok){ const j = await r.json(); id = j && j.id; ok = !!id; }
+      }
+      await ref.set({ id: id || null, url: cfg.url, sig: ok ? sig : (d.sig || ''), editedAt: Date.now(), by: me, lockUntil: 0, lockBy: null });
+      if(ok) boardSeen = sig;
+    } catch(e) {
+      try { await ref.set({ lockUntil: 0, lockBy: null }, { merge: true }); } catch(x) {}
+    } finally { boardBusy = false; }
+  }
+
   // ---------- Admin setup ----------
   window.falsehoodDiscordSetup = async ()=>{
     if(window.FALSEHOOD_ROLE !== 'admin' || !fs()) return;
@@ -4770,9 +4846,11 @@ setInterval(()=>{
     const ov = document.createElement('div'); ov.className = 'dc-ov';
     ov.innerHTML = `<div class="dc-card" role="dialog" aria-label="Discord posts">
       <h4>💬 Discord posts</h4>
-      <p>Posts MVP kills, when spawn windows open and go overdue, and the Boss Event to a Discord channel. No pings. Any FLHD / Timers / Admin with the tracker open does the posting.</p>
+      <p>Keeps a live MVP board in a Discord channel (one message that updates itself), and can also post each kill, spawn window, overdue and Boss Event. No pings. Any FLHD / Timers / Admin with the tracker open does the updating.</p>
       <ol><li>In Discord: <b>Server Settings → Integrations → Webhooks → New Webhook</b>.</li><li>Pick the channel, then <b>Copy Webhook URL</b>.</li><li>Paste it here and press <b>Save &amp; turn on</b>.</li></ol>
       <input class="dc-url" type="url" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false">
+      <label class="dc-ck"><input type="checkbox" class="dc-board"> <span><b>Live board</b>: one message that edits itself (pin it once in Discord)</span></label>
+      <label class="dc-ck"><input type="checkbox" class="dc-posts"> <span><b>Individual posts</b>: a new message for each kill, spawn window, overdue and Boss Event</span></label>
       <div class="dc-st">${cur && cur.on ? '✓ Discord posts are <b>on</b>.' : cur && cur.url ? 'Discord posts are <b>off</b>.' : 'Not set up yet.'}</div>
       <div class="dc-acts">
         ${cur && cur.on ? '<button type="button" class="dc-off">Turn off</button>' : ''}
@@ -4783,6 +4861,8 @@ setInterval(()=>{
     document.body.appendChild(ov);
     const inp = ov.querySelector('.dc-url'), st = ov.querySelector('.dc-st');
     if(cur && cur.url) inp.value = cur.url;
+    ov.querySelector('.dc-board').checked = !cur || cur.board !== false;
+    ov.querySelector('.dc-posts').checked = !!(cur && cur.posts === true);
     const say = (t, k)=>{ st.className = 'dc-st' + (k ? ' ' + k : ''); st.innerHTML = t; };
     const valid = ()=>{ const u = inp.value.trim(); if(!HOOK_RE.test(u)){ say('That doesn’t look like a Discord webhook URL. It starts with https://discord.com/api/webhooks/', 'bad'); return null; } return u; };
     ov.querySelector('.dc-close').onclick = ()=> ov.remove();
@@ -4790,12 +4870,14 @@ setInterval(()=>{
     ov.querySelector('.dc-test').onclick = async ()=>{
       const u = valid(); if(!u) return;
       say('Sending…');
-      try { say(await send(u, '✅ **Falsehood MVP Tracker** is connected. Kills, spawn windows and the Boss Event will be posted here.') ? 'Test sent. Check your Discord channel.' : 'Discord refused it. Check the webhook URL.', 'ok'); }
+      try { say(await send(u, '✅ **Falsehood MVP Tracker** is connected. The live MVP board will appear in this channel.') ? 'Test sent. Check your Discord channel.' : 'Discord refused it. Check the webhook URL.', 'ok'); }
       catch(e) { say('Couldn’t reach Discord. Check the URL and your connection.', 'bad'); }
     };
     ov.querySelector('.dc-save').onclick = async ()=>{
       const u = valid(); if(!u) return;
-      try { await fs().doc('config_discord/main').set({ url: u, on: true, since: Date.now(), by: window.FALSEHOOD_UID || null }); say('✓ Saved. Discord posts are on.', 'ok'); setTimeout(()=> ov.remove(), 1200); }
+      const bOn = ov.querySelector('.dc-board').checked, pOn = ov.querySelector('.dc-posts').checked;
+      if(!bOn && !pOn){ say('Tick the live board, individual posts, or both.', 'bad'); return; }
+      try { await fs().doc('config_discord/main').set({ url: u, on: true, board: bOn, posts: pOn, since: Date.now(), by: window.FALSEHOOD_UID || null }); say('✓ Saved. Discord posts are on.', 'ok'); setTimeout(()=> ov.remove(), 1200); }
       catch(e) { say('Couldn’t save (' + ((e && e.code) || 'error') + '). Update the Firebase rules first.', 'bad'); }
     };
     const off = ov.querySelector('.dc-off');
@@ -4823,7 +4905,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014220319';
+  const BUILD = '20261014221059';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
