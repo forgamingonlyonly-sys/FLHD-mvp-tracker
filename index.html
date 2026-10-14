@@ -807,6 +807,7 @@ h1 small { font-family: var(--font-body); font-size: 11px; letter-spacing: .14em
 .item.s-window.fav { box-shadow: inset 0 0 0 1px var(--gold), 0 0 14px var(--window-glow); }
 .b-overdue { color: var(--overdue); background: var(--overdue-bg); }
 .b-unknown { color: var(--unknown); background: var(--unknown-bg); }
+.b-killed { color: var(--text-2); background: var(--unknown-bg); }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .b-window::before { animation: none; } .item { transition: none; } }
 
@@ -1501,13 +1502,13 @@ function loadLocalTimers(){
     const data = JSON.parse(lsGet('falsehood-local-timers') || '{}');
     mvps.forEach(m=>{
       const d = data[m.id];
-      if(d){ m.lastDeath = typeof d.lastDeath === 'number' ? d.lastDeath : null; if(d.location) m.location = d.location; }
+      if(d){ m.lastDeath = typeof d.lastDeath === 'number' ? d.lastDeath : null; if(d.location) m.location = d.location; m.ev = d.ev || null; m.killer = d.killer || ''; }
     });
   } catch(e) {}
 }
 function saveLocalTimers(){
   const data = {};
-  mvps.forEach(m=>{ data[m.id] = { lastDeath: m.lastDeath, location: m.location }; });
+  mvps.forEach(m=>{ data[m.id] = { lastDeath: m.lastDeath, location: m.location, ev: m.ev || null, killer: m.killer || '' }; });
   lsSet('falsehood-local-timers', JSON.stringify(data));
 }
 
@@ -1517,6 +1518,7 @@ function persist(m){
   if(mode === 'local'){ saveLocalTimers(); return; }
   if(mode !== 'live') return;
   const body = { lastDeath: m.lastDeath, by: m.by || null, location: m.location || '', updatedAt: Date.now() };
+  if(m.id === 'boss_event'){ body.ev = m.ev || null; body.killer = m.killer || ''; }
   writeChain = writeChain.then(()=> db.collection('mvps').doc(m.id).set(body)).catch(handleWriteError);
 }
 function handleWriteError(e){
@@ -1562,10 +1564,11 @@ function applySnapshot(snap){
     const b = d.data() || {};
     const was = m.lastDeath;
     m.lastDeath = typeof b.lastDeath === 'number' ? b.lastDeath : null;
-    // Boss Event "has spawned" (logged as died 60 min ago): ring the spawn alert on every device
-    if(m.id === 'boss_event' && !firstSnapshot && m.lastDeath && m.lastDeath !== was){
-      const since = Date.now() - (m.lastDeath + m.min*60000);
-      if(since >= 0 && since < 120000) prevStatus[m.id] = 'waiting';
+    if(m.id === 'boss_event'){
+      m.ev = b.ev === 'spawn' || b.ev === 'dead' ? b.ev : (m.lastDeath ? 'dead' : null);
+      m.killer = typeof b.killer === 'string' ? b.killer : '';
+      // a fresh "has spawned": ring the spawn alert on every device
+      if(!firstSnapshot && m.ev === 'spawn' && m.lastDeath && m.lastDeath !== was && Date.now() - m.lastDeath < 120000) prevStatus[m.id] = 'waiting';
     }
     m.by = typeof b.by === 'string' ? b.by : null;
     m.location = (typeof b.location === 'string' && b.location) ? b.location : m.defaultLocation;
@@ -1739,6 +1742,7 @@ function getNextSpawn(m){ return m.lastDeath ? m.lastDeath + m.min*60000 : Infin
 
 function getStatus(m){
   if(!m.lastDeath) return 'unknown';
+  if(m.id === 'boss_event') return m.ev === 'spawn' ? 'window' : 'killed';   // a record of the last event, no timer
   const now = Date.now();
   if(now < m.lastDeath + m.min*60000) return 'waiting';
   if(now <= m.lastDeath + m.max*60000) return 'window';
@@ -1746,7 +1750,7 @@ function getStatus(m){
 }
 
 /* Order: In window → Overdue → Waiting (soonest first) → Unknown; favorites first within each */
-const STATUS_RANK = { overdue:0, window:1, waiting:2, unknown:3 };   // overdue first, then floating
+const STATUS_RANK = { overdue:0, window:1, waiting:2, killed:2.5, unknown:3 };   // overdue first, then floating
 function compareMvps(a,b){
   const sa = getStatus(a), sb = getStatus(b);
   if(sa !== sb) return STATUS_RANK[sa] - STATUS_RANK[sb];
@@ -1757,17 +1761,19 @@ function compareMvps(a,b){
   return 0;
 }
 
-const STATUS_LABEL = { unknown:'Unknown', waiting:'Waiting', window:'Floating', overdue:'Overdue' };
+const STATUS_LABEL = { unknown:'Unknown', waiting:'Waiting', window:'Floating', overdue:'Overdue', killed:'Killed' };
 
 function getSpawnText(m){
   if(!m.lastDeath) return '';
   const now = Date.now();
+  if(m.id === 'boss_event')
+    return m.ev === 'spawn'
+      ? `<span class="green">has spawned · up for ${fmtClock(now - m.lastDeath)}</span>`
+      : `killed ${formatTime(m.lastDeath)}${m.killer ? ' by ' + esc(m.killer) : ''}`;
   const minSpawn = m.lastDeath + m.min*60000;
   const maxSpawn = m.lastDeath + m.max*60000;
   if(now < minSpawn && m.min === m.max)
     return `spawns in <span class="green">${fmtClock(minSpawn-now)}</span>`;
-  if(m.id === 'boss_event' && now > maxSpawn)
-    return `<span class="red">has spawned · up for ${fmtClock(now-maxSpawn)}</span>`;
   if(now < minSpawn)
     return `floating in <span class="red">${fmtClock(minSpawn-now)}</span> – <span class="green">${fmtClock(maxSpawn-now)}</span>`;
   if(now <= maxSpawn)
@@ -1776,10 +1782,10 @@ function getSpawnText(m){
 }
 function getStatusHTML(m){
   const s = getStatus(m);
-  const label = m.id === 'boss_event' && s === 'overdue' ? 'Spawned' : STATUS_LABEL[s];
+  const label = m.id === 'boss_event' && s === 'window' ? 'Spawned' : STATUS_LABEL[s];
   return `<span class="badge b-${s}">${label}</span><span class="spawn-text">${getSpawnText(m)}</span>`;
 }
-const isUrgent = m => getStatus(m) === 'window' && (m.lastDeath + m.max*60000 - Date.now()) < 5*60000;
+const isUrgent = m => m.id !== 'boss_event' && getStatus(m) === 'window' && (m.lastDeath + m.max*60000 - Date.now()) < 5*60000;
 function setUrgent(el, on){
   if(on && !el.classList.contains('urgent')){
     el.style.animationDelay = `-${Date.now() % 1000}ms`;   // stay in step with the clock
@@ -1872,7 +1878,7 @@ function visibleList(){
 }
 // An MVP overdue for 3+ hours was almost certainly killed without being logged: treat it as Unknown again
 const STALE_MS = 3 * 60 * 60000;
-const isStale = m => !!m.lastDeath && Date.now() > m.lastDeath + m.max*60000 + STALE_MS;
+const isStale = m => m.id !== 'boss_event' && !!m.lastDeath && Date.now() > m.lastDeath + m.max*60000 + STALE_MS;
 function sweepStale(){
   let changed = false;
   mvps.forEach(m=>{ if(isStale(m)){ m.lastDeath = null; m.by = null; changed = true; } });
@@ -2025,7 +2031,7 @@ function showTip(nameEl){
       return `<div class="tip-h">Drops</div>${dropListHTML(dr.d)}${dr.r.length ? `<div class="tip-h">MVP reward</div>${dropListHTML(dr.r)}` : ''}`; })()}
     <dl class="tip-grid tip-sub">
       <dt>Map</dt><dd>${escX(m.location || '—')}</dd>
-      <dt>Floats</dt><dd>${m.min}~${m.max} min after death</dd>
+      <dt>Floats</dt><dd>${m.id === 'boss_event' ? 'Random event, about hourly' : m.min + '~' + m.max + ' min after death'}</dd>
     </dl>
     <div class="tip-note">Classic RO stats and drop rates; your server may differ.</div>`;
   tip.hidden = false;
@@ -2197,6 +2203,7 @@ function undoKill(m){
   if(!u || m.lastDeath !== u.setTo) return;
   m.lastDeath = u.prev;
   m.by = u.prevBy;
+  if(m.id === 'boss_event'){ m.ev = u.prevEv || (u.prev ? 'dead' : null); m.killer = u.prevKiller || ''; }
   persist(m);
   delete undoLog[m.id]; saveUndo();
   if(typeof prevStatus !== 'undefined') prevStatus[m.id] = getStatus(m);
@@ -2933,10 +2940,12 @@ function requestRender(){
 }
 
 function logKill(m, minutesAgo){
-  const prev = m.lastDeath, prevBy = m.by;
+  const prev = m.lastDeath, prevBy = m.by, prevEv = m.ev, prevKiller = m.killer;
+  if(m.id === 'boss_event'){ m.ev = m._ev || 'dead'; m.killer = m._killer || ''; m._ev = m._killer = null; }
   m.lastDeath = Date.now() - minutesAgo*60000;
   m.by = myId;
   recordUndo(m, prev, prevBy);
+  if(m.id === 'boss_event'){ undoLog[m.id].prevEv = prevEv || null; undoLog[m.id].prevKiller = prevKiller || ''; saveUndo(); }
   prefs.input[m.id] = 0; savePrefs();
   prevStatus[m.id] = getStatus(m);
   persist(m);
@@ -2944,6 +2953,7 @@ function logKill(m, minutesAgo){
 }
 function clearKill(m){
   m.lastDeath = null;
+  if(m.id === 'boss_event'){ m.ev = null; m.killer = ''; }
   m.by = myId;
   prefs.input[m.id] = 0; savePrefs();
   prevStatus[m.id] = 'unknown';
@@ -2971,8 +2981,9 @@ function render(){
       <div class="line2">
         <span class="loc" spellcheck="false"></span>
         <span class="sep">·</span>
-        <span>${m.min}~${m.max}m</span>
-        ${m.lastDeath ? `<span class="sep">·</span><span>died ${formatTime(m.lastDeath)}</span>` : ''}
+        ${m.id === 'boss_event'
+          ? (m.lastDeath ? `<span>${m.ev === 'spawn' ? 'spawned' : 'killed'} ${formatTime(m.lastDeath)}</span>` : '<span>random, about hourly</span>')
+          : `<span>${m.min}~${m.max}m</span>${m.lastDeath ? `<span class="sep">·</span><span>died ${formatTime(m.lastDeath)}</span>` : ''}`}
       </div>
       <div class="controls">
         <button class="btn btn-primary kill" title="Log a kill at the current time" ${locked ? 'disabled' : ''}>Killed</button>
@@ -3186,6 +3197,12 @@ function removeBanner(key){
 }
 function updateBanner(r){
   const m = r.m, now = Date.now();
+  if(m.id === 'boss_event'){
+    r.el.querySelector('.ab-time').textContent = m.ev === 'spawn' ? `up for ${fmtClock(now - m.lastDeath)}` : 'killed';
+    r.el.classList.add('is-floating'); r.el.classList.remove('is-overdue');
+    if(r.kind === 'main') r.el.querySelector('.ab-what').textContent = 'has spawned';
+    return;
+  }
   const min = m.lastDeath + m.min*60000, max = m.lastDeath + m.max*60000;
   let t;
   if(r.kind === 'pre') t = now < min ? `opens in ${fmtClock(min-now)}` : 'now floating';
@@ -3238,6 +3255,15 @@ function showBanner(m, kind){
 }
 
 function fireMain(m){
+  if(m.id === 'boss_event'){
+    if(alertCfg.sound) playChime();
+    speak('Boss event has spawned');
+    if(alertCfg.title) flashTitle('⚔ Boss Event spawned!');
+    if(alertCfg.desktop) notify('Boss Event has spawned', m.location || '', 'mvp-' + m.id);
+    if(alertCfg.banner) showBanner(m, 'main');
+    lastRepeat = Date.now();
+    return;
+  }
   if(alertCfg.sound) playChime();
   speak(`${m.name} is floating`);
   if(alertCfg.title) flashTitle(`⚔ ${m.name} spawning!`);
@@ -4387,7 +4413,7 @@ setInterval(()=>{
     const who = e.killer ? 'by ' + e.killer : '';
     if(!m){ addLog('miss', 'Boss Event row not found', evTitle(e)); return; }
     const now = Date.now();
-    if((recent.get(m.id) || 0) > now - SAME_KILL_MS || (m.lastDeath && now - m.lastDeath < SAME_KILL_MS)){
+    if((recent.get(m.id) || 0) > now - SAME_KILL_MS || (m.ev === 'dead' && m.lastDeath && now - m.lastDeath < SAME_KILL_MS)){
       recent.set(m.id, now); addLog('skip', `Boss Event (${e.boss}) already logged`, who); return;
     }
     let can = true;
@@ -4396,9 +4422,10 @@ setInterval(()=>{
     recent.set(m.id, now);
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
+      m._ev = 'dead'; m._killer = e.killer || '';
       logKill(m, 0);
     } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
-    addLog('ok', `Boss Event logged: ${e.boss || 'MVP'}`, [e.map, who].filter(Boolean).join(' · '));
+    addLog('ok', `Boss Event killed: ${e.boss || 'MVP'}`, [e.map, who].filter(Boolean).join(' · '));
     try { showToast(`📡 Boss Event: ${e.boss || 'MVP'} defeated in ${e.map || '?'}${e.killer ? ' by ' + e.killer : ''}`); } catch(x) {}
   }
 
@@ -4406,8 +4433,8 @@ setInterval(()=>{
   function handleSpawn(e){
     const m = (typeof byId !== 'undefined' && byId) ? byId.boss_event : null;
     if(!m){ addLog('miss', 'Boss Event row not found', evTitle(e)); return; }
-    const now = Date.now(), at = now - m.min * 60000;
-    if((recent.get('boss_event_spawn') || 0) > now - SAME_KILL_MS || (m.lastDeath && Math.abs(m.lastDeath - at) < SAME_KILL_MS)){
+    const now = Date.now();
+    if((recent.get('boss_event_spawn') || 0) > now - SAME_KILL_MS || (m.ev === 'spawn' && m.lastDeath && now - m.lastDeath < SAME_KILL_MS)){
       recent.set('boss_event_spawn', now); addLog('skip', `Boss Event spawn (${e.boss}) already logged`, e.map || ''); return;
     }
     let can = true;
@@ -4416,7 +4443,8 @@ setInterval(()=>{
     recent.set('boss_event_spawn', now);
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
-      logKill(m, m.min);
+      m._ev = 'spawn'; m._killer = '';
+      logKill(m, 0);
       if(typeof prevStatus !== 'undefined') prevStatus[m.id] = 'waiting';   // ring the spawn alert here too
     } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
     addLog('ok', `Boss Event spawned: ${e.boss || 'MVP'}`, e.map || '');
@@ -4562,7 +4590,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014210318';
+  const BUILD = '20261014210958';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';

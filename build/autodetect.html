@@ -606,7 +606,7 @@
     const who = e.killer ? 'by ' + e.killer : '';
     if(!m){ addLog('miss', 'Boss Event row not found', evTitle(e)); return; }
     const now = Date.now();
-    if((recent.get(m.id) || 0) > now - SAME_KILL_MS || (m.lastDeath && now - m.lastDeath < SAME_KILL_MS)){
+    if((recent.get(m.id) || 0) > now - SAME_KILL_MS || (m.ev === 'dead' && m.lastDeath && now - m.lastDeath < SAME_KILL_MS)){
       recent.set(m.id, now); addLog('skip', `Boss Event (${e.boss}) already logged`, who); return;
     }
     let can = true;
@@ -615,9 +615,10 @@
     recent.set(m.id, now);
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
+      m._ev = 'dead'; m._killer = e.killer || '';
       logKill(m, 0);
     } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
-    addLog('ok', `Boss Event logged: ${e.boss || 'MVP'}`, [e.map, who].filter(Boolean).join(' · '));
+    addLog('ok', `Boss Event killed: ${e.boss || 'MVP'}`, [e.map, who].filter(Boolean).join(' · '));
     try { showToast(`📡 Boss Event: ${e.boss || 'MVP'} defeated in ${e.map || '?'}${e.killer ? ' by ' + e.killer : ''}`); } catch(x) {}
   }
 
@@ -625,8 +626,8 @@
   function handleSpawn(e){
     const m = (typeof byId !== 'undefined' && byId) ? byId.boss_event : null;
     if(!m){ addLog('miss', 'Boss Event row not found', evTitle(e)); return; }
-    const now = Date.now(), at = now - m.min * 60000;
-    if((recent.get('boss_event_spawn') || 0) > now - SAME_KILL_MS || (m.lastDeath && Math.abs(m.lastDeath - at) < SAME_KILL_MS)){
+    const now = Date.now();
+    if((recent.get('boss_event_spawn') || 0) > now - SAME_KILL_MS || (m.ev === 'spawn' && m.lastDeath && now - m.lastDeath < SAME_KILL_MS)){
       recent.set('boss_event_spawn', now); addLog('skip', `Boss Event spawn (${e.boss}) already logged`, e.map || ''); return;
     }
     let can = true;
@@ -635,7 +636,8 @@
     recent.set('boss_event_spawn', now);
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
-      logKill(m, m.min);
+      m._ev = 'spawn'; m._killer = '';
+      logKill(m, 0);
       if(typeof prevStatus !== 'undefined') prevStatus[m.id] = 'waiting';   // ring the spawn alert here too
     } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
     addLog('ok', `Boss Event spawned: ${e.boss || 'MVP'}`, e.map || '');
