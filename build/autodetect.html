@@ -44,7 +44,7 @@
       document.head.appendChild(s);
     }).then(async ()=>{
       worker = await Tesseract.createWorker('eng');
-      await worker.setParameters({ tessedit_pageseg_mode: '7', preserve_interword_spaces: '1',
+      await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1',
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]().,\'-_ ' });
       return worker;
     });
@@ -69,7 +69,7 @@
       const on = y < H && rows[y] >= 4;
       if(on){ if(y0 < 0) y0 = y; gap = 0; }
       else if(y0 >= 0){
-        if(++gap > 3 || y === H){ const y1 = y - gap; if(y1 - y0 >= 6 && y1 - y0 <= 60) bands.push([y0, y1]); y0 = -1; gap = 0; }
+        if(++gap > 3 || y === H){ const y1 = y - gap; if(y1 - y0 >= 6 && y1 - y0 <= 220) bands.push([y0, y1]); y0 = -1; gap = 0; }
       }
     }
     const out = [];
@@ -175,7 +175,9 @@
 
   // ---------- capture loop ----------
   let stream = null, track = null, grabber = null, video = null, ticker = null, busy = false;
-  const seenSig = new Map(), recent = new Map(), log = [];
+  const seenSig = new Map(), recent = new Map(), log = [], seenKill = new Map();
+  const GONE_MS = 3 * 60000;    // a kill line must be gone this long before the same line counts again
+  let warm = false;             // the first read after Start only notes what's already in chat
   let lastScan = 0, status = '';
   const diag = { size: '', black: false, lines: 0, lastLineAt: 0, lastText: '', lastTextAt: 0 };
 
@@ -213,18 +215,41 @@
       const lines = findLines(img);
       diag.lines = lines.length; if(lines.length) diag.lastLineAt = Date.now();
       const now = Date.now();
-      for(const [k, t] of seenSig) if(now - t > 20000) seenSig.delete(k);
+      for(const [k, v] of seenSig) if(now - v.at > 10 * 60000) seenSig.delete(k);
+      const visible = [];
       for(const ln of lines){
-        if(seenSig.has(ln.sig)) continue;                      // same text still on screen
-        seenSig.set(ln.sig, now);
-        await loadOCR();
-        const { data } = await worker.recognize(ln.canvas);
-        const txt = String((data && data.text) || '').replace(/\s+/g, ' ').trim();
-        diag.lastText = txt; diag.lastTextAt = Date.now();
-        const p = parseLine(txt);
-        if(!p){ if(/kil|has|guild/i.test(txt)) addLog('miss', 'Saw a message but couldn’t read it', txt.slice(0, 90)); continue; }
-        handleKill(p);
+        let hit = seenSig.get(ln.sig);                         // same picture as before: reuse what we read
+        if(!hit){
+          await loadOCR();
+          const { data } = await worker.recognize(ln.canvas);
+          const items = [];
+          for(const row of String((data && data.text) || '').split(/\n+/)){
+            const txt = row.replace(/\s+/g, ' ').trim();
+            if(!txt) continue;
+            diag.lastText = txt; diag.lastTextAt = Date.now();
+            const p = parseLine(txt);
+            if(!p){ if(/kil|has|guild/i.test(txt)) addLog('miss', 'Saw a message but couldn’t read it', txt.slice(0, 90)); continue; }
+            const m = resolve(p);
+            if(!m){ addLog('miss', `Couldn’t match “${p.mvp}”`, [p.map, p.killer && 'by ' + p.killer].filter(Boolean).join(' · ')); continue; }
+            items.push({ m, p });
+          }
+          hit = { items, at: now };
+          seenSig.set(ln.sig, hit);
+        }
+        hit.at = now;
+        visible.push(...hit.items);
       }
+      // a kill line stays in chat for a while: only a line we haven't been seeing counts as a new kill
+      for(const [id, arr] of seenKill){ const keep = arr.filter(e=> now - e.seen < GONE_MS); keep.length ? seenKill.set(id, keep) : seenKill.delete(id); }
+      for(const { m, p } of visible){
+        const arr = seenKill.get(m.id) || [];
+        const same = arr.find(e=> (!e.killer && !p.killer) || sim(e.killer, p.killer) >= 0.5);
+        if(same){ same.seen = now; continue; }
+        arr.push({ killer: p.killer, seen: now }); seenKill.set(m.id, arr);
+        if(warm) handleKill(p, m);
+        else addLog('skip', `${m.name}: already in chat when you started`, p.killer ? 'by ' + p.killer : '');
+      }
+      if(worker) warm = true;
       status = diag.black
         ? '⚠ The shared window is black. Run Ragnarok in windowed mode (Alt+Enter), then Stop and Start again.'
         : 'Watching · last check ' + new Date(lastScan).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -251,10 +276,14 @@
     if(scored[1] && scored[1].s >= scored[0].s - 0.02) return null;     // two MVPs share that map
     return scored[0].m;
   }
-  function handleKill(p){
+  function resolve(p){
     let m = matchMvp(p.mvp, p.map);
     if(!m && p.loose) m = findInWords(p.after || p.text, p.map);
     if(!m) m = byMap(p.map);
+    return m;
+  }
+  function handleKill(p, m){
+    m = m || resolve(p);
     const who = p.killer ? `by ${p.killer}${p.guild ? ' (' + p.guild + ')' : ''}` : '';
     if(!m){ addLog('miss', `Couldn’t match “${p.mvp}”`, [p.map, who].filter(Boolean).join(' · ')); return; }
     const now = Date.now();
@@ -280,6 +309,7 @@
       stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 2, max: 5 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
     } catch(e) { return; }   // they cancelled the share box
     track = stream.getVideoTracks()[0];
+    warm = false; seenKill.clear(); seenSig.clear();
     track.addEventListener('ended', stop);
     grabber = (typeof ImageCapture !== 'undefined') ? new ImageCapture(track) : null;
     if(!grabber){ video = document.createElement('video'); video.muted = true; video.srcObject = stream; video.play().catch(()=>{}); }
@@ -364,7 +394,7 @@
     const lines = findLines(cx.getImageData(0, 0, W, H));
     await loadOCR();
     const res = [];
-    for(const ln of lines){ const { data } = await worker.recognize(ln.canvas); const p = parseLine(data.text); res.push({ text: data.text.trim(), parsed: p, match: p ? (matchMvp(p.mvp, p.map) || {}).id : null }); if(p) handleKill(p); }
+    for(const ln of lines){ const { data } = await worker.recognize(ln.canvas); for(const row of data.text.split(/\n+/)){ const t = row.trim(); if(!t) continue; const p = parseLine(t); const m = p ? resolve(p) : null; res.push({ text: t, match: m ? m.id : null }); } }
     return res;
   };
 })();
