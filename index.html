@@ -300,12 +300,13 @@ body.no-delete .st-del{display:none!important}
         ${upgrade ? '' : `<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="Your in-game name (e.g. Scrumzilla)" aria-label="Your in-game name">`}
         <input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
         <div class="g-err" role="alert"></div>
-        <div class="g-row"><button type="button" class="g-skip">${upgrade ? 'Cancel' : 'Use offline'}</button><button class="g-go">Enter</button></div>
+        <div class="g-row">${upgrade ? '<button type="button" class="g-skip">Cancel</button>' : ''}<button class="g-go">Enter</button></div>
       </form>`;
       document.body.appendChild(g);
       const form = g.querySelector('form'), inp = g.querySelector('.g-pass'), nickIn = g.querySelector('.g-nick'), err = g.querySelector('.g-err'), go = g.querySelector('.g-go');
       if(nickIn){ nickIn.value = lsGetX(NICK_KEY) || ''; (nickIn.value ? inp : nickIn).focus(); } else inp.focus();
-      g.querySelector('.g-skip').onclick = ()=>{ g.remove(); resolve(false); };
+      const skip = g.querySelector('.g-skip');   // only when switching access; no offline mode on the login box
+      if(skip) skip.onclick = ()=>{ g.remove(); resolve(false); };
       form.onsubmit = async e=>{
         e.preventDefault();
         const pass = inp.value;
