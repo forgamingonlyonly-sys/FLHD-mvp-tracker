@@ -3926,8 +3926,8 @@ setInterval(()=>{
   let warm = false;             // the first read after Start only notes what's already in chat
   let lastScan = 0, status = '', lastFrameSize = null;
   const AREA_KEY = 'falsehood-ad-chat';
-  // default: Ragnarok's chat window sits in the bottom-left corner
-  const DEFAULT_AREA = { x: 0, y: 0.76, w: 0.45, h: 0.24 };
+  // default: the whole bottom strip, so the chat box is found whether it's bottom-left, middle or right
+  const DEFAULT_AREA = { x: 0, y: 0.7, w: 1, h: 0.3 };
   let area = (()=>{ try { const a = JSON.parse(localStorage.getItem(AREA_KEY) || 'null'); return a && a.w > 0 && a.h > 0 ? a : null; } catch(e) { return null; } })() || DEFAULT_AREA;
   const areaIsDefault = ()=> area === DEFAULT_AREA;
   // the watcher drags a box around their chat window once; only that part is read
@@ -4144,11 +4144,11 @@ setInterval(()=>{
     const ago = t=>{ const s = Math.floor((Date.now() - t) / 1000); return s < 60 ? s + 's ago' : Math.floor(s / 60) + 'm ago'; };
     pop.innerHTML = `<h4>📡 Auto-detect kills</h4>
       <p>${on ? 'Keep Ragnarok and this tab open, with your chat box visible. New <i>“… has killed [MVP] at …”</i> lines in chat are logged for everyone.'
-              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box in the bottom-left</b> (you can adjust the area). When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. Nothing touches the game; it only reads the picture.'}</p>
+              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box along the bottom</b> of the game (left, middle or right); you can adjust the area. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. Nothing touches the game; it only reads the picture.'}</p>
       <div class="ad-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
       ${on ? `<div class="ad-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
       <div class="ad-log">${log.length ? log.slice(0, 12).map(e=>`<div class="ad-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="ad-none">No kills detected yet.</div>'}</div>
-      ${on ? `<div class="ad-area">${areaIsDefault() ? '✓ Reading the bottom-left chat area' : '✓ Reading your marked chat box'} <button type="button" class="ad-mark">${areaIsDefault() ? 'Adjust' : 'Change'}</button></div>` : ''}
+      ${on ? `<div class="ad-area">${areaIsDefault() ? '✓ Reading the bottom of the game window' : '✓ Reading your marked chat box'} <button type="button" class="ad-mark">${areaIsDefault() ? 'Adjust' : 'Change'}</button></div>` : ''}
       <div class="ad-acts">${on ? '<button type="button" class="ad-stop">■ Stop auto-detect</button>' : '<button type="button" class="ad-go">▶ Start: share game window</button>'}</div>`;
     const go = pop.querySelector('.ad-go'), st = pop.querySelector('.ad-stop');
     if(go) go.onclick = ()=>{ start(); };
