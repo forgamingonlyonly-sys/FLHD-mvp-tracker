@@ -265,7 +265,8 @@ body.no-delete .st-del{display:none!important}
           const groups = await Promise.all(['admin', 'editor', 'timer', 'viewer'].map(async rl=>{
             const snap = await fs.collection('presence_' + rl).where('at', '>', since).get();
             const who = await Promise.all(snap.docs.map(d=> fs.collection('presence_who').doc(d.id).get().then(w=> w.exists ? (w.data() || {}) : {}).catch(()=> ({}))));
-            return [rl, snap.docs.map((d, i)=>({ id: who[i].uid || d.id, at: (d.data() || {}).at || 0, name: who[i].name || names[who[i].uid] || '' }))
+            // older trackers (before the update) wrote their name straight into the check-in
+            return [rl, snap.docs.map((d, i)=>({ id: who[i].uid || d.id, at: (d.data() || {}).at || 0, name: who[i].name || names[who[i].uid] || (d.data() || {}).name || names[d.id] || '', old: !who[i].uid }))
               .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'))];
           }));
           // someone who switched access level shows only under their current (highest) level
@@ -273,7 +274,7 @@ body.no-delete .st-del{display:none!important}
           groups.forEach(g=>{ g[1] = g[1].filter(p=>{ if(seen.has(p.id)) return false; seen.add(p.id); return true; }); });
           pop.innerHTML = `<div class="m-info w-top"><span>Online in the last 5 minutes</span><button type="button" class="w-ref">↻ Refresh</button></div>` + groups.map(([rl, list])=>
             `<div class="w-grp"><div class="w-h">${LBL[rl]} <span>${list.length}</span></div>${list.length
-              ? list.map(p=>`<div class="w-row"><span>${esc(p.name || 'No nickname')}${p.id === uid ? ' <em>(you)</em>' : ''}</span><small>${ago(p.at)}</small></div>`).join('')
+              ? list.map(p=>`<div class="w-row"><span>${p.name ? esc(p.name) : '<i>Unnamed</i>'}${p.old ? ' <em>(old version)</em>' : ''}${p.id === uid ? ' <em>(you)</em>' : ''}</span><small>${ago(p.at)}</small></div>`).join('')
               : '<div class="w-none">Nobody</div>'}</div>`).join('');
           pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
           pop.querySelector('.w-ref').onclick = async ()=>{ await beat(); refresh(); open(true); };
@@ -4241,7 +4242,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014092611';
+  const BUILD = '20261014093044';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
