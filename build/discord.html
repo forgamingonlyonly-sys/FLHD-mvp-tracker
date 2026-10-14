@@ -89,6 +89,10 @@
           ? `🟢 **${m.name}** has spawned${place ? ' · ' + place : ''}`
           : `🟢 **${m.name}** is floating now${place ? ' · ' + place : ''} · window ends ${at(close)} (${at(close, 'R')})`);
       }
+      // window closed and nobody logged a new kill: it's overdue
+      if(m.min !== m.max && close >= since && now > close && now - close < 3 * 60000){
+        post('over_' + m.id + '_' + m.lastDeath, `🔴 **${m.name}** is overdue${place ? ' · ' + place : ''} · window ended ${at(close)} (${at(close, 'R')})`);
+      }
     }
   }
   setInterval(tick, 5000);
@@ -101,7 +105,7 @@
     const ov = document.createElement('div'); ov.className = 'dc-ov';
     ov.innerHTML = `<div class="dc-card" role="dialog" aria-label="Discord posts">
       <h4>💬 Discord posts</h4>
-      <p>Posts MVP kills, when spawn windows open, and the Boss Event to a Discord channel. No pings. Any FLHD / Timers / Admin with the tracker open does the posting.</p>
+      <p>Posts MVP kills, when spawn windows open and go overdue, and the Boss Event to a Discord channel. No pings. Any FLHD / Timers / Admin with the tracker open does the posting.</p>
       <ol><li>In Discord: <b>Server Settings → Integrations → Webhooks → New Webhook</b>.</li><li>Pick the channel, then <b>Copy Webhook URL</b>.</li><li>Paste it here and press <b>Save &amp; turn on</b>.</li></ol>
       <input class="dc-url" type="url" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false">
       <div class="dc-st">${cur && cur.on ? '✓ Discord posts are <b>on</b>.' : cur && cur.url ? 'Discord posts are <b>off</b>.' : 'Not set up yet.'}</div>
