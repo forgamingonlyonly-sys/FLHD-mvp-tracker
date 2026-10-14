@@ -1427,6 +1427,29 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
   .controls { grid-column: 1; grid-row: auto; margin-top: 3px; flex-wrap: wrap; }
   .loc { max-width: 150px; }
 }
+/* ================= LAYOUT: header (logo · status), one control bar, tabs row with the counts ================= */
+.hdr-id { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ctl { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 0; margin: 0 0 12px; padding: 6px 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.ctl-grp { display: flex; align-items: center; gap: 8px; padding: 0 8px; flex-wrap: wrap; }
+.ctl-grp:empty, .ctl-grp.empty { display: none; }
+.ctl-lab { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.ctl-div { width: 1px; height: 22px; background: var(--border); }
+.ctl-right { margin-left: auto; }
+.ctl .fb-online, .ctl .fb-watch, .ctl .kd-btn { margin-left: 0; height: 30px; box-sizing: border-box; }
+.ctl .alert-btn, .ctl #apBtn { height: 30px; box-sizing: border-box; border-radius: 8px; }
+.ctl .alert-btn { padding: 0 12px; }
+.toolbar-right .summary { margin: 0; gap: 0; flex-wrap: nowrap; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.toolbar-right .summary .chip { border: 0; border-radius: 0; background: none; border-right: 1px solid var(--border); height: 32px; box-sizing: border-box; padding: 0 10px; }
+.toolbar-right .summary .chip:last-child { border-right: 0; }
+.toolbar-right .btn { height: 34px; box-sizing: border-box; border-radius: 10px; }
+@media (max-width: 760px) {
+  .ctl-div { display: none; }
+  .ctl-right { margin-left: 0; }
+  .toolbar-right { flex-wrap: wrap; }
+  .toolbar-right .summary { width: 100%; }
+  .toolbar-right .summary .chip { flex: 1 1 auto; justify-content: center; padding: 0 6px; font-size: 11.5px; gap: 4px; }
+}
 </style>
 
 <div class="wrap">
@@ -3885,6 +3908,37 @@ setInterval(()=>{
   cycleTick();
 }, 1000);
 
+/* ================= LAYOUT ================= */
+// Puts the header pieces in tidy places: logo left with LIVE + account on the right; one control bar
+// (Online · Auto-detect · Alerts + settings); the status counts beside Compact / Reset all.
+// Some pieces are added later (after sign-in), so it keeps checking and moves them in when they appear.
+(function arrangeLayout(){
+  const header = document.querySelector('header');
+  const idBox = document.createElement('div'); idBox.className = 'hdr-id';
+  header.appendChild(idBox);
+  const ctl = document.createElement('div'); ctl.className = 'ctl';
+  ctl.innerHTML = '<div class="ctl-grp ctl-online"></div><span class="ctl-div"></span><div class="ctl-grp ctl-auto"></div><div class="ctl-grp ctl-right"></div>';
+  header.after(ctl);
+  const $ = q=> document.querySelector(q);
+  const put = (el, box, first)=>{ if(el && el.parentNode !== box){ if(first) box.prepend(el); else box.appendChild(el); } };
+  function arrange(){
+    put($('#sync'), idBox); put($('#fbRole'), idBox);
+    const g1 = ctl.querySelector('.ctl-online'), g2 = ctl.querySelector('.ctl-auto'), g3 = ctl.querySelector('.ctl-right');
+    put($('.fb-online'), g1);
+    const kd = $('.kd-btn'), w = $('.fb-watch');
+    if(kd && kd.parentNode !== g2) g2.insertBefore(kd, g2.querySelector('.fb-watch'));
+    put(w, g2);
+    put($('#alertBtn'), g3); put($('.ap-wrap'), g3);
+    const right = $('.toolbar-right'); if(right) put($('#summary'), right, true);
+    g1.classList.toggle('empty', !g1.querySelector('.fb-online'));
+    g2.classList.toggle('empty', !kd && !w);
+    ctl.querySelector('.ctl-div').hidden = g1.classList.contains('empty') || g2.classList.contains('empty');
+  }
+  arrange();
+  let n = 0;
+  const t = setInterval(()=>{ arrange(); if(++n > 150) { clearInterval(t); setInterval(arrange, 5000); } }, 400);
+})();
+
 /* ================= START ================= */
 setSync();
 render();
@@ -5087,7 +5141,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014224308';
+  const BUILD = '20261014235439';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
