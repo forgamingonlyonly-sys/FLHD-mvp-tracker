@@ -3833,13 +3833,20 @@ setInterval(()=>{
   const SCAN_MS = 1500, SAME_KILL_MS = 5 * 60000;
 
   // ---------- reading the announcement ----------
-  // Poring World announcements are bright green: about rgb(130, 245, 120)
-  // Poring World kill lines are one exact green: about rgb(140, 255, 123). Matching that shade tightly
-  // ignores grass, trees and other green things on screen.
-  const isAnn = (r, g, b)=> g >= 225 && r >= 110 && r <= 170 && b >= 95 && b <= 150 && g - r >= 75;
+  // Screen sharing sends the game through video compression, which smears the colour of thin text
+  // but keeps its brightness. So each text colour is matched by its exact brightness (Y) plus the
+  // direction of its colour (Cb/Cr), not by exact RGB.
+  //   kill green rgb(140,255,123): Y 205, colour toward green
+  //   event red  rgb(255,0,0):     Y 76,  colour toward red
+  //   event yellow rgb(255,255,0): Y 225, colour toward yellow
+  const ycc = (r, g, b)=>{ const y = 0.299*r + 0.587*g + 0.114*b; return [y, (b - y)*0.564 + 128, (r - y)*0.713 + 128]; };
+  const isAnn = (r, g, b)=>{ const [y, cb, cr] = ycc(r, g, b); return y >= 197 && y <= 213 && cb <= 120 && cr <= 120; };
   // "[PW2 Boss Event]" lines that update the Boss Event row:
   // red "X has spawned in map" (boss is up now) and yellow "X has been defeated in map by Y" (died now)
-  const EV_COLORS = [ (r, g, b)=> r >= 235 && g <= 45 && b <= 45, (r, g, b)=> r >= 235 && g >= 235 && b <= 45 ];
+  const EV_COLORS = [
+    (r, g, b)=>{ const [y, cb, cr] = ycc(r, g, b); return y >= 68 && y <= 84 && cr >= 150 && cb >= 80 && cb <= 122; },
+    (r, g, b)=>{ const [y, cb, cr] = ycc(r, g, b); return y >= 217 && y <= 233 && cb <= 100 && cr >= 128; },
+  ];
   const SCALE = 4;
   let tessP = null, worker = null;
   function loadOCR(){
@@ -3861,36 +3868,63 @@ setInterval(()=>{
   // find each line of kill-green text and return it as a clean black-on-white picture, one line per picture
   function findLines(img, isAnn, keepShort){
     const W = img.width, H = img.height, d = img.data;
-    const mask = new Uint8Array(W * H), rows = new Uint32Array(H);
-    for(let y = 0, i = 0; y < H; y++){
-      let c = 0;
-      for(let x = 0; x < W; x++, i += 4){
-        if(isAnn(d[i], d[i+1], d[i+2])){ mask[y*W + x] = 1; c++; }
+    const mask = new Uint8Array(W * H);
+    for(let y = 0, i = 0; y < H; y++) for(let x = 0; x < W; x++, i += 4) if(isAnn(d[i], d[i+1], d[i+2])) mask[y*W + x] = 1;
+    // rows that hold at least 2 matching pixels between columns c0..c1, split into runs at blank rows
+    const rowRuns = (c0, c1, r0, r1)=>{
+      const runs = []; let y0 = -1;
+      for(let y = r0; y <= r1 + 1; y++){
+        let c = 0;
+        if(y <= r1) for(let x = c0; x <= c1 && c < 2; x++) c += mask[y*W + x];
+        const on = y <= r1 && c >= 2;
+        if(on && y0 < 0) y0 = y;
+        if(!on && y0 >= 0){ runs.push([y0, y - 1]); y0 = -1; }
       }
-      rows[y] = c;
+      // join tiny pieces (dots of i/j, accents) to the line right below/above them
+      const lines = [];
+      for(const r of runs){
+        const last = lines[lines.length - 1];
+        if(last && (r[0] - last[1] <= 2) && ((r[1] - r[0] < 4) || (last[1] - last[0] < 4))) last[1] = r[1];
+        else lines.push(r.slice());
+      }
+      return lines;
+    };
+    // columns with any match in rows a..b, split where there's a wide empty gap (another chat window)
+    const colSegs = (a, b)=>{
+      const segs = []; let x0 = -1, gap = 0;
+      for(let x = 0; x <= W; x++){
+        let on = false;
+        if(x < W) for(let y = a; y <= b && !on; y++) on = mask[y*W + x] === 1;
+        if(on){ if(x0 < 0) x0 = x; gap = 0; last = x; }
+        else if(x0 >= 0 && ++gap >= 16){ segs.push([x0, last]); x0 = -1; gap = 0; }
+      }
+      if(x0 >= 0) segs.push([x0, last]);
+      return segs;
+    };
+    let last = 0;
+    const found = [];
+    for(const [a, b] of rowRuns(0, W - 1, 0, H - 1)){
+      for(const [s0, s1] of colSegs(a, b)){
+        for(const [la, lb] of rowRuns(s0, s1, a, b)){
+          if(lb - la < 5 || lb - la > 40) continue;                 // not a text line
+          let total = 0, x0 = W, x1 = -1;
+          for(let y = la; y <= lb; y++) for(let x = s0; x <= s1; x++) if(mask[y*W + x]){ total++; if(x < x0) x0 = x; if(x > x1) x1 = x; }
+          const short = total < 120 || x1 - x0 < 100;               // too short to be a whole kill line…
+          if(short && (!keepShort || total < 12 || x1 - x0 < 8)) continue;   // …but it may be the wrapped end of one
+          if(!short){
+            // real text is fairly dense and runs across the line; scattered game graphics aren't
+            const dens = total / ((x1 - x0 + 1) * (lb - la + 1));
+            let filled = 0, buckets = 0;
+            for(let x = x0; x <= x1; x += 8){ buckets++; let on = false; for(let y = la; y <= lb && !on; y++) for(let k = x; k < Math.min(x + 8, x1 + 1) && !on; k++) on = mask[y*W + k] === 1; if(on) filled++; }
+            if(dens < 0.08 || filled / buckets < 0.5) continue;
+          }
+          found.push({ a: la, b: lb, x0, x1, total, short });
+        }
+      }
     }
-    // lines = runs of rows that contain green, split wherever a blank row (or a near-blank one) separates them
-    const runs = [];
-    let y0 = -1;
-    for(let y = 0; y <= H; y++){
-      const on = y < H && rows[y] >= 2;
-      if(on && y0 < 0) y0 = y;
-      if(!on && y0 >= 0){ runs.push([y0, y - 1]); y0 = -1; }
-    }
-    // join tiny pieces (dots of i/j, accents) to the line right below/above them
-    const lines = [];
-    for(const r of runs){
-      const last = lines[lines.length - 1];
-      if(last && (r[0] - last[1] <= 2) && ((r[1] - r[0] < 4) || (last[1] - last[0] < 4))) last[1] = r[1];
-      else lines.push(r.slice());
-    }
+    found.sort((p, q)=> p.a - q.a || p.x0 - q.x0);
     const out = [];
-    for(const [a, b] of lines){
-      if(b - a < 5 || b - a > 40) continue;                 // not a text line
-      let total = 0, x0 = W, x1 = -1;
-      for(let y = a; y <= b; y++) for(let x = 0; x < W; x++) if(mask[y*W + x]){ total++; if(x < x0) x0 = x; if(x > x1) x1 = x; }
-      const short = total < 120 || x1 - x0 < 100;           // too short to be a whole kill line…
-      if(short && (!keepShort || total < 12 || x1 - x0 < 8)) continue;   // …but it may be the wrapped end of one
+    for(const { a, b, x0, x1, short } of found){
       const pad = 4, cx0 = Math.max(0, x0 - pad), cy0 = Math.max(0, a - pad), cw = Math.min(W, x1 + pad + 1) - cx0, ch = Math.min(H, b + pad + 1) - cy0;
       // black text on white at 1x, then scaled up smoothly (soft edges read better than blocky pixels)
       const tmp = document.createElement('canvas'); tmp.width = cw + 8; tmp.height = ch + 8;
@@ -3905,9 +3939,28 @@ setInterval(()=>{
       cx.drawImage(tmp, 0, 0, cv.width, cv.height);
       let sig = '';
       for(let x = 0; x < cw; x += 5){ let c = 0; for(let y = 0; y < ch; y++) c += mask[(cy0 + y)*W + cx0 + x]; sig += c.toString(36); }
-      out.push({ canvas: cv, sig: cw + 'x' + ch + ':' + sig, y0: a, y1: b, short });
+      out.push({ canvas: cv, sig: cw + 'x' + ch + ':' + sig, y0: a, y1: b, x0, x1, short });
     }
     return out;
+  }
+
+  // wrapped kill messages: a line continues on the next one in the same chat window (right below, same left edge)
+  const newMsg = t=> /^.{0,40}?\]\s*o[ft]\s+Gu?[il1|]{1,2}d/i.test(t);
+  const KILL_RULES = { isNew: newMsg, isDone: t=> /\.\s*$/.test(t) };
+  // event lines start with "[PW2 Boss Event]"; one is finished once the map is followed by more words
+  const EV_RULES = { isNew: t=> /^\W{0,3}P\s*[WwV]{1,3}\s*[2Z]|^.{0,8}Bo[s5]{2}\s*Ev/i.test(t), isDone: t=> /(spawn|defeat|gather)\S*\s+[il1]n\s+\S{4,}\s+\S/i.test(t) };
+  function joinWrapped(items, rules){        // items: { ln, text } in top-to-bottom order
+    rules = rules || KILL_RULES;
+    const chains = [];
+    for(const it of items){
+      const ch = chains.find(c=>{
+        const p = c[c.length - 1];
+        return it.ln.y0 - p.ln.y1 >= 0 && it.ln.y0 - p.ln.y1 <= 10 && Math.abs(it.ln.x0 - c[0].ln.x0) <= 40 && !c.done;
+      });
+      if(ch && !rules.isNew(it.text) && !rules.isDone(ch.map(x=> x.text).join(' '))) ch.push(it);
+      else { if(ch) ch.done = true; if(!it.ln.short) chains.push([it]); }
+    }
+    return chains.map(c=>({ text: c.map(x=> x.text).join(' '), key: c.map(x=> x.ln.sig).join('|') }));
   }
 
   // "[Name] of Guild [Guild] has killed [Maya] at Ant Hell F2."
@@ -3971,22 +4024,26 @@ setInterval(()=>{
   // name (and, when readable, the map) decide which MVP it is; a shaky name is accepted when the map agrees
   function matchMvp(name, map, withScore){
     const list = (typeof mvps !== 'undefined' ? mvps : []);
-    let best = null, bestS = 0;
+    const rows = [];
     for(const m of list){
       if(m.id === 'boss_event') continue;
       const fam = FAMILY_OF[m.id];
       if(fam !== undefined && FAMILIES[fam].pick(map || '') !== m.id) continue;   // e.g. Baphomet at Glast Heim → Baphomet GH
       const names = [m.name].concat(ALIASES[m.id] || [], fam !== undefined ? FAMILIES[fam].names : []);
       let nS = 0; for(const n of names) nS = Math.max(nS, sim(name, n));
-      const mS = map ? sim(map, placeOf(m)) : 0;
-      const ok = nS >= 0.72 || (nS >= 0.5 && mS >= 0.6);
-      const sc = nS + (mS >= 0.6 ? 0.2 * mS : 0);
-      if(ok && sc > bestS){ bestS = sc; best = m; }
-      if(withScore && !ok && nS > bestS - 0.3 && nS >= 0.6 && !best){ /* keep looking */ }
+      rows.push({ m, nS, mS: map ? sim(map, placeOf(m)) : 0 });
+    }
+    let best = null, bestS = 0;
+    for(const r of rows){
+      const rival = rows.some(o=> o !== r && o.nS >= r.nS - 0.15);
+      const ok = r.nS >= 0.72 || (r.nS >= 0.5 && r.mS >= 0.6) || (r.nS >= 0.66 && !rival);
+      const sc = r.nS + (r.mS >= 0.6 ? 0.2 * r.mS : 0);
+      if(ok && sc > bestS){ bestS = sc; best = r.m; }
     }
     if(withScore) return best ? { mvp: best, score: bestS } : null;
     return best;
   }
+
 
   // ---------- capture loop ----------
   let stream = null, track = null, grabber = null, video = null, ticker = null, busy = false;
@@ -4102,39 +4159,31 @@ setInterval(()=>{
         thumb.width = tw; thumb.height = th;
         thumb.getContext('2d').drawImage(cv, 0, 0, tw, th);
       }
-      const evLines = EV_COLORS.flatMap((fn, ci)=> findLines(img, fn).map(l=> (l.sig = 'e' + ci + l.sig, l)));
+      const evLines = EV_COLORS.flatMap((fn, ci)=> findLines(img, fn, true).map(l=> (l.sig = 'e' + ci + l.sig, l))).sort((p, q)=> p.y0 - q.y0 || p.x0 - q.x0);
       const now = Date.now();
       for(const [k, v] of seenSig) if(now - v.at > 10 * 60000) seenSig.delete(k);
       for(const [k, t] of missSeen) if(now - t > 10 * 60000) missSeen.delete(k);
       // read each green line (a picture already read is reused)
-      const texts = [];
-      for(let i = 0; i < lines.length; i++){
-        const ln = lines[i], prev = lines[i - 1];
-        const joined = !!prev && ln.y0 - prev.y1 <= 10;          // sits right under the line above
-        if(ln.short && !joined) continue;                        // a short bit on its own isn't a kill line
+      const items = [];
+      for(const ln of lines){
         let hit = seenSig.get(ln.sig);
         if(!hit){
+          if(ln.short && !lines.some(p=> p !== ln && !p.short && ln.y0 - p.y1 >= 0 && ln.y0 - p.y1 <= 26 && Math.abs(ln.x0 - p.x0) <= 40)) continue;   // a stray bit on its own
           await loadOCR();
           const { data } = await worker.recognize(ln.canvas);
           hit = { text: String((data && data.text) || '').replace(/\s+/g, ' ').trim(), at: now };
           seenSig.set(ln.sig, hit);
         }
         hit.at = now;
-        if(hit.text) texts.push({ text: hit.text, joined, sig: ln.sig });
+        if(hit.text) items.push({ ln, text: hit.text });
       }
-      // a long kill message wraps onto the next line in a narrow chat box: join the pieces back together
-      const newMsg = t=> /^.{0,40}?\]\s*o[ft]\s+Gu?[il1|]{1,2}d/i.test(t);
       const visible = [];
-      for(let i = 0; i < texts.length; i++){
-        let txt = texts[i].text, key = texts[i].sig;
-        while(i + 1 < texts.length && texts[i + 1].joined && !newMsg(texts[i + 1].text) && !/\.\s*$/.test(txt)){
-          i++; txt += ' ' + texts[i].text; key += '|' + texts[i].sig;
-        }
+      for(const { text: txt, key } of joinWrapped(items)){
         diag.lastText = txt; diag.lastTextAt = now;
         const p = parseLine(txt);
         const m = p ? resolve(p) : null;
         if(!m){
-          if(!missSeen.has(key) && /kil|has|guild/i.test(txt)){
+          if(!missSeen.has(key) && /k\S{0,3}ed\b|o[ft]\s+gu/i.test(txt)){
             missSeen.set(key, now);
             addLog('miss', p ? `Couldn’t match “${p.mvp}”` : 'Saw a message but couldn’t read it', p ? [p.map, p.killer && 'by ' + p.killer].filter(Boolean).join(' · ') : txt.slice(0, 90));
           }
@@ -4142,24 +4191,25 @@ setInterval(()=>{
         }
         visible.push({ m, p });
       }
-      const evVisible = [];
+      const evItems = [];
       for(const ln of evLines){
         let hit = seenSig.get(ln.sig);
         if(!hit){
+          if(ln.short && !evLines.some(p=> p !== ln && !p.short && ln.y0 - p.y1 >= 0 && ln.y0 - p.y1 <= 26 && Math.abs(ln.x0 - p.x0) <= 40)) continue;
           await loadOCR();
           const { data } = await worker.recognize(ln.canvas);
-          const items = [];
-          for(const row of String((data && data.text) || '').split(/\n+/)){
-            const txt = row.replace(/\s+/g, ' ').trim();
-            if(!txt) continue;
-            const e = parseEvent(txt);
-            if(e){ diag.lastText = txt; diag.lastTextAt = Date.now(); items.push(e); }
-          }
-          hit = { items, at: now };
+          hit = { text: String((data && data.text) || '').replace(/\s+/g, ' ').trim(), at: now };
           seenSig.set(ln.sig, hit);
         }
         hit.at = now;
-        evVisible.push(...hit.items);
+        if(hit.text) evItems.push({ ln, text: hit.text });
+      }
+      const evVisible = [];
+      for(const { text } of joinWrapped(evItems, EV_RULES)){
+        const e = parseEvent(text);
+        if(!e || (e.kind !== 'dead' && e.kind !== 'spawn') || !e.map || e.map.length < 4) continue;
+        diag.lastText = text; diag.lastTextAt = now;
+        evVisible.push(e);
       }
       for(const [k, t] of seenEvt) if(now - t >= GONE_MS) seenEvt.delete(k);
       for(const e of evVisible){
@@ -4244,7 +4294,8 @@ setInterval(()=>{
     const word = s=> fixMap(String(s || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm')
       .replace(/[0-9OoSsIl]+$/, d=> /\d/.test(d) ? d.replace(/[Oo]/g, '0').replace(/[Ss]/g, '5').replace(/[Il]/g, '1') : d));
     let m;
-    if((m = /^(.+?)\s+ha[s5]\s+[s5]pawn\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'spawn', boss: canonBoss(m[1]), map: word(m[2]) };
+    const mapAt = (txt, re)=>{ const mm = re.exec(txt); if(!mm) return ''; const toks = txt.slice(mm.index + mm[0].length).trim().split(/\s+/); return toks[0] && toks[0].length < 4 && toks[1] ? toks[0] + toks[1] : (toks[0] || ''); };
+    if((m = /^(.+?)\s+ha[s5]\s+[s5]pawn\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'spawn', boss: canonBoss(m[1]), map: word(mapAt(body, /[s5]pawn\S*\s+[il1]n\s+/i)) };
     if((m = /gather\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'gather', boss: '', map: word(m[1]) };
     if((m = /^(.+?)\s+ha[s5]\s+been\s+defeat\S*\s+[il1]n\s+([A-Za-z0-9_]+)(?:\s+by\s+(.+?))?(?:\s+o[ft]\s+[\[\(].*)?$/i.exec(body)))
       return { kind: 'dead', boss: canonBoss(m[1]), map: word(m[2]), killer: (m[3] || '').replace(/[\[\]\(\)!.,]+$/g, '').trim() };
@@ -4255,14 +4306,16 @@ setInterval(()=>{
   function fixMap(m){
     if(!m) return m;
     const lower = m.toLowerCase();
+    // the number after the name: fix look-alike letters, and keep at most 2 digits (a trailing "!" is often read as l/1)
+    const num = r=>{ const n = r.replace(/[od]/g, '0').replace(/[il|]/g, '1').replace(/s/g, '5').replace(/z/g, '2').replace(/b/g, '8'); return /^\d+$/.test(n) ? n.slice(0, 2) : n; };
     let best = null, bs = 0;
     for(const st of MAP_STEMS){
-      const head = lower.slice(0, st.length);
-      if(head === st) return lower;
+      const head = lower.slice(0, st.length).replace(/1/g, 'l').replace(/0/g, 'o');
+      if(head === st) return st + num(lower.slice(st.length));
       const sc = sim1(head, st);
       if(sc > bs){ bs = sc; best = st; }
     }
-    return bs >= 0.8 ? best + lower.slice(best.length) : m;
+    return bs >= 0.8 ? best + num(lower.slice(best.length)) : m;
   }
   // tidy the boss name: the tracker's own name when it's one we know (Baphomet, Moonlight Flower, …)
   function canonBoss(raw){
@@ -4435,20 +4488,12 @@ setInterval(()=>{
     const lines = findLines(im, isAnn, true);
     await loadOCR();
     const res = [];
-    for(const fn of EV_COLORS) for(const ln of findLines(im, fn)){ const { data } = await worker.recognize(ln.canvas); for(const row of data.text.split(/\n+/)){ const t = row.trim(); if(!t) continue; const e = parseEvent(t); res.push({ text: t, match: e ? JSON.stringify(e) : null }); } }
-    const texts = [];
-    for(let i = 0; i < lines.length; i++){
-      const ln = lines[i], prev = lines[i - 1], joined = !!prev && ln.y0 - prev.y1 <= 10;
-      if(ln.short && !joined) continue;
-      const { data } = await worker.recognize(ln.canvas);
-      texts.push({ text: data.text.replace(/\s+/g, ' ').trim(), joined });
-    }
-    const newMsg = t=> /^.{0,40}?\]\s*o[ft]\s+Gu?[il1|]{1,2}d/i.test(t);
-    for(let i = 0; i < texts.length; i++){
-      let t = texts[i].text;
-      while(i + 1 < texts.length && texts[i + 1].joined && !newMsg(texts[i + 1].text) && !/\.\s*$/.test(t)){ i++; t += ' ' + texts[i].text; }
-      const p = parseLine(t); const m = p ? resolve(p) : null; res.push({ text: t, match: m ? m.id : null });
-    }
+    const evItems = [];
+    for(const ln of EV_COLORS.flatMap(fn=> findLines(im, fn, true)).sort((p, q)=> p.y0 - q.y0 || p.x0 - q.x0)){ const { data } = await worker.recognize(ln.canvas); const t = data.text.replace(/\s+/g, ' ').trim(); if(t) evItems.push({ ln, text: t }); }
+    for(const { text: t } of joinWrapped(evItems, EV_RULES)){ const e = parseEvent(t); res.push({ text: t, match: e ? JSON.stringify(e) : null }); }
+    const items = [];
+    for(const ln of lines){ const { data } = await worker.recognize(ln.canvas); const t = data.text.replace(/\s+/g, ' ').trim(); if(t) items.push({ ln, text: t }); }
+    for(const { text: t } of joinWrapped(items)){ const p = parseLine(t); const m = p ? resolve(p) : null; res.push({ text: t, match: m ? m.id : null }); }
     return res;
   };
 })();
@@ -4469,7 +4514,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014202501';
+  const BUILD = '20261014203332';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
