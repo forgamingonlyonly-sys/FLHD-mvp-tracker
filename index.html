@@ -4505,18 +4505,21 @@ setInterval(()=>{
     if(!m) return m;
     const lower = m.toLowerCase();
     // the number after the name: fix look-alike letters, and keep at most 2 digits (a trailing "!" is often read as l/1)
-    const num = r=>{ const n = r.replace(/[od]/g, '0').replace(/[il|]/g, '1').replace(/s/g, '5').replace(/z/g, '2').replace(/b/g, '8'); return /^\d+$/.test(n) ? n.slice(0, 2) : n; };
-    // try the whole thing, and also with the last 1-2 characters taken as the number (cd_fild0S → cd_fild + 05)
+    const num = r=>{ const n = r.replace(/[od]/g, '0').replace(/[il|!]/g, '1').replace(/s/g, '5').replace(/z/g, '2').replace(/b/g, '8'); return /^\d+$/.test(n) ? n.slice(0, 2) : n; };
+    // try the whole thing, and also with the last 1-3 characters taken as the number (cd_fild0S → cd_fild + 05, crad_fild051 → crad_fild + 05)
     const cands = [[lower, '']];
-    for(const k of [1, 2]) if(lower.length > k + 3){ const t = num(lower.slice(-k)); if(/^\d+$/.test(t)) cands.push([lower.slice(0, -k), t]); }
+    for(const k of [1, 2, 3]) if(lower.length > k + 3){ const t = num(lower.slice(-k)); if(/^\d+$/.test(t)) cands.push([lower.slice(0, -k), t]); }
+    // common misreads of "m" in this font: rn, ra, ri, nn, in
+    const variants = n=> [n, n.replace(/rn|ra|ri|nn|in/g, 'm')];
     let best = null, bs = 0;
-    for(const [name, tail] of cands) for(const st of MAP_STEMS){
+    for(const [name0, tail] of cands) for(const name of variants(name0)) for(const st of MAP_STEMS){
       const head = name.slice(0, st.length).replace(/1/g, 'l').replace(/0/g, 'o');
       const sc = head === st ? 1.01 : sim1(head, st);
       if(sc > bs){ bs = sc; best = st + num(name.slice(st.length) + tail); }
     }
     return bs >= 0.8 ? best : m;
   }
+
 
   // tidy the boss name: the tracker's own name when it's one we know (Baphomet, Moonlight Flower, …)
   function canonBoss(raw){
@@ -4946,7 +4949,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014222413';
+  const BUILD = '20261014222813';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
