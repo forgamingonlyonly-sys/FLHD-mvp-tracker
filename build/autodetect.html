@@ -8,13 +8,14 @@
 .kd-btn.busy .kd-dot{background:#e0a100}
 @keyframes kdPulse{50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){.kd-btn.on .kd-dot{animation:none}}
-.kd-pop{position:fixed;z-index:9998;width:min(340px,calc(100vw - 16px));background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:12px;padding:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);font:13px Inter,system-ui,sans-serif}
+.kd-pop{box-sizing:border-box;position:fixed;z-index:9998;width:min(340px,calc(100vw - 16px));background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:12px;padding:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);font:13px Inter,system-ui,sans-serif}
 .kd-pop[hidden]{display:none!important}
 .kd-pop h4{margin:0 0 6px;font:700 14px Cinzel,serif;letter-spacing:.03em}
 .kd-pop p{margin:0 0 10px;color:#b9aecb;font-size:12.5px;line-height:1.45}
 .kd-pop .kd-status{font-size:12px;color:#9d8fb3;margin-bottom:8px}
 .kd-pop .kd-diag{font-size:11.5px;color:#8f82a6;margin:-2px 0 8px;line-height:1.4;word-break:break-word}
-.kd-pop .kd-area{font-size:12px;color:#cfc4df;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.kd-pop .kd-area{font-size:12px;color:#cfc4df;margin:10px 0 0;padding-top:10px;border-top:1px solid #3b2d52;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.kd-pop .kd-area button{flex:none}
 .kd-pop .kd-area button{padding:3px 10px;border-radius:8px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 12px Inter,system-ui,sans-serif;cursor:pointer}
 .kd-pick{position:fixed;inset:0;z-index:9999;background:rgba(10,6,18,.82);display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif}
 .kd-pick-card{background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:14px;padding:14px;display:grid;gap:8px;max-width:94vw}
@@ -28,9 +29,12 @@
 .kd-pick-acts button{padding:8px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
 .kd-pick-acts .kd-pick-ok{background:#a02ab8;border-color:#c03bd6}
 .kd-pick-acts button:disabled{opacity:.5;cursor:default}
-.kd-pop .kd-log{max-height:220px;overflow:auto;border-top:1px solid #3b2d52;padding-top:6px}
+.kd-pop .kd-log{max-height:220px;overflow-y:auto;overflow-x:hidden;border-top:1px solid #3b2d52;padding-top:6px}
 .kd-pop .kd-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px}
-.kd-pop .kd-row small{color:#8f82a6;white-space:nowrap}
+.kd-pop .kd-row>span{min-width:0;overflow-wrap:anywhere}
+.kd-pop .kd-row>small{flex:none}
+.kd-pop .kd-row small{color:#8f82a6}
+.kd-pop .kd-row>small{white-space:nowrap}
 .kd-pop .kd-row.ok b{color:#7be0a5}
 .kd-pop .kd-row.skip b{color:#e0c27a}
 .kd-pop .kd-row.miss b{color:#ff9aa8}
@@ -456,6 +460,7 @@
   }
   const wait = setInterval(()=>{ if(document.getElementById('fbRole')){ clearInterval(wait); setTimeout(mount, 300); } }, 500);
 
+  window.__adLog = (k, t, sub)=> addLog(k, t, sub);
   window.__adParse = t=>{ const p = parseLine(t); if(!p) return null; const m = matchMvp(p.mvp, p.map) || (p.loose ? findInWords(p.after || p.text, p.map) : null) || byMap(p.map); return { mvp: p.mvp, map: p.map, killer: p.killer, loose: !!p.loose, id: m ? m.id : null }; };
   // for testing: window.__adTest(imageOrCanvas) runs one frame through the reader
   window.__adTest = async (src)=>{
