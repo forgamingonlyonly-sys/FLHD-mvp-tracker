@@ -47,8 +47,10 @@
 
   // ---------- reading the announcement ----------
   // Poring World announcements are bright green: about rgb(130, 245, 120)
-  const isAnn = (r, g, b)=> g > 200 && g - r > 60 && g - b > 70;
-
+  // Poring World kill lines are one exact green: about rgb(140, 255, 123). Matching that shade tightly
+  // ignores grass, trees and other green things on screen.
+  const isAnn = (r, g, b)=> g >= 225 && r >= 110 && r <= 170 && b >= 95 && b <= 150 && g - r >= 75;
+  const SCALE = 4;
   let tessP = null, worker = null;
   function loadOCR(){
     if(tessP) return tessP;
@@ -58,7 +60,7 @@
       document.head.appendChild(s);
     }).then(async ()=>{
       worker = await Tesseract.createWorker('eng');
-      await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1',
+      await worker.setParameters({ tessedit_pageseg_mode: '7', preserve_interword_spaces: '1',
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]().,\'-_ ' });
       return worker;
     });
@@ -66,7 +68,7 @@
     return tessP;
   }
 
-  // find lines of announcement-green text in a frame; return black-on-white crops ready for OCR
+  // find each line of kill-green text and return it as a clean black-on-white picture, one line per picture
   function findLines(img){
     const W = img.width, H = img.height, d = img.data;
     const mask = new Uint8Array(W * H), rows = new Uint32Array(H);
@@ -77,34 +79,41 @@
       }
       rows[y] = c;
     }
-    const bands = [];
-    let y0 = -1, gap = 0;
+    // lines = runs of rows that contain green, split wherever a blank row (or a near-blank one) separates them
+    const runs = [];
+    let y0 = -1;
     for(let y = 0; y <= H; y++){
-      const on = y < H && rows[y] >= 4;
-      if(on){ if(y0 < 0) y0 = y; gap = 0; }
-      else if(y0 >= 0){
-        if(++gap > 3 || y === H){ const y1 = y - gap; if(y1 - y0 >= 6 && y1 - y0 <= 220) bands.push([y0, y1]); y0 = -1; gap = 0; }
-      }
+      const on = y < H && rows[y] >= 2;
+      if(on && y0 < 0) y0 = y;
+      if(!on && y0 >= 0){ runs.push([y0, y - 1]); y0 = -1; }
+    }
+    // join tiny pieces (dots of i/j, accents) to the line right below/above them
+    const lines = [];
+    for(const r of runs){
+      const last = lines[lines.length - 1];
+      if(last && (r[0] - last[1] <= 2) && ((r[1] - r[0] < 4) || (last[1] - last[0] < 4))) last[1] = r[1];
+      else lines.push(r.slice());
     }
     const out = [];
-    for(const [a, b] of bands){
+    for(const [a, b] of lines){
+      if(b - a < 5 || b - a > 40) continue;                 // not a text line
       let total = 0, x0 = W, x1 = -1;
       for(let y = a; y <= b; y++) for(let x = 0; x < W; x++) if(mask[y*W + x]){ total++; if(x < x0) x0 = x; if(x > x1) x1 = x; }
-      if(total < 150 || x1 - x0 < 120) continue;           // too small to be a kill line
-      const pad = 8, cx0 = Math.max(0, x0 - pad), cy0 = Math.max(0, a - pad), cw = Math.min(W, x1 + pad) - cx0, ch = Math.min(H, b + pad) - cy0;
-      const S = 3, cv = document.createElement('canvas'); cv.width = cw * S; cv.height = ch * S;
-      const cx = cv.getContext('2d'), od = cx.createImageData(cw, ch);
+      if(total < 120 || x1 - x0 < 100) continue;            // too short to be a kill line
+      const pad = 4, cx0 = Math.max(0, x0 - pad), cy0 = Math.max(0, a - pad), cw = Math.min(W, x1 + pad + 1) - cx0, ch = Math.min(H, b + pad + 1) - cy0;
+      // black text on white at 1x, then scaled up smoothly (soft edges read better than blocky pixels)
+      const tmp = document.createElement('canvas'); tmp.width = cw + 8; tmp.height = ch + 8;
+      const tx = tmp.getContext('2d'), od = tx.createImageData(tmp.width, tmp.height);
+      od.data.fill(255);
+      for(let y = 0; y < ch; y++) for(let x = 0; x < cw; x++)
+        if(mask[(cy0 + y)*W + cx0 + x]){ const j = ((y + 4) * tmp.width + x + 4) * 4; od.data[j] = od.data[j+1] = od.data[j+2] = 0; }
+      tx.putImageData(od, 0, 0);
+      const cv = document.createElement('canvas'); cv.width = tmp.width * SCALE; cv.height = tmp.height * SCALE;
+      const cx = cv.getContext('2d');
+      cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+      cx.drawImage(tmp, 0, 0, cv.width, cv.height);
       let sig = '';
-      for(let y = 0; y < ch; y++) for(let x = 0; x < cw; x++){
-        const k = ((cy0 + y)*W + cx0 + x) * 4, r = d[k], g = d[k+1], b = d[k+2];
-        // how "announcement green" this pixel is, as a shade: green text → black, anything else → white
-        const ink = Math.max(0, Math.min(255, (g - (r + b) / 2 - 35) * 2.6 + (g > 170 ? (g - 170) : 0)));
-        const j = (y*cw + x) * 4, v = 255 - ink;
-        od.data[j] = od.data[j+1] = od.data[j+2] = v; od.data[j+3] = 255;
-      }
-      for(let x = 0; x < cw; x += 6){ let c = 0; for(let y = 0; y < ch; y++) c += mask[(cy0 + y)*W + cx0 + x]; sig += c.toString(36); }
-      const tmp = document.createElement('canvas'); tmp.width = cw; tmp.height = ch; tmp.getContext('2d').putImageData(od, 0, 0);
-      cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high'; cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(tmp, 0, 0, cv.width, cv.height);
+      for(let x = 0; x < cw; x += 5){ let c = 0; for(let y = 0; y < ch; y++) c += mask[(cy0 + y)*W + cx0 + x]; sig += c.toString(36); }
       out.push({ canvas: cv, sig: cw + 'x' + ch + ':' + sig });
     }
     return out;
@@ -289,7 +298,7 @@
             const p = parseLine(txt);
             if(!p){ if(/kil|has|guild/i.test(txt)) addLog('miss', 'Saw a message but couldn’t read it', txt.slice(0, 90)); continue; }
             const m = resolve(p);
-            if(!m){ addLog('miss', `Couldn’t match “${p.mvp}”`, [p.map, p.killer && 'by ' + p.killer].filter(Boolean).join(' · ')); continue; }
+            if(!m){ if(/guild|has|kil/i.test(txt)) addLog('miss', `Couldn’t match “${p.mvp}”`, [p.map, p.killer && 'by ' + p.killer].filter(Boolean).join(' · ')); continue; }
             items.push({ m, p });
           }
           hit = { items, at: now };
