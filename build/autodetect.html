@@ -14,6 +14,20 @@
 .ad-pop p{margin:0 0 10px;color:#b9aecb;font-size:12.5px;line-height:1.45}
 .ad-pop .ad-status{font-size:12px;color:#9d8fb3;margin-bottom:8px}
 .ad-pop .ad-diag{font-size:11.5px;color:#8f82a6;margin:-2px 0 8px;line-height:1.4;word-break:break-word}
+.ad-pop .ad-area{font-size:12px;color:#cfc4df;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ad-pop .ad-area button{padding:3px 10px;border-radius:8px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 12px Inter,system-ui,sans-serif;cursor:pointer}
+.ad-pick{position:fixed;inset:0;z-index:9999;background:rgba(10,6,18,.82);display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif}
+.ad-pick-card{background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:14px;padding:14px;display:grid;gap:8px;max-width:94vw}
+.ad-pick-card>b{font:700 16px Cinzel,serif}
+.ad-pick-card>span{font-size:12.5px;color:#b9aecb}
+.ad-pick-stage{position:relative;cursor:crosshair;touch-action:none;line-height:0}
+.ad-pick-stage canvas{border-radius:6px;max-width:100%}
+.ad-pick-rect{position:absolute;border:2px solid #2fbf71;background:rgba(47,191,113,.15);box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
+.ad-pick-rect[hidden]{display:none}
+.ad-pick-acts{display:flex;gap:8px;justify-content:flex-end}
+.ad-pick-acts button{padding:8px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+.ad-pick-acts .ad-pick-ok{background:#a02ab8;border-color:#c03bd6}
+.ad-pick-acts button:disabled{opacity:.5;cursor:default}
 .ad-pop .ad-log{max-height:220px;overflow:auto;border-top:1px solid #3b2d52;padding-top:6px}
 .ad-pop .ad-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px}
 .ad-pop .ad-row small{color:#8f82a6;white-space:nowrap}
@@ -178,7 +192,46 @@
   const seenSig = new Map(), recent = new Map(), log = [], seenKill = new Map();
   const GONE_MS = 3 * 60000;    // a kill line must be gone this long before the same line counts again
   let warm = false;             // the first read after Start only notes what's already in chat
-  let lastScan = 0, status = '';
+  let lastScan = 0, status = '', lastFrameSize = null;
+  const AREA_KEY = 'falsehood-ad-chat';
+  // default: Ragnarok's chat window sits in the bottom-left corner
+  const DEFAULT_AREA = { x: 0, y: 0.76, w: 0.45, h: 0.24 };
+  let area = (()=>{ try { const a = JSON.parse(localStorage.getItem(AREA_KEY) || 'null'); return a && a.w > 0 && a.h > 0 ? a : null; } catch(e) { return null; } })() || DEFAULT_AREA;
+  const areaIsDefault = ()=> area === DEFAULT_AREA;
+  // the watcher drags a box around their chat window once; only that part is read
+  async function pickArea(){
+    const f = await frame();
+    if(!f){ alert('Start auto-detect and share the Ragnarok window first.'); return; }
+    const W = f.width || f.videoWidth, H = f.height || f.videoHeight;
+    const shot = document.createElement('canvas'); shot.width = W; shot.height = H; shot.getContext('2d').drawImage(f, 0, 0, W, H);
+    if(f.close) f.close();
+    const ov = document.createElement('div'); ov.className = 'ad-pick';
+    ov.innerHTML = `<div class="ad-pick-card"><b>Drag a box around your chat window</b><span>Only the green kill lines inside this box are read. Include the whole chat area.</span>
+      <div class="ad-pick-stage"><canvas></canvas><div class="ad-pick-rect" hidden></div></div>
+      <div class="ad-pick-acts"><button type="button" class="ad-pick-cancel">Cancel</button><button type="button" class="ad-pick-ok" disabled>Use this area</button></div></div>`;
+    document.body.appendChild(ov);
+    const cv = ov.querySelector('canvas'), stage = ov.querySelector('.ad-pick-stage'), rect = ov.querySelector('.ad-pick-rect'), ok = ov.querySelector('.ad-pick-ok');
+    const scale = Math.min(1, (innerWidth * 0.9) / W, (innerHeight * 0.68) / H);
+    cv.width = Math.round(W * scale); cv.height = Math.round(H * scale);
+    cv.getContext('2d').drawImage(shot, 0, 0, cv.width, cv.height);
+    let sel = area ? { x: area.x * cv.width, y: area.y * cv.height, w: area.w * cv.width, h: area.h * cv.height } : null, drag = null;
+    const draw = ()=>{ if(!sel || sel.w < 4 || sel.h < 4){ rect.hidden = true; ok.disabled = true; return; }
+      rect.hidden = false; ok.disabled = false; Object.assign(rect.style, { left: sel.x + 'px', top: sel.y + 'px', width: sel.w + 'px', height: sel.h + 'px' }); };
+    const pos = e=>{ const r = cv.getBoundingClientRect(); return { x: Math.max(0, Math.min(cv.width, e.clientX - r.left)), y: Math.max(0, Math.min(cv.height, e.clientY - r.top)) }; };
+    stage.addEventListener('pointerdown', e=>{ e.preventDefault(); stage.setPointerCapture(e.pointerId); drag = pos(e); sel = { x: drag.x, y: drag.y, w: 0, h: 0 }; draw(); });
+    stage.addEventListener('pointermove', e=>{ if(!drag) return; const p = pos(e); sel = { x: Math.min(p.x, drag.x), y: Math.min(p.y, drag.y), w: Math.abs(p.x - drag.x), h: Math.abs(p.y - drag.y) }; draw(); });
+    stage.addEventListener('pointerup', ()=>{ drag = null; });
+    draw();
+    ov.querySelector('.ad-pick-cancel').onclick = ()=> ov.remove();
+    ok.onclick = ()=>{
+      area = { x: sel.x / cv.width, y: sel.y / cv.height, w: sel.w / cv.width, h: sel.h / cv.height };
+      try { localStorage.setItem(AREA_KEY, JSON.stringify(area)); } catch(e) {}
+      seenSig.clear(); seenKill.clear(); warm = false;      // whatever is in chat right now counts as old
+      ov.remove();
+      addLog('ok', 'Chat area set', 'Only kills in your chat box are read');
+      status = 'Watching'; paintBtn();
+    };
+  }
   const diag = { size: '', black: false, lines: 0, lastLineAt: 0, lastText: '', lastTextAt: 0 };
 
   function addLog(kind, title, sub){
@@ -208,10 +261,16 @@
       cx.drawImage(f, 0, 0, W, H);
       if(f.close) f.close();
       lastScan = Date.now();
-      const img = cx.getImageData(0, 0, W, H);
+      lastFrameSize = [W, H];
+      if(!area){ status = 'Mark your chat box to start reading kills'; return; }
+      // read only the chat box the watcher marked
+      const ax = Math.max(0, Math.round(area.x * W)), ay = Math.max(0, Math.round(area.y * H));
+      const aw = Math.min(W - ax, Math.round(area.w * W)), ah = Math.min(H - ay, Math.round(area.h * H));
+      if(aw < 40 || ah < 10){ status = 'The marked chat area is too small. Mark it again.'; return; }
+      const img = cx.getImageData(ax, ay, aw, ah);
       // a fully black picture usually means Ragnarok is in full-screen mode
       let lit = 0; for(let i = 0; i < img.data.length; i += 4 * 97) if(img.data[i] + img.data[i+1] + img.data[i+2] > 30) lit++;
-      diag.size = W + '×' + H; diag.black = lit < 20;
+      diag.size = W + '×' + H + ' · reading chat area ' + aw + '×' + ah; diag.black = lit < 20;
       const lines = findLines(img);
       diag.lines = lines.length; if(lines.length) diag.lastLineAt = Date.now();
       const now = Date.now();
@@ -315,7 +374,8 @@
     if(!grabber){ video = document.createElement('video'); video.muted = true; video.srcObject = stream; video.play().catch(()=>{}); }
     status = 'Loading the text reader…';
     paintBtn(); paintPop();
-    loadOCR().then(()=>{ status = 'Watching'; paintBtn(); paintPop(); }).catch(e=>{ status = e.message; paintPop(); });
+    loadOCR().then(()=>{ status = area ? 'Watching' : 'Mark your chat box to start reading kills'; paintBtn(); paintPop(); }).catch(e=>{ status = e.message; paintPop(); });
+
     // timers in a worker keep ticking even when this tab is in the background
     const blob = new Blob([`setInterval(()=>postMessage(0), ${SCAN_MS});`], { type: 'text/javascript' });
     ticker = new Worker(URL.createObjectURL(blob));
@@ -351,15 +411,17 @@
     const on = !!track;
     const ago = t=>{ const s = Math.floor((Date.now() - t) / 1000); return s < 60 ? s + 's ago' : Math.floor(s / 60) + 'm ago'; };
     pop.innerHTML = `<h4>📡 Auto-detect kills</h4>
-      <p>${on ? 'Keep Ragnarok and this tab open. When the game announces <i>“… has killed [MVP] at …”</i>, the kill is logged for everyone.'
-              : 'Share your <b>Ragnarok game window</b>. When the game announces <i>“… has killed [MVP] at …”</i>, the tracker logs the kill for everyone. Nothing touches the game; it only reads the picture.'}</p>
+      <p>${on ? 'Keep Ragnarok and this tab open, with your chat box visible. New <i>“… has killed [MVP] at …”</i> lines in chat are logged for everyone.'
+              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box in the bottom-left</b> (you can adjust the area). When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. Nothing touches the game; it only reads the picture.'}</p>
       <div class="ad-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
       ${on ? `<div class="ad-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
       <div class="ad-log">${log.length ? log.slice(0, 12).map(e=>`<div class="ad-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="ad-none">No kills detected yet.</div>'}</div>
+      ${on ? `<div class="ad-area">${areaIsDefault() ? '✓ Reading the bottom-left chat area' : '✓ Reading your marked chat box'} <button type="button" class="ad-mark">${areaIsDefault() ? 'Adjust' : 'Change'}</button></div>` : ''}
       <div class="ad-acts">${on ? '<button type="button" class="ad-stop">■ Stop auto-detect</button>' : '<button type="button" class="ad-go">▶ Start: share game window</button>'}</div>`;
     const go = pop.querySelector('.ad-go'), st = pop.querySelector('.ad-stop');
     if(go) go.onclick = ()=>{ start(); };
     if(st) st.onclick = ()=>{ stop(); };
+    const mk = pop.querySelector('.ad-mark'); if(mk) mk.onclick = ()=>{ pop.hidden = true; pickArea(); };
   }
   function mount(){
     const r = window.FALSEHOOD_ROLE;
@@ -391,7 +453,8 @@
     const W = src.width || src.naturalWidth, H = src.height || src.naturalHeight;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const cx = cv.getContext('2d'); cx.drawImage(src, 0, 0);
-    const lines = findLines(cx.getImageData(0, 0, W, H));
+    const ax = Math.round(area.x * W), ay = Math.round(area.y * H), aw = Math.round(area.w * W), ah = Math.round(area.h * H);
+    const lines = findLines(cx.getImageData(ax, ay, aw, ah));
     await loadOCR();
     const res = [];
     for(const ln of lines){ const { data } = await worker.recognize(ln.canvas); for(const row of data.text.split(/\n+/)){ const t = row.trim(); if(!t) continue; const p = parseLine(t); const m = p ? resolve(p) : null; res.push({ text: t, match: m ? m.id : null }); } }
