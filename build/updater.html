@@ -1,0 +1,32 @@
+<!-- Update notice: open trackers check for a newer version and offer a one-click refresh -->
+<style>
+#fbUpdate{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:9996;display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px;border-radius:12px;background:#1b1426;color:#f1ecf8;border:1px solid #c03bd6;box-shadow:0 10px 30px rgba(0,0,0,.45);font:13px Inter,system-ui,sans-serif;max-width:calc(100vw - 24px)}
+#fbUpdate[hidden]{display:none!important}
+#fbUpdate b{font-weight:700}
+#fbUpdate button{padding:7px 14px;border-radius:9px;border:1px solid #c03bd6;background:#a02ab8;color:#fff;font:600 13px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+#fbUpdate .u-x{background:transparent;border-color:#4a3a63;color:#b9aecb;padding:7px 10px}
+</style>
+<script>
+(function(){
+  const BUILD = '__BUILD__';
+  const bar = document.createElement('div');
+  bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
+  bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
+  document.body.appendChild(bar);
+  bar.querySelector('.u-go').onclick = ()=> location.reload();
+  let snoozed = 0;
+  bar.querySelector('.u-x').onclick = ()=>{ bar.hidden = true; snoozed = Date.now(); };
+  async function check(){
+    if(location.protocol === 'file:') return;
+    try {
+      const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+      if(!r.ok) return;
+      const v = await r.json();
+      if(v && v.build && v.build !== BUILD && Date.now() - snoozed > 30 * 60000) bar.hidden = false;
+    } catch(e) {}
+  }
+  setTimeout(check, 20000);
+  setInterval(check, 5 * 60000);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') check(); });
+})();
+</script>

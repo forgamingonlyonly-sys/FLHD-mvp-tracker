@@ -26,5 +26,12 @@ auto = root / 'autodetect.html'
 if auto.exists():
     i = src.rfind('</body>')
     src = src[:i] + auto.read_text() + '\n' + src[i:]
+import time, json
+build_id = time.strftime('%Y%m%d%H%M%S', time.gmtime())
+upd = root / 'updater.html'
+if upd.exists():
+    i = src.rfind('</body>')
+    src = src[:i] + upd.read_text().replace('__BUILD__', build_id) + '\n' + src[i:]
+(root.parent / 'version.json').write_text(json.dumps({'build': build_id}))
 (root.parent / 'index.html').write_text(src)
 print('built', len(src))
