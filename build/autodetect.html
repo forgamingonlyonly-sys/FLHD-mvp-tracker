@@ -13,6 +13,7 @@
 .ad-pop h4{margin:0 0 6px;font:700 14px Cinzel,serif;letter-spacing:.03em}
 .ad-pop p{margin:0 0 10px;color:#b9aecb;font-size:12.5px;line-height:1.45}
 .ad-pop .ad-status{font-size:12px;color:#9d8fb3;margin-bottom:8px}
+.ad-pop .ad-diag{font-size:11.5px;color:#8f82a6;margin:-2px 0 8px;line-height:1.4;word-break:break-word}
 .ad-pop .ad-log{max-height:220px;overflow:auto;border-top:1px solid #3b2d52;padding-top:6px}
 .ad-pop .ad-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px}
 .ad-pop .ad-row small{color:#8f82a6;white-space:nowrap}
@@ -148,6 +149,7 @@
   let stream = null, track = null, grabber = null, video = null, ticker = null, busy = false;
   const seenSig = new Map(), recent = new Map(), log = [];
   let lastScan = 0, status = '';
+  const diag = { size: '', black: false, lines: 0, lastLineAt: 0, lastText: '', lastTextAt: 0 };
 
   function addLog(kind, title, sub){
     log.unshift({ kind, title, sub, at: Date.now() });
@@ -155,7 +157,10 @@
     paintPop();
   }
   async function frame(){
-    if(grabber){ try { return await grabber.grabFrame(); } catch(e) {} }
+    if(grabber){
+      try { return await Promise.race([grabber.grabFrame(), new Promise((_, rej)=> setTimeout(()=> rej(new Error('timeout')), 3000))]); }
+      catch(e) { if(!video){ video = document.createElement('video'); video.muted = true; video.srcObject = stream; video.play().catch(()=>{}); } }
+    }
     if(video && video.videoWidth) return video;
     return null;
   }
@@ -173,7 +178,12 @@
       cx.drawImage(f, 0, 0, W, H);
       if(f.close) f.close();
       lastScan = Date.now();
-      const lines = findLines(cx.getImageData(0, 0, W, H));
+      const img = cx.getImageData(0, 0, W, H);
+      // a fully black picture usually means Ragnarok is in full-screen mode
+      let lit = 0; for(let i = 0; i < img.data.length; i += 4 * 97) if(img.data[i] + img.data[i+1] + img.data[i+2] > 30) lit++;
+      diag.size = W + '×' + H; diag.black = lit < 20;
+      const lines = findLines(img);
+      diag.lines = lines.length; if(lines.length) diag.lastLineAt = Date.now();
       const now = Date.now();
       for(const [k, t] of seenSig) if(now - t > 20000) seenSig.delete(k);
       for(const ln of lines){
@@ -181,11 +191,15 @@
         seenSig.set(ln.sig, now);
         await loadOCR();
         const { data } = await worker.recognize(ln.canvas);
-        const p = parseLine(data && data.text);
-        if(!p) continue;
+        const txt = String((data && data.text) || '').replace(/\s+/g, ' ').trim();
+        diag.lastText = txt; diag.lastTextAt = Date.now();
+        const p = parseLine(txt);
+        if(!p){ if(/kil|has|guild/i.test(txt)) addLog('miss', 'Saw a message but couldn’t read it', txt.slice(0, 90)); continue; }
         handleKill(p);
       }
-      status = 'Watching · last check ' + new Date(lastScan).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+      status = diag.black
+        ? '⚠ The shared window is black. Run Ragnarok in windowed mode (Alt+Enter), then Stop and Start again.'
+        : 'Watching · last check ' + new Date(lastScan).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
     } catch(e) {
       status = 'Problem reading the screen: ' + ((e && e.message) || e);
     } finally { busy = false; paintBtn(); }
@@ -261,6 +275,7 @@
       <p>${on ? 'Keep Ragnarok and this tab open. When the game announces <i>“… has killed [MVP] at …”</i>, the kill is logged for everyone.'
               : 'Share your <b>Ragnarok game window</b>. When the game announces <i>“… has killed [MVP] at …”</i>, the tracker logs the kill for everyone. Nothing touches the game; it only reads the picture.'}</p>
       <div class="ad-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
+      ${on ? `<div class="ad-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
       <div class="ad-log">${log.length ? log.slice(0, 12).map(e=>`<div class="ad-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="ad-none">No kills detected yet.</div>'}</div>
       <div class="ad-acts">${on ? '<button type="button" class="ad-stop">■ Stop auto-detect</button>' : '<button type="button" class="ad-go">▶ Start: share game window</button>'}</div>`;
     const go = pop.querySelector('.ad-go'), st = pop.querySelector('.ad-stop');
