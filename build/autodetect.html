@@ -1,43 +1,43 @@
 <!-- Auto-detect: share the Ragnarok window; the tracker reads "… has killed [MVP] at Map." announcements and logs the kill -->
 <style>
-.ad-btn{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;letter-spacing:.04em;padding:3px 10px;border-radius:999px;border:1px solid rgba(127,110,150,.45);background:transparent;color:inherit;cursor:pointer;vertical-align:middle;white-space:nowrap}
-.ad-btn:hover{border-color:#b77ee8}
-.ad-btn .ad-dot{width:7px;height:7px;border-radius:50%;background:#8f82a6}
-.ad-btn.on{border-color:#2fbf71;color:#2fbf71}
-.ad-btn.on .ad-dot{background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.2);animation:adPulse 1.6s ease-in-out infinite}
-.ad-btn.busy .ad-dot{background:#e0a100}
-@keyframes adPulse{50%{opacity:.35}}
-@media (prefers-reduced-motion:reduce){.ad-btn.on .ad-dot{animation:none}}
-.ad-pop{position:fixed;z-index:9998;width:min(340px,calc(100vw - 16px));background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:12px;padding:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);font:13px Inter,system-ui,sans-serif}
-.ad-pop[hidden]{display:none!important}
-.ad-pop h4{margin:0 0 6px;font:700 14px Cinzel,serif;letter-spacing:.03em}
-.ad-pop p{margin:0 0 10px;color:#b9aecb;font-size:12.5px;line-height:1.45}
-.ad-pop .ad-status{font-size:12px;color:#9d8fb3;margin-bottom:8px}
-.ad-pop .ad-diag{font-size:11.5px;color:#8f82a6;margin:-2px 0 8px;line-height:1.4;word-break:break-word}
-.ad-pop .ad-area{font-size:12px;color:#cfc4df;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.ad-pop .ad-area button{padding:3px 10px;border-radius:8px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 12px Inter,system-ui,sans-serif;cursor:pointer}
-.ad-pick{position:fixed;inset:0;z-index:9999;background:rgba(10,6,18,.82);display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif}
-.ad-pick-card{background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:14px;padding:14px;display:grid;gap:8px;max-width:94vw}
-.ad-pick-card>b{font:700 16px Cinzel,serif}
-.ad-pick-card>span{font-size:12.5px;color:#b9aecb}
-.ad-pick-stage{position:relative;cursor:crosshair;touch-action:none;line-height:0}
-.ad-pick-stage canvas{border-radius:6px;max-width:100%}
-.ad-pick-rect{position:absolute;border:2px solid #2fbf71;background:rgba(47,191,113,.15);box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
-.ad-pick-rect[hidden]{display:none}
-.ad-pick-acts{display:flex;gap:8px;justify-content:flex-end}
-.ad-pick-acts button{padding:8px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
-.ad-pick-acts .ad-pick-ok{background:#a02ab8;border-color:#c03bd6}
-.ad-pick-acts button:disabled{opacity:.5;cursor:default}
-.ad-pop .ad-log{max-height:220px;overflow:auto;border-top:1px solid #3b2d52;padding-top:6px}
-.ad-pop .ad-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px}
-.ad-pop .ad-row small{color:#8f82a6;white-space:nowrap}
-.ad-pop .ad-row.ok b{color:#7be0a5}
-.ad-pop .ad-row.skip b{color:#e0c27a}
-.ad-pop .ad-row.miss b{color:#ff9aa8}
-.ad-pop .ad-none{color:#8f82a6;font-size:12px;padding:4px 0}
-.ad-pop .ad-acts{display:flex;gap:8px;margin-top:10px}
-.ad-pop button.ad-go{flex:1;padding:8px 12px;border-radius:9px;border:1px solid #c03bd6;background:#a02ab8;color:#fff;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
-.ad-pop button.ad-stop{flex:1;padding:8px 12px;border-radius:9px;border:1px solid #6b3b4a;background:#3a1f29;color:#ffb3c0;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+.kd-btn{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:600 11px Inter,system-ui,sans-serif;letter-spacing:.04em;padding:3px 10px;border-radius:999px;border:1px solid rgba(127,110,150,.45);background:transparent;color:inherit;cursor:pointer;vertical-align:middle;white-space:nowrap}
+.kd-btn:hover{border-color:#b77ee8}
+.kd-btn .kd-dot{width:7px;height:7px;border-radius:50%;background:#8f82a6}
+.kd-btn.on{border-color:#2fbf71;color:#2fbf71}
+.kd-btn.on .kd-dot{background:#2fbf71;box-shadow:0 0 0 3px rgba(47,191,113,.2);animation:kdPulse 1.6s ease-in-out infinite}
+.kd-btn.busy .kd-dot{background:#e0a100}
+@keyframes kdPulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.kd-btn.on .kd-dot{animation:none}}
+.kd-pop{position:fixed;z-index:9998;width:min(340px,calc(100vw - 16px));background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:12px;padding:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);font:13px Inter,system-ui,sans-serif}
+.kd-pop[hidden]{display:none!important}
+.kd-pop h4{margin:0 0 6px;font:700 14px Cinzel,serif;letter-spacing:.03em}
+.kd-pop p{margin:0 0 10px;color:#b9aecb;font-size:12.5px;line-height:1.45}
+.kd-pop .kd-status{font-size:12px;color:#9d8fb3;margin-bottom:8px}
+.kd-pop .kd-diag{font-size:11.5px;color:#8f82a6;margin:-2px 0 8px;line-height:1.4;word-break:break-word}
+.kd-pop .kd-area{font-size:12px;color:#cfc4df;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.kd-pop .kd-area button{padding:3px 10px;border-radius:8px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 12px Inter,system-ui,sans-serif;cursor:pointer}
+.kd-pick{position:fixed;inset:0;z-index:9999;background:rgba(10,6,18,.82);display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif}
+.kd-pick-card{background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:14px;padding:14px;display:grid;gap:8px;max-width:94vw}
+.kd-pick-card>b{font:700 16px Cinzel,serif}
+.kd-pick-card>span{font-size:12.5px;color:#b9aecb}
+.kd-pick-stage{position:relative;cursor:crosshair;touch-action:none;line-height:0}
+.kd-pick-stage canvas{border-radius:6px;max-width:100%}
+.kd-pick-rect{position:absolute;border:2px solid #2fbf71;background:rgba(47,191,113,.15);box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
+.kd-pick-rect[hidden]{display:none}
+.kd-pick-acts{display:flex;gap:8px;justify-content:flex-end}
+.kd-pick-acts button{padding:8px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+.kd-pick-acts .kd-pick-ok{background:#a02ab8;border-color:#c03bd6}
+.kd-pick-acts button:disabled{opacity:.5;cursor:default}
+.kd-pop .kd-log{max-height:220px;overflow:auto;border-top:1px solid #3b2d52;padding-top:6px}
+.kd-pop .kd-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px}
+.kd-pop .kd-row small{color:#8f82a6;white-space:nowrap}
+.kd-pop .kd-row.ok b{color:#7be0a5}
+.kd-pop .kd-row.skip b{color:#e0c27a}
+.kd-pop .kd-row.miss b{color:#ff9aa8}
+.kd-pop .kd-none{color:#8f82a6;font-size:12px;padding:4px 0}
+.kd-pop .kd-acts{display:flex;gap:8px;margin-top:10px}
+.kd-pop button.kd-go{flex:1;padding:8px 12px;border-radius:9px;border:1px solid #c03bd6;background:#a02ab8;color:#fff;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+.kd-pop button.kd-stop{flex:1;padding:8px 12px;border-radius:9px;border:1px solid #6b3b4a;background:#3a1f29;color:#ffb3c0;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
 </style>
 <script>
 (function(){
@@ -193,7 +193,7 @@
   const GONE_MS = 3 * 60000;    // a kill line must be gone this long before the same line counts again
   let warm = false;             // the first read after Start only notes what's already in chat
   let lastScan = 0, status = '', lastFrameSize = null;
-  const AREA_KEY = 'falsehood-ad-chat';
+  const AREA_KEY = 'falsehood-kd-chat';
   // default: the whole bottom strip, so the chat box is found whether it's bottom-left, middle or right
   const DEFAULT_AREA = { x: 0, y: 0.7, w: 1, h: 0.3 };
   let area = (()=>{ try { const a = JSON.parse(localStorage.getItem(AREA_KEY) || 'null'); return a && a.w > 0 && a.h > 0 ? a : null; } catch(e) { return null; } })() || DEFAULT_AREA;
@@ -205,12 +205,12 @@
     const W = f.width || f.videoWidth, H = f.height || f.videoHeight;
     const shot = document.createElement('canvas'); shot.width = W; shot.height = H; shot.getContext('2d').drawImage(f, 0, 0, W, H);
     if(f.close) f.close();
-    const ov = document.createElement('div'); ov.className = 'ad-pick';
-    ov.innerHTML = `<div class="ad-pick-card"><b>Drag a box around your chat window</b><span>Only the green kill lines inside this box are read. Include the whole chat area.</span>
-      <div class="ad-pick-stage"><canvas></canvas><div class="ad-pick-rect" hidden></div></div>
-      <div class="ad-pick-acts"><button type="button" class="ad-pick-cancel">Cancel</button><button type="button" class="ad-pick-ok" disabled>Use this area</button></div></div>`;
+    const ov = document.createElement('div'); ov.className = 'kd-pick';
+    ov.innerHTML = `<div class="kd-pick-card"><b>Drag a box around your chat window</b><span>Only the green kill lines inside this box are read. Include the whole chat area.</span>
+      <div class="kd-pick-stage"><canvas></canvas><div class="kd-pick-rect" hidden></div></div>
+      <div class="kd-pick-acts"><button type="button" class="kd-pick-cancel">Cancel</button><button type="button" class="kd-pick-ok" disabled>Use this area</button></div></div>`;
     document.body.appendChild(ov);
-    const cv = ov.querySelector('canvas'), stage = ov.querySelector('.ad-pick-stage'), rect = ov.querySelector('.ad-pick-rect'), ok = ov.querySelector('.ad-pick-ok');
+    const cv = ov.querySelector('canvas'), stage = ov.querySelector('.kd-pick-stage'), rect = ov.querySelector('.kd-pick-rect'), ok = ov.querySelector('.kd-pick-ok');
     const scale = Math.min(1, (innerWidth * 0.9) / W, (innerHeight * 0.68) / H);
     cv.width = Math.round(W * scale); cv.height = Math.round(H * scale);
     cv.getContext('2d').drawImage(shot, 0, 0, cv.width, cv.height);
@@ -222,7 +222,7 @@
     stage.addEventListener('pointermove', e=>{ if(!drag) return; const p = pos(e); sel = { x: Math.min(p.x, drag.x), y: Math.min(p.y, drag.y), w: Math.abs(p.x - drag.x), h: Math.abs(p.y - drag.y) }; draw(); });
     stage.addEventListener('pointerup', ()=>{ drag = null; });
     draw();
-    ov.querySelector('.ad-pick-cancel').onclick = ()=> ov.remove();
+    ov.querySelector('.kd-pick-cancel').onclick = ()=> ov.remove();
     ok.onclick = ()=>{
       area = { x: sel.x / cv.width, y: sel.y / cv.height, w: sel.w / cv.width, h: sel.h / cv.height };
       try { localStorage.setItem(AREA_KEY, JSON.stringify(area)); } catch(e) {}
@@ -402,9 +402,9 @@
     const on = !!track;
     btn.classList.toggle('on', on);
     btn.classList.toggle('busy', on && !worker);
-    btn.innerHTML = `<span class="ad-dot"></span>${on ? 'Auto-detect on' : 'Auto-detect'}`;
+    btn.innerHTML = `<span class="kd-dot"></span>${on ? 'Auto-detect on' : 'Auto-detect'}`;
     btn.title = on ? 'Reading kill announcements from the shared game window. Click for details.' : 'Share your Ragnarok window and kills are logged automatically';
-    const st = pop && pop.querySelector('.ad-status'); if(st) st.textContent = status;
+    const st = pop && pop.querySelector('.kd-status'); if(st) st.textContent = status;
   }
   function paintPop(){
     if(!pop) return;
@@ -413,24 +413,24 @@
     pop.innerHTML = `<h4>📡 Auto-detect kills</h4>
       <p>${on ? 'Keep Ragnarok and this tab open, with your chat box visible. New <i>“… has killed [MVP] at …”</i> lines in chat are logged for everyone.'
               : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box along the bottom</b> of the game (left, middle or right); you can adjust the area. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. Nothing touches the game; it only reads the picture.'}</p>
-      <div class="ad-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
-      ${on ? `<div class="ad-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
-      <div class="ad-log">${log.length ? log.slice(0, 12).map(e=>`<div class="ad-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="ad-none">No kills detected yet.</div>'}</div>
-      ${on ? `<div class="ad-area">${areaIsDefault() ? '✓ Reading the bottom of the game window' : '✓ Reading your marked chat box'} <button type="button" class="ad-mark">${areaIsDefault() ? 'Adjust' : 'Change'}</button></div>` : ''}
-      <div class="ad-acts">${on ? '<button type="button" class="ad-stop">■ Stop auto-detect</button>' : '<button type="button" class="ad-go">▶ Start: share game window</button>'}</div>`;
-    const go = pop.querySelector('.ad-go'), st = pop.querySelector('.ad-stop');
+      <div class="kd-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
+      ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
+      <div class="kd-log">${log.length ? log.slice(0, 12).map(e=>`<div class="kd-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="kd-none">No kills detected yet.</div>'}</div>
+      ${on ? `<div class="kd-area">${areaIsDefault() ? '✓ Reading the bottom of the game window' : '✓ Reading your marked chat box'} <button type="button" class="kd-mark">${areaIsDefault() ? 'Adjust' : 'Change'}</button></div>` : ''}
+      <div class="kd-acts">${on ? '<button type="button" class="kd-stop">■ Stop auto-detect</button>' : '<button type="button" class="kd-go">▶ Start: share game window</button>'}</div>`;
+    const go = pop.querySelector('.kd-go'), st = pop.querySelector('.kd-stop');
     if(go) go.onclick = ()=>{ start(); };
     if(st) st.onclick = ()=>{ stop(); };
-    const mk = pop.querySelector('.ad-mark'); if(mk) mk.onclick = ()=>{ pop.hidden = true; pickArea(); };
+    const mk = pop.querySelector('.kd-mark'); if(mk) mk.onclick = ()=>{ pop.hidden = true; pickArea(); };
   }
   function mount(){
     const r = window.FALSEHOOD_ROLE;
     if(r !== 'editor' && r !== 'admin' && r !== 'timer') return;   // anyone who can log kills
     const anchor = document.querySelector('.fb-online') || document.getElementById('fbRole');
     if(!anchor || btn) return;
-    btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ad-btn';
+    btn = document.createElement('button'); btn.type = 'button'; btn.className = 'kd-btn';
     anchor.after(btn);
-    pop = document.createElement('div'); pop.className = 'ad-pop'; pop.hidden = true;
+    pop = document.createElement('div'); pop.className = 'kd-pop'; pop.hidden = true;
     document.body.appendChild(pop);
     btn.onclick = e=>{
       e.stopPropagation();
