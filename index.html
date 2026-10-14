@@ -324,7 +324,8 @@ body.no-delete .st-del{display:none!important}
         e.preventDefault();
         const pass = inp.value;
         const nick = nickIn ? cleanNick(nickIn.value) : '';
-        if(nickIn && nick.length < 2){ err.textContent = 'Enter your in-game name (at least 2 characters).'; nickIn.focus(); return; }
+        const nErr = nickIn ? nickError(nick) : '';
+        if(nErr){ err.textContent = nErr; nickIn.focus(); nickIn.select(); return; }
         if(!pass) return;
         go.disabled = true; err.textContent = '';
         try {
@@ -394,6 +395,19 @@ body.no-delete .st-del{display:none!important}
   const NICK_KEY = 'falsehood-nick';
   let myNick = '';
   const cleanNick = v=> String(v || '').replace(/\s+/g, ' ').trim().slice(0, 24);
+  // names that would confuse the Online list, history or access badges aren't allowed
+  const RESERVED = ['nonickname','nickname','noname','name','myname','yourname','ign','guildmate','aguildmate','amember','member','someone',
+    'unknown','anonymous','anon','user','player','guest','test','tester','null','undefined','none','na','nil','blank','empty',
+    'admin','administrator','flhd','flhdog','falsehood','moderator','mod','officer','gm','gamemaster','leader','guildleader','owner',
+    'you','me','timer','timers','viewer','viewonly','editor','system','bot','claude'];
+  function nickError(v){
+    const n = cleanNick(v), k = n.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if(n.length < 2) return 'Enter your in-game name (at least 2 characters).';
+    if(!/[a-z0-9]/i.test(n)) return 'Use your real in-game name (letters or numbers).';
+    if(RESERVED.includes(k) || /^no(nick|name)/.test(k) || /^(admin|flhd)\d*$/.test(k)) return '“' + n + '” can’t be used. Enter your real in-game name.';
+    return '';
+  }
+  window.falsehoodNickError = nickError;
   async function saveNick(uid, nick){
     myNick = nick; lsSetX(NICK_KEY, nick);
     try { names[uid] = nick; } catch(e) {}
@@ -416,7 +430,8 @@ body.no-delete .st-del{display:none!important}
       g.querySelector('form').onsubmit = e=>{
         e.preventDefault();
         const n = cleanNick(nickIn.value);
-        if(n.length < 2){ err.textContent = 'At least 2 characters.'; return; }
+        const nErr = nickError(n);
+        if(nErr){ err.textContent = nErr; nickIn.select(); return; }
         g.remove(); resolve(n);
       };
     });
@@ -425,7 +440,8 @@ body.no-delete .st-del{display:none!important}
     try {
       const d = await fs.collection('names').doc(uid).get();
       const n = d.exists ? cleanNick((d.data() || {}).name) : '';
-      if(n){ myNick = n; lsSetX(NICK_KEY, n); return; }
+      if(n && !nickError(n)){ myNick = n; lsSetX(NICK_KEY, n); return; }
+      if(n) lsSetX(NICK_KEY, '');
     } catch(e) {}
     if(document.readyState === 'loading') await new Promise(r=> document.addEventListener('DOMContentLoaded', r, { once:true }));
     await saveNick(uid, await askNick());
@@ -2454,6 +2470,8 @@ function paintMyName(){
       <input id="stMeName" class="st-modal-input" maxlength="24" placeholder="e.g. Scrumzilla" value="${escX(mine || '')}">`,
       ()=>{
         const v = document.getElementById('stMeName').value.trim().slice(0, 24);
+        const nErr = window.falsehoodNickError ? window.falsehoodNickError(v) : '';
+        if(nErr){ showToast(nErr); return; }
         const ref = db.collection('names').doc(me);
         (v ? ref.set({ name: v }) : ref.delete()).catch(lootError);
         if(v) nickNames[me] = v; else delete nickNames[me];
@@ -4223,7 +4241,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014092342';
+  const BUILD = '20261014092611';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';

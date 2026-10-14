@@ -15,6 +15,11 @@ fixes = {
   "showNotice('Not connected to the shared board.":
   "showNotice((window.FALSEHOOD_FB_ERROR ? '<b>Firebase error: ' + window.FALSEHOOD_FB_ERROR + '.</b> ' : '') + 'Not connected to the shared board.",
   "const canEditStorage = ()=>{ try {": "const canEditStorage = ()=>{ if(window.FALSEHOOD_ROLE === 'timer') return false; try {",
+  """        const v = document.getElementById('stMeName').value.trim().slice(0, 24);
+        const ref = db.collection('names').doc(me);""": """        const v = document.getElementById('stMeName').value.trim().slice(0, 24);
+        const nErr = window.falsehoodNickError ? window.falsehoodNickError(v) : '';
+        if(nErr){ showToast(nErr); return; }
+        const ref = db.collection('names').doc(me);""",
   "'your Claude name'": "'a guildmate (no name set)'",
   "You can see the guild’s timers but can’t log kills. Ask the page owner to invite you as an <b>Editor</b>.":
   "<b>View only.</b> You can see the timers and storage but can’t make changes.<button class=\"unlock\" onclick=\"falsehoodUnlock()\">🔑 Enter editor password</button>",
