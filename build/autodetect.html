@@ -29,6 +29,8 @@
 .kd-pick-acts button{padding:8px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
 .kd-pick-acts .kd-pick-ok{background:#a02ab8;border-color:#c03bd6}
 .kd-pick-acts button:disabled{opacity:.5;cursor:default}
+.kd-pop .kd-prev{margin:0 0 8px;display:grid;gap:4px;font-size:11px;color:#8f82a6}
+.kd-pop .kd-thumb{width:100%;height:auto;border-radius:6px;border:1px solid #3b2d52;background:#000}
 .kd-pop .kd-log{max-height:220px;overflow-y:auto;overflow-x:hidden;border-top:1px solid #3b2d52;padding-top:6px}
 .kd-pop .kd-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px}
 .kd-pop .kd-row>span{min-width:0;overflow-wrap:anywhere}
@@ -250,7 +252,10 @@
       status = 'Watching'; paintBtn();
     };
   }
-  const diag = { size: '', black: false, lines: 0, lastLineAt: 0, lastText: '', lastTextAt: 0 };
+  const diag = { size: '', black: false, lines: 0, lastLineAt: 0, lastText: '', lastTextAt: 0, outside: 0, frozenSince: 0, sum: -1, frozen: false };
+  // small copy of the last frame, for the preview in the panel
+  const thumb = document.createElement('canvas');
+  let scanN = 0;
 
   function addLog(kind, title, sub){
     log.unshift({ kind, title, sub, at: Date.now() });
@@ -291,6 +296,30 @@
       diag.size = W + '×' + H + ' · reading chat area ' + aw + '×' + ah; diag.black = lit < 20;
       const lines = findLines(img, isAnn, true);
       diag.lines = lines.filter(l=> !l.short).length; if(diag.lines) diag.lastLineAt = Date.now();
+      scanN++;
+      // is the picture changing at all? (a minimized game sends one frozen picture)
+      {
+        const full = cx.getImageData(0, 0, W, H).data;
+        let sum = 0; for(let i = 0; i < full.length; i += 4 * 37) sum = (sum * 31 + full[i] + full[i+1] * 3 + full[i+2] * 7) % 2147483647;
+        if(sum === diag.sum){ if(!diag.frozenSince) diag.frozenSince = Date.now(); }
+        else { diag.frozenSince = 0; diag.sum = sum; }
+        diag.frozen = !!diag.frozenSince && Date.now() - diag.frozenSince > 60000;
+        // no kill-green inside the reading area: look for it in the rest of the window
+        if(!diag.lines && scanN % 3 === 0){
+          let out = 0;
+          for(let y = 0; y < H; y += 1){
+            const inA = y >= ay && y < ay + ah;
+            for(let x = 0, i = y * W * 4; x < W; x++, i += 4){
+              if(inA && x >= ax && x < ax + aw) continue;
+              if(isAnn(full[i], full[i+1], full[i+2])) out++;
+            }
+          }
+          diag.outside = out;
+        } else if(diag.lines) diag.outside = 0;
+        const tw = 300, th = Math.round(H * tw / W);
+        thumb.width = tw; thumb.height = th;
+        thumb.getContext('2d').drawImage(cv, 0, 0, tw, th);
+      }
       const evLines = EV_COLORS.flatMap((fn, ci)=> findLines(img, fn).map(l=> (l.sig = 'e' + ci + l.sig, l)));
       const now = Date.now();
       for(const [k, v] of seenSig) if(now - v.at > 10 * 60000) seenSig.delete(k);
@@ -371,6 +400,10 @@
       if(worker) warm = true;
       status = diag.black
         ? '⚠ The shared window is black. Run Ragnarok in windowed mode (Alt+Enter), then Stop and Start again.'
+        : diag.frozen
+        ? '⚠ The game picture hasn’t changed for a while. Is Ragnarok minimized? Restore it (it can sit behind other windows, just not minimized).'
+        : diag.outside > 150
+        ? '⚠ Green kill text is on screen but outside the area being read. Press Adjust and draw the box around your chat.'
         : 'Watching · last check ' + new Date(lastScan).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
     } catch(e) {
       status = 'Problem reading the screen: ' + ((e && e.message) || e);
@@ -549,8 +582,16 @@
       <div class="kd-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
       ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
       <div class="kd-log">${log.length ? log.slice(0, 12).map(e=>`<div class="kd-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="kd-none">Nothing detected yet.</div>'}</div>
+      ${on && thumb.width ? '<div class="kd-prev"><span>What it sees (green box = area read)</span><canvas class="kd-thumb"></canvas></div>' : ''}
       ${on ? `<div class="kd-area">${areaIsDefault() ? '✓ Reading the bottom of the game window' : '✓ Reading your marked chat box'} <button type="button" class="kd-mark">${areaIsDefault() ? 'Adjust' : 'Change'}</button></div>` : ''}
       <div class="kd-acts">${on ? '<button type="button" class="kd-stop">■ Stop auto-detect</button>' : '<button type="button" class="kd-go">▶ Start: share game window</button>'}</div>`;
+    const tc = pop.querySelector('.kd-thumb');
+    if(tc){
+      tc.width = thumb.width; tc.height = thumb.height;
+      const g = tc.getContext('2d'); g.drawImage(thumb, 0, 0);
+      g.strokeStyle = '#2fbf71'; g.lineWidth = 2;
+      g.strokeRect(area.x * tc.width + 1, area.y * tc.height + 1, area.w * tc.width - 2, area.h * tc.height - 2);
+    }
     const go = pop.querySelector('.kd-go'), st = pop.querySelector('.kd-stop');
     if(go) go.onclick = ()=>{ start(); };
     if(st) st.onclick = ()=>{ stop(); };
@@ -582,6 +623,7 @@
 
   window.__adLog = (k, t, sub)=> addLog(k, t, sub);
   window.__adEvent = t=> parseEvent(t);
+  window.__adDiag = ()=> diag;
   window.__adEventLog = t=>{ const e = parseEvent(t); if(e) handleEvent(e); return e; };
   window.__adParse = t=>{ const p = parseLine(t); if(!p) return null; const m = matchMvp(p.mvp, p.map) || (p.loose ? findInWords(p.after || p.text, p.map) : null) || byMap(p.map); return { mvp: p.mvp, map: p.map, killer: p.killer, loose: !!p.loose, id: m ? m.id : null }; };
   // for testing: window.__adTest(imageOrCanvas) runs one frame through the reader
