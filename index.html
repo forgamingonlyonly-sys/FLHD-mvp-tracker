@@ -1158,14 +1158,18 @@ input[type=number]:focus { outline: none; border-color: var(--accent-2); }
 .nu-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 16px; color: var(--waiting); }
 .nu-empty { color: var(--text-3); }
 /* Boss Event strip (under Next up) */
-.bebar { border-left-color: var(--overdue); cursor: pointer; }
-.bebar.is-dead, .bebar.is-none { border-left-color: var(--text-3); cursor: default; }
-.bebar.is-dead { cursor: pointer; }
+.bebar { border-left-color: var(--overdue); }
+.bebar.is-dead, .bebar.is-none { border-left-color: var(--text-3); }
 .bebar .nu-label { background: #f0997b; color: #4a1b0c; }
 .bebar.is-dead .nu-label, .bebar.is-none .nu-label { background: var(--surface-2); color: var(--text-2); }
 .be-map { color: var(--text-2); }
 .be-up { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 16px; color: var(--overdue); }
 .be-ago { font-variant-numeric: tabular-nums; color: var(--text-3); }
+.be-acts { margin-left: auto; display: inline-flex; gap: 6px; }
+.be-acts .btn { font-size: 13px; padding: 4px 12px; }
+.be-edit { border-radius: 6px; padding: 0 3px; outline: none; }
+.be-edit:hover, .be-edit:focus { background: var(--surface-2); cursor: text; }
+.bebar.flash { animation: rowFlash 2.2s ease-out; }
 /* compact mode */
 .compact-btn { border-radius: 10px; padding: 7px 12px; color: var(--text-2); }
 .compact-btn[aria-pressed="true"] { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
@@ -1873,7 +1877,7 @@ const MINI_IDS = ['angel_toy','angel_mjolnir','ghost_poring','angel_poring','ang
 mvps.forEach(m=>{ m.type = MINI_IDS.includes(m.id) ? 'mini' : 'mvp'; });
 let tabSig = '';
 let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); return t === 'mini' || t === 'storage' || t === 'timer' ? t : 'mvp'; } catch(e) { return 'mvp'; } })();
-const inTab = m => m.type === currentTab;
+const inTab = m => m.type === currentTab && m.id !== 'boss_event';
 function tabSignature(){ return currentTab + ['mvp','mini'].map(t=>mvps.some(m=>m.type===t && getStatus(m)==='window')).join(); }
 const TAB_LABEL = { mvp:'MVP', mini:'MINI MVP', storage:'STORAGE', timer:'TIMER' };
 function renderTabs(){
@@ -1890,7 +1894,7 @@ function renderTabs(){
       const n = (typeof storageItems !== 'undefined' ? storageItems : []).filter(x=>x.status !== 'sold').length;
       return `<button class="tab tab-storage${t === currentTab ? ' active' : ''}" data-tab="storage" role="tab" aria-selected="${t === currentTab}">STORAGE<span class="count">${n}</span></button>`;
     }
-    const list = mvps.filter(m=>m.type === t && !isHidden(m));
+    const list = mvps.filter(m=>m.type === t && m.id !== 'boss_event' && !isHidden(m));
     const live = list.some(m=>getStatus(m) === 'window');
     return `<button class="tab${t === currentTab ? ' active' : ''}" data-tab="${t}" role="tab" aria-selected="${t === currentTab}">`
       + `${live ? '<span class="live-dot" title="Something is floating"></span>' : ''}${TAB_LABEL[t]}<span class="count">${list.length}</span></button>`;
@@ -1912,7 +1916,7 @@ let searchQ = '';
 const matchesSearch = m => (m.name + ' ' + (m.location || '')).toLowerCase().includes(searchQ);
 // While searching, look across both tabs; otherwise show the current tab
 function visibleList(){
-  return mvps.filter(m=> !isHidden(m) && (searchQ ? matchesSearch(m) : inTab(m)));
+  return mvps.filter(m=> m.id !== 'boss_event' && !isHidden(m) && (searchQ ? matchesSearch(m) : inTab(m)));
 }
 // An MVP overdue for 3+ hours was almost certainly killed without being logged: treat it as Unknown again
 const STALE_MS = 3 * 60 * 60000;
@@ -2158,29 +2162,40 @@ let nextSig = null;   // null so the empty-state message draws on first load
 const beBar = document.createElement('div');
 beBar.className = 'nextup bebar is-none';
 beBar.setAttribute('aria-label', 'Boss Event');
-beBar.title = 'Show the Boss Event row';
 nextUp.after(beBar);
-beBar.onclick = ()=>{
-  const m = byId.boss_event;
-  if(!m || !m.lastDeath) return;
-  if(searchQ){ const s = document.getElementById('mvpSearch'); s.value = ''; s.oninput(); }
-  A.goTo(m);
-};
 let beSig = null;
 function renderBossBar(){
   const m = byId.boss_event, now = Date.now();
   const mm = m && /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
   const map = mm ? mm[1] : '', boss = mm ? mm[2] : 'Boss';
   const state = !m || !m.lastDeath ? 'none' : m.ev === 'spawn' ? 'up' : 'dead';
-  const sig = state + (m && m.lastDeath) + (m && m.location) + (m && m.killer);
-  if(sig !== beSig){
+  const can = A.canKill() && mode !== 'connecting';
+  const undo = m && canUndo(m);
+  const sig = state + (m && m.lastDeath) + (m && m.location) + (m && m.killer) + can + undo;
+  if(sig !== beSig && !(document.activeElement && document.activeElement.classList.contains('be-edit'))){
     beSig = sig;
     beBar.className = 'nextup bebar' + (state === 'none' ? ' is-none' : state === 'dead' ? ' is-dead' : '');
     beBar.innerHTML = '<span class="nu-label">Boss Event</span>' + (state === 'none'
       ? '<span class="nu-empty">No event recorded yet · random, about hourly</span>'
       : `<span class="nu-name">${escX(boss)}</span>${map ? `<span class="be-map">${escX(map)}</span>` : ''}<span class="sep">·</span>` + (state === 'up'
         ? '<span class="be-up"></span>'
-        : `<span class="be-map">killed ${formatTime(m.lastDeath)}${m.killer ? ' by ' + escX(m.killer) : ''}</span><span class="sep">·</span><span class="be-ago"></span>`));
+        : `<span class="be-map">killed ${formatTime(m.lastDeath)}${m.killer ? ' by ' + escX(m.killer) : ''}</span><span class="sep">·</span><span class="be-ago"></span>`))
+      + (m && m.auto ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat">📡</span>' : '')
+      + (can ? `<span class="be-acts">${state === 'up' ? '<button class="btn btn-primary be-kill" title="Mark the Boss Event killed now">Killed</button>' : ''}${undo ? '<button class="btn undo be-undo" title="Undo the last change">↶ Undo</button>' : ''}</span>` : '');
+    const k = beBar.querySelector('.be-kill'); if(k) k.onclick = ()=> logKill(m, 0);
+    const u = beBar.querySelector('.be-undo'); if(u) u.onclick = ()=> undoKill(m);
+    // fix a misread map name: click it, type, Enter
+    const mapEl = beBar.querySelector('.be-map');
+    if(can && mapEl && state !== 'none' && map){
+      mapEl.classList.add('be-edit'); mapEl.contentEditable = 'true'; mapEl.spellcheck = false;
+      mapEl.title = 'Click to fix the map name';
+      mapEl.onkeydown = e=>{ if(e.key === 'Enter'){ e.preventDefault(); mapEl.blur(); } };
+      mapEl.onblur = ()=>{
+        const v = mapEl.textContent.trim().replace(/\s+/g, '');
+        if(v && v !== map){ m.location = v + ' (' + boss + ')'; persist(m); }
+        beSig = null; renderBossBar();
+      };
+    }
   }
   if(state === 'up') beBar.querySelector('.be-up').textContent = 'up for ' + fmtClock(now - m.lastDeath);
   if(state === 'dead'){ const mins = Math.floor((now - m.lastDeath) / 60000); beBar.querySelector('.be-ago').textContent = mins < 1 ? 'just now' : mins < 60 ? mins + ' min ago' : Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm ago'; }
@@ -3158,6 +3173,11 @@ const A = {
     } catch(e) { return ''; }
   },
   goTo(m){
+    if(m.id === 'boss_event'){
+      beBar.scrollIntoView({ block:'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+      beBar.classList.remove('flash'); void beBar.offsetWidth; beBar.classList.add('flash');
+      return;
+    }
     if(currentTab !== m.type){
       currentTab = m.type;
       try { localStorage.setItem('falsehood-tab', currentTab); } catch(e) {}
@@ -4949,7 +4969,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014222813';
+  const BUILD = '20261014223228';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
