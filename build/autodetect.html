@@ -54,8 +54,9 @@
   // Poring World kill lines are one exact green: about rgb(140, 255, 123). Matching that shade tightly
   // ignores grass, trees and other green things on screen.
   const isAnn = (r, g, b)=> g >= 225 && r >= 110 && r <= 170 && b >= 95 && b <= 150 && g - r >= 75;
-  // "[PW2 Boss Event] X has been defeated in map by Y" is pure yellow: that line logs the Boss Event row
-  const EV_COLORS = [ (r, g, b)=> r >= 235 && g >= 235 && b <= 45 ];
+  // "[PW2 Boss Event]" lines that update the Boss Event row:
+  // red "X has spawned in map" (boss is up now) and yellow "X has been defeated in map by Y" (died now)
+  const EV_COLORS = [ (r, g, b)=> r >= 235 && g <= 45 && b <= 45, (r, g, b)=> r >= 235 && g >= 235 && b <= 45 ];
   const SCALE = 4;
   let tessP = null, worker = null;
   function loadOCR(){
@@ -450,6 +451,7 @@
   const evTitle = e=> e.kind === 'gather' ? `gathering in ${e.map || '?'}` : `${e.boss || 'MVP'} ${e.kind === 'dead' ? 'defeated' : 'spawned'} in ${e.map || '?'}`;
   // the yellow "has been defeated" line: Boss Event row → died now, location = that map (and which boss it was)
   function handleEvent(e){
+    if(e.kind === 'spawn') return handleSpawn(e);
     if(e.kind !== 'dead') return;
     const m = (typeof byId !== 'undefined' && byId) ? byId.boss_event : null;
     const who = e.killer ? 'by ' + e.killer : '';
@@ -468,6 +470,27 @@
     } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
     addLog('ok', `Boss Event logged: ${e.boss || 'MVP'}`, [e.map, who].filter(Boolean).join(' · '));
     try { showToast(`📡 Boss Event: ${e.boss || 'MVP'} defeated in ${e.map || '?'}${e.killer ? ' by ' + e.killer : ''}`); } catch(x) {}
+  }
+
+  // red "has spawned" line: show the Boss Event row as up right now, at the new map
+  function handleSpawn(e){
+    const m = (typeof byId !== 'undefined' && byId) ? byId.boss_event : null;
+    if(!m){ addLog('miss', 'Boss Event row not found', evTitle(e)); return; }
+    const now = Date.now(), at = now - m.min * 60000;
+    if((recent.get('boss_event_spawn') || 0) > now - SAME_KILL_MS || (m.lastDeath && Math.abs(m.lastDeath - at) < SAME_KILL_MS)){
+      recent.set('boss_event_spawn', now); addLog('skip', `Boss Event spawn (${e.boss}) already logged`, e.map || ''); return;
+    }
+    let can = true;
+    try { can = A.canKill(); } catch(x) {}
+    if(!can){ addLog('miss', 'Boss Event: you can’t log it', evTitle(e)); return; }
+    recent.set('boss_event_spawn', now);
+    try {
+      if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
+      logKill(m, m.min);
+      if(typeof prevStatus !== 'undefined') prevStatus[m.id] = 'waiting';   // ring the spawn alert here too
+    } catch(x) { addLog('miss', 'Boss Event: couldn’t log', String(x && x.message || x)); return; }
+    addLog('ok', `Boss Event spawned: ${e.boss || 'MVP'}`, e.map || '');
+    try { showToast(`📡 Boss Event: ${e.boss || 'MVP'} has spawned in ${e.map || '?'}`); } catch(x) {}
   }
 
   async function start(){
@@ -522,7 +545,7 @@
     const ago = t=>{ const s = Math.floor((Date.now() - t) / 1000); return s < 60 ? s + 's ago' : Math.floor(s / 60) + 'm ago'; };
     pop.innerHTML = `<h4>📡 Auto-detect kills</h4>
       <p>${on ? 'Keep Ragnarok and this tab open, with your chat box visible. New <i>“… has killed [MVP] at …”</i> lines in chat are logged for everyone.'
-              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box along the bottom</b> of the game (left, middle or right); you can adjust the area. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. The yellow <b>[PW2 Boss Event] … has been defeated in …</b> line logs the Boss Event row. Nothing touches the game; it only reads the picture.'}</p>
+              : 'Share your <b>Ragnarok game window</b>. It reads the <b>chat box along the bottom</b> of the game (left, middle or right); you can adjust the area. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. The <b>[PW2 Boss Event]</b> “has spawned” (red) and “has been defeated” (yellow) lines update the Boss Event row. Nothing touches the game; it only reads the picture.'}</p>
       <div class="kd-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
       ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
       <div class="kd-log">${log.length ? log.slice(0, 12).map(e=>`<div class="kd-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="kd-none">Nothing detected yet.</div>'}</div>

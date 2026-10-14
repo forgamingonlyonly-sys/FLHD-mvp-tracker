@@ -976,7 +976,13 @@ function applySnapshot(snap){
     const m = byId[d.id];
     if(!m) return;
     const b = d.data() || {};
+    const was = m.lastDeath;
     m.lastDeath = typeof b.lastDeath === 'number' ? b.lastDeath : null;
+    // Boss Event "has spawned" (logged as died 60 min ago): ring the spawn alert on every device
+    if(m.id === 'boss_event' && !firstSnapshot && m.lastDeath && m.lastDeath !== was){
+      const since = Date.now() - (m.lastDeath + m.min*60000);
+      if(since >= 0 && since < 120000) prevStatus[m.id] = 'waiting';
+    }
     m.by = typeof b.by === 'string' ? b.by : null;
     m.location = (typeof b.location === 'string' && b.location) ? b.location : m.defaultLocation;
   });
@@ -1174,6 +1180,10 @@ function getSpawnText(m){
   const now = Date.now();
   const minSpawn = m.lastDeath + m.min*60000;
   const maxSpawn = m.lastDeath + m.max*60000;
+  if(now < minSpawn && m.min === m.max)
+    return `spawns in <span class="green">${fmtClock(minSpawn-now)}</span>`;
+  if(m.id === 'boss_event' && now > maxSpawn)
+    return `<span class="red">has spawned · up for ${fmtClock(now-maxSpawn)}</span>`;
   if(now < minSpawn)
     return `floating in <span class="red">${fmtClock(minSpawn-now)}</span> – <span class="green">${fmtClock(maxSpawn-now)}</span>`;
   if(now <= maxSpawn)
@@ -1182,7 +1192,8 @@ function getSpawnText(m){
 }
 function getStatusHTML(m){
   const s = getStatus(m);
-  return `<span class="badge b-${s}">${STATUS_LABEL[s]}</span><span class="spawn-text">${getSpawnText(m)}</span>`;
+  const label = m.id === 'boss_event' && s === 'overdue' ? 'Spawned' : STATUS_LABEL[s];
+  return `<span class="badge b-${s}">${label}</span><span class="spawn-text">${getSpawnText(m)}</span>`;
 }
 const isUrgent = m => getStatus(m) === 'window' && (m.lastDeath + m.max*60000 - Date.now()) < 5*60000;
 function setUrgent(el, on){
