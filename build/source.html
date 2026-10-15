@@ -1842,7 +1842,7 @@ function renderNextUp(){
   const sig = list.map(m=>m.id + (portraits[m.id] ? 'p' : '')).join('|');
   if(sig !== nextSig){
     nextSig = sig;
-    nextUp.innerHTML = '<span class="nu-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l9 9M20 4l-9 9M7 17l-3 3M17 17l3 3M6 14l4 4M18 14l-4 4"/></svg><span>Next<br>spawns</span></span>' + (list.length
+    nextUp.innerHTML = '<span class="nu-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l9 9M20 4l-9 9M7 17l-3 3M17 17l3 3M6 14l4 4M18 14l-4 4"/></svg><span>Next <br>spawns</span></span>' + (list.length
       ? list.map(m=>`<button class="nu-item" data-id="${escX(m.id)}">${portraitHTML(m, 'pt-card')}<span class="nu-txt"><span class="nu-name">${escX(m.name)}${m.type === 'mini' ? ' <span class="mini-tag">MINI</span>' : ''}</span><span class="nu-time"></span><span class="nu-map">${PIN}${escX(String(m.location || '').replace(/\s*\(.*\)\s*$/, ''))} (${m.min}~${m.max})</span></span></button>`).join('')
       : '<span class="nu-empty">Nothing waiting. Log a kill to start a timer.</span>');
     nextUp.querySelectorAll('.nu-item').forEach(b=>{

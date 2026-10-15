@@ -2603,7 +2603,7 @@ function renderNextUp(){
   const sig = list.map(m=>m.id + (portraits[m.id] ? 'p' : '')).join('|');
   if(sig !== nextSig){
     nextSig = sig;
-    nextUp.innerHTML = '<span class="nu-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l9 9M20 4l-9 9M7 17l-3 3M17 17l3 3M6 14l4 4M18 14l-4 4"/></svg><span>Next<br>spawns</span></span>' + (list.length
+    nextUp.innerHTML = '<span class="nu-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l9 9M20 4l-9 9M7 17l-3 3M17 17l3 3M6 14l4 4M18 14l-4 4"/></svg><span>Next <br>spawns</span></span>' + (list.length
       ? list.map(m=>`<button class="nu-item" data-id="${escX(m.id)}">${portraitHTML(m, 'pt-card')}<span class="nu-txt"><span class="nu-name">${escX(m.name)}${m.type === 'mini' ? ' <span class="mini-tag">MINI</span>' : ''}</span><span class="nu-time"></span><span class="nu-map">${PIN}${escX(String(m.location || '').replace(/\s*\(.*\)\s*$/, ''))} (${m.min}~${m.max})</span></span></button>`).join('')
       : '<span class="nu-empty">Nothing waiting. Log a kill to start a timer.</span>');
     nextUp.querySelectorAll('.nu-item').forEach(b=>{
@@ -4535,6 +4535,20 @@ setInterval(()=>{
 /* the big panels get a soft frosted blur (only a few, so it stays light on the PC) */
 :root:not([data-theme="light"]) .nextup,:root:not([data-theme="light"]) .bebar,:root:not([data-theme="light"]) .ctl-bar,:root:not([data-theme="light"]) .tabs{
   background:rgba(12,7,22,.72);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+/* Next Spawns: bright glowing frame, the artwork shows through on the right */
+:root:not([data-theme="light"]) .nextup.nu-hero{border:1.5px solid #9b4dff;
+  background:linear-gradient(90deg,rgba(8,4,16,.9) 0%,rgba(8,4,16,.74) 50%,rgba(8,4,16,.3) 100%);
+  -webkit-backdrop-filter:blur(1.5px);backdrop-filter:blur(1.5px);
+  box-shadow:0 0 0 1px rgba(200,150,255,.18) inset,0 0 14px rgba(155,77,255,.75),0 0 40px rgba(120,50,230,.4)}
+:root:not([data-theme="light"]) .nu-hero .nu-label br{display:none}
+:root:not([data-theme="light"]) .nu-hero .nu-label{white-space:nowrap;word-spacing:.35em;color:#ffc93d;text-shadow:0 0 10px rgba(255,190,60,.45)}
+:root:not([data-theme="light"]) .nu-hero .nu-label svg{stroke:#ffc93d;filter:drop-shadow(0 0 5px rgba(255,190,60,.5))}
+:root:not([data-theme="light"]) .nu-hero .nu-item{border-left:1px solid rgba(155,77,255,.38)}
+:root:not([data-theme="light"]) .nu-hero .nu-name{color:#fff}
+:root:not([data-theme="light"]) .nu-hero .nu-time{font:800 25px/1.15 Inter,system-ui,sans-serif;color:#ffc93d;letter-spacing:.01em;text-shadow:0 0 12px rgba(255,180,40,.45)}
+:root:not([data-theme="light"]) .nu-hero .pt-card img{filter:drop-shadow(0 0 6px rgba(170,110,255,.55))}
+@media (max-width:700px){:root:not([data-theme="light"]) .nu-hero .nu-item{border-left:0;border-top:1px solid rgba(155,77,255,.3)}
+  :root:not([data-theme="light"]) .nextup.nu-hero{background:linear-gradient(180deg,rgba(8,4,16,.88),rgba(8,4,16,.62))}}
 </style>
 <script>
 (function(){
@@ -5832,7 +5846,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015182601';
+  const BUILD = '20261015182923';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
