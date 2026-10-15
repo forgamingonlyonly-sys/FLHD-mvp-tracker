@@ -21,18 +21,52 @@ window.FALSEHOOD_FIREBASE = {
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
-#fbGate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(10,6,18,.86);font-family:Inter,system-ui,sans-serif}
+#fbGate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px 16px;box-sizing:border-box;overflow-y:auto;background:rgba(8,4,16,.78);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);font-family:Inter,system-ui,sans-serif}
 #fbGate[hidden]{display:none!important}
-#fbGate .g-card{width:min(360px,calc(100vw - 32px));background:#1b1426;border:1px solid #3b2d52;border-radius:14px;padding:22px;color:#f1ecf8;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-#fbGate h2{margin:0 0 6px;font:700 20px Cinzel,serif;letter-spacing:.04em}
-#fbGate p{margin:0 0 14px;font-size:13px;color:#b9aecb;line-height:1.45}
-#fbGate input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:9px;border:1px solid #4a3a63;background:#120d1b;color:#fff;font-size:15px}
-#fbGate input:focus{outline:2px solid #c03bd6;outline-offset:1px}
-#fbGate .g-err{min-height:18px;margin:8px 0 4px;font-size:12.5px;color:#ff7a8a}
+#fbGate .g-card{position:relative;width:min(500px,100%);box-sizing:border-box;margin:auto;padding:30px 38px 30px;border-radius:18px;color:#f1ecf8;text-align:center;overflow:visible;isolation:isolate;
+  background:radial-gradient(120% 70% at 50% 0%,#2a1250 0%,#160a2b 45%,#0c0616 100%);
+  border:1.5px solid #9d4bff;box-shadow:0 0 0 1px rgba(214,160,255,.18) inset,0 0 28px rgba(157,75,255,.55),0 30px 80px rgba(0,0,0,.6)}
+#fbGate .g-card::before{content:'';position:absolute;inset:7px;border:1px solid rgba(190,130,255,.28);border-radius:13px;pointer-events:none;z-index:2}
+#fbGate .g-sky{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;border-radius:17px;clip-path:inset(0 round 17px)}
+#fbGate .g-gem{position:absolute;left:50%;width:22px;height:22px;transform:translateX(-50%) rotate(45deg);z-index:3;background:linear-gradient(135deg,#f3d6ff,#b05cff 45%,#5b1fb8);box-shadow:0 0 14px #b05cff,0 0 0 3px #12081f}
+#fbGate .g-gem.t{top:-11px}#fbGate .g-gem.b{bottom:-11px}
+#fbGate .g-corner{position:absolute;width:26px;height:26px;z-index:3;border-color:#c48bff;border-style:solid;opacity:.85}
+#fbGate .g-corner.tl{top:12px;left:12px;border-width:2px 0 0 2px;border-radius:8px 0 0 0}
+#fbGate .g-corner.tr{top:12px;right:12px;border-width:2px 2px 0 0;border-radius:0 8px 0 0}
+#fbGate .g-corner.bl{bottom:12px;left:12px;border-width:0 0 2px 2px;border-radius:0 0 0 8px}
+#fbGate .g-corner.br{bottom:12px;right:12px;border-width:0 2px 2px 0;border-radius:0 0 8px 0}
+#fbGate .g-x{position:absolute;top:18px;right:18px;z-index:4;width:38px;height:38px;padding:0;display:grid;place-items:center;border-radius:10px;border:1px solid rgba(214,170,255,.55);background:rgba(18,9,32,.75);color:#f1ecf8;font-size:17px;cursor:pointer}
+#fbGate .g-x:hover{border-color:#e0b8ff;box-shadow:0 0 12px rgba(176,92,255,.6)}
+#fbGate .g-logo{width:118px;height:118px;margin:0 auto 4px;filter:drop-shadow(0 0 16px rgba(176,92,255,.85)) drop-shadow(0 0 4px rgba(240,200,255,.6))}
+#fbGate .g-logo picture,#fbGate .g-logo img{display:block;width:100%;height:100%;object-fit:contain}
+#fbGate .g-title{font:800 42px/1 Cinzel,Georgia,serif;letter-spacing:.07em;margin:2px 0 6px;background:linear-gradient(180deg,#fff2ff 0%,#e7a8ff 45%,#a04cff 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 10px rgba(190,90,255,.7)) drop-shadow(0 2px 0 #3a0f6e)}
+#fbGate .g-sub{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 18px;font:600 12px Inter,system-ui,sans-serif;letter-spacing:.28em;color:#e4d4f7}
+#fbGate .g-sub::before,#fbGate .g-sub::after{content:'';width:34px;height:1px;background:linear-gradient(90deg,transparent,#c48bff)}
+#fbGate .g-sub::after{transform:scaleX(-1)}
+#fbGate h2{margin:0 0 6px;font:700 22px Cinzel,serif;letter-spacing:.04em}
+#fbGate p{margin:0 auto 18px;max-width:360px;font-size:15px;color:#efe6fb;line-height:1.5}
+#fbGate p b{color:#ffd36b}
+#fbGate .g-field{position:relative;display:block;margin:0 0 12px;text-align:left}
+#fbGate .g-field>svg{position:absolute;left:15px;top:50%;width:20px;height:20px;transform:translateY(-50%);fill:none;stroke:#c9b6e6;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+#fbGate input{width:100%;box-sizing:border-box;padding:14px 14px;border-radius:11px;border:1.5px solid #4a3768;background:rgba(10,5,20,.82);color:#fff;font-size:15.5px;font-family:inherit}
+#fbGate .g-field input{padding-left:46px}
+#fbGate .g-field.pw input{padding-right:48px}
+#fbGate input::placeholder{color:#9d8cb8}
+#fbGate input:focus{outline:none;border-color:#b45cff;box-shadow:0 0 0 3px rgba(176,92,255,.25),0 0 18px rgba(176,92,255,.35)}
+#fbGate .g-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:36px;height:36px;padding:0;display:grid;place-items:center;border:0;background:none;color:#c9b6e6;cursor:pointer;border-radius:8px}
+#fbGate .g-eye:hover{color:#fff;background:rgba(176,92,255,.15)}
+#fbGate .g-eye svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#fbGate .g-note{display:flex;gap:12px;align-items:flex-start;text-align:left;margin:2px 0 4px;padding:11px 14px;border-radius:11px;border:1.5px solid rgba(240,180,60,.75);background:rgba(60,36,6,.45);font-size:13px;line-height:1.45;color:#eadfca}
+#fbGate .g-note b{display:block;color:#ffc94d;font-size:13.5px}
+#fbGate .g-note svg{flex:0 0 auto;width:26px;height:26px;margin-top:2px}
+#fbGate .g-err{min-height:18px;margin:8px 0 6px;font-size:13px;color:#ff8a98;text-align:left}
 #fbGate .g-row{display:flex;gap:8px;justify-content:flex-end}
-#fbGate button{padding:9px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font-weight:600;cursor:pointer}
-#fbGate button.g-go{background:#a02ab8;border-color:#c03bd6}
+#fbGate button{padding:9px 14px;border-radius:9px;border:1px solid #4a3a63;background:#2a2233;color:#f6f3fb;font-weight:600;cursor:pointer;font-family:inherit}
+#fbGate button.g-go{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;border-radius:12px;border:1.5px solid #c27bff;background:linear-gradient(90deg,#7a22e0,#a33cff 50%,#7a22e0);color:#fff;font-size:18px;font-weight:700;letter-spacing:.02em;box-shadow:0 0 22px rgba(160,60,255,.55),0 1px 0 rgba(255,255,255,.25) inset}
+#fbGate button.g-go:hover{filter:brightness(1.1)}
+#fbGate button.g-go svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 #fbGate button:disabled{opacity:.6;cursor:default}
+@media (max-width:480px){#fbGate .g-card{padding:26px 20px 24px}#fbGate .g-title{font-size:33px}#fbGate .g-logo{width:96px;height:96px}#fbGate p{font-size:14px}}
 body.storage-ro #stAdd,body.storage-ro .st-actions,body.storage-ro .st-restore,body.storage-ro .st-file-actions [data-act=replace],body.storage-ro .st-file-actions [data-act=remove],body.storage-ro [data-act=attach],
 body.viewonly #stAdd,body.viewonly .st-actions,body.viewonly .st-restore,body.viewonly .st-file-actions [data-act=replace],body.viewonly .st-file-actions [data-act=remove],body.viewonly [data-act=attach]{display:none!important}
 .fb-role{margin-left:6px;font:600 11px Inter,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid;cursor:pointer;background:transparent;vertical-align:middle}
@@ -359,6 +393,31 @@ body.no-delete .st-del{display:none!important}
     setInterval(()=>{ beat(); refresh(); }, BEAT_MS);
     document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ beat().then(refresh); } });
   }
+  // ---- login card artwork: moonlit castles, the guild emblem from the header, ornaments ----
+  const G_SKY = `<svg class="g-sky" viewBox="0 0 500 640" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
+    <defs><radialGradient id="gMoon" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#e9d8ff" stop-opacity=".95"/><stop offset=".55" stop-color="#b08cff" stop-opacity=".55"/><stop offset="1" stop-color="#7a4dff" stop-opacity="0"/></radialGradient>
+      <linearGradient id="gFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c0616" stop-opacity="0"/><stop offset=".55" stop-color="#0c0616" stop-opacity=".2"/><stop offset="1" stop-color="#0c0616" stop-opacity=".95"/></linearGradient></defs>
+    <g fill="#fff" opacity=".55"><circle cx="60" cy="40" r="1"/><circle cx="130" cy="90" r=".8"/><circle cx="210" cy="30" r="1.1"/><circle cx="300" cy="60" r=".8"/><circle cx="440" cy="190" r="1"/><circle cx="30" cy="150" r=".9"/><circle cx="250" cy="120" r=".7"/><circle cx="470" cy="40" r=".8"/></g>
+    <circle cx="395" cy="105" r="95" fill="url(#gMoon)" opacity=".55"/><circle cx="395" cy="105" r="52" fill="#c9b0ff" opacity=".42"/>
+    <circle cx="380" cy="95" r="9" fill="#9c7ee6" opacity=".35"/><circle cx="410" cy="122" r="6" fill="#9c7ee6" opacity=".3"/>
+    <path fill="#1c0d36" opacity=".95" d="M0 300V190l10-24 10 24v-40l14-34 14 34v60h10v-30l8-18 8 18v50h12v-80l16-40 16 40v100h10v-36l9-20 9 20v56h12v40H0z"/>
+    <path fill="#1c0d36" opacity=".95" d="M500 300V200l-10-22-10 22v-56l-14-36-14 36v86h-10v-34l-9-20-9 20v46h-12v-70l-15-40-15 40v94h-10v-30l-8-18-8 18v50h-12v32h176z"/>
+    <path fill="#13082a" d="M0 330V250l9-20 9 20v-30l12-28 12 28v58h120v62zM500 330V240l-9-20-9 20v-26l-12-30-12 30v52H340v64z"/>
+    <rect y="260" width="500" height="380" fill="url(#gFade)"/>
+    <g fill="#6a2fbf" opacity=".22"><ellipse cx="20" cy="560" rx="90" ry="60"/><ellipse cx="490" cy="520" rx="80" ry="70"/><ellipse cx="40" cy="430" rx="50" ry="40"/><ellipse cx="470" cy="400" rx="44" ry="36"/></g>
+  </svg>`;
+  const G_ORN = '<i class="g-gem t"></i><i class="g-gem b"></i><i class="g-corner tl"></i><i class="g-corner tr"></i><i class="g-corner bl"></i><i class="g-corner br"></i>';
+  const gLogo = ()=>{ const e = document.querySelector('header .emblem'); return e ? `<div class="g-logo">${e.outerHTML}</div>` : ''; };
+  const G_HEAD = ()=> G_SKY + G_ORN + gLogo() + '<div class="g-title">FALSEHOOD</div><div class="g-sub">RAGNAROK GUILD</div>';
+  const G_IC = {
+    user: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4.3-6 8-6s6.8 2 8 6z"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.3"/></svg>',
+    eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+    eyeOff: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 5.1A9.9 9.9 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',
+    warn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffc94d" d="M12 2.5 1.5 21h21z"/><path fill="#2a1600" d="M11 9h2v6h-2zm0 7.5h2v2h-2z"/></svg>',
+    go: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+  };
+  window.falsehoodGateHead = G_HEAD;
   window.falsehoodUnlock = async ()=>{
     const uid = auth.currentUser && auth.currentUser.uid;
     if(!uid) return;
@@ -377,18 +436,28 @@ body.no-delete .st-del{display:none!important}
       const g = document.createElement('div');
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
-        <h2>Falsehood</h2>
+        ${G_HEAD()}
+        ${upgrade ? '<button type="button" class="g-x g-skip" title="Cancel" aria-label="Cancel">✕</button>' : ''}
         <p>${upgrade ? 'Enter a higher-access password (Timers, FLHD or Admin) for this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 24 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
-        ${upgrade ? '' : `<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="Your in-game name (e.g. Scrumzilla)" aria-label="Your in-game name">`}
-        <input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
+        ${upgrade ? '' : `<label class="g-field">${G_IC.user}<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="In-game name (e.g. Scrumzilla)" aria-label="Your in-game name"></label>`}
+        <label class="g-field pw">${G_IC.lock}<input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password"><button type="button" class="g-eye" title="Show password" aria-label="Show password">${G_IC.eyeOff}</button></label>
+        ${upgrade ? '' : `<div class="g-note">${G_IC.warn}<div><b>Use your real in-game name (IGN).</b>Guildmates see it on kills, storage and the online list. Placeholder names like “admin”, “guest” or “no name” are blocked.</div></div>`}
         <div class="g-err" role="alert"></div>
-        <div class="g-row">${upgrade ? '<button type="button" class="g-skip">Cancel</button>' : ''}<button class="g-go">Enter</button></div>
+        <button class="g-go">${G_IC.go}Enter</button>
       </form>`;
       document.body.appendChild(g);
       const form = g.querySelector('form'), inp = g.querySelector('.g-pass'), nickIn = g.querySelector('.g-nick'), err = g.querySelector('.g-err'), go = g.querySelector('.g-go');
       if(nickIn){ nickIn.value = lsGetX(NICK_KEY) || ''; (nickIn.value ? inp : nickIn).focus(); } else inp.focus();
       const skip = g.querySelector('.g-skip');   // only when switching access; no offline mode on the login box
       if(skip) skip.onclick = ()=>{ g.remove(); resolve(false); };
+      const eye = g.querySelector('.g-eye');
+      eye.onclick = ()=>{
+        const show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        eye.innerHTML = show ? G_IC.eye : G_IC.eyeOff;
+        eye.title = show ? 'Hide password' : 'Show password'; eye.setAttribute('aria-label', eye.title);
+        inp.focus();
+      };
       form.onsubmit = async e=>{
         e.preventDefault();
         const pass = inp.value;
@@ -487,11 +556,11 @@ body.no-delete .st-del{display:none!important}
       const g = document.createElement('div');
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
-        <h2>Your nickname</h2>
+        ${G_HEAD()}
         <p>Enter your in-game name so guildmates know who’s online and who logged each kill.</p>
-        <input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="e.g. Scrumzilla" aria-label="Your in-game name">
+        <label class="g-field">${G_IC.user}<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="In-game name (e.g. Scrumzilla)" aria-label="Your in-game name"></label>
         <div class="g-err" role="alert"></div>
-        <div class="g-row"><button class="g-go">Save</button></div>
+        <button class="g-go">${G_IC.go}Save</button>
       </form>`;
       document.body.appendChild(g);
       const nickIn = g.querySelector('.g-nick'), err = g.querySelector('.g-err');
@@ -5544,7 +5613,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015093041';
+  const BUILD = '20261015095059';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
