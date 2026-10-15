@@ -1368,7 +1368,7 @@ function openMinutesModal(m, onSave){
     <label class="mm-label" for="mmInput">How many minutes ago did <b>${safe}</b> die?</label>
     <span class="mm-row"><input type="number" id="mmInput" min="0" max="1440" step="1" inputmode="numeric" placeholder="0"> <span>min ago</span></span>
     <span class="mm-quick">${[1,3,5,10,15,30].map(v=>`<button type="button" class="btn mm-q" data-v="${v}">${v} min</button>`).join('')}</span>
-    <span class="mm-or">or the time it died</span>
+    <span class="mm-or">or the time it was killed</span>
     <span class="mm-row"><input type="time" id="mmTime" aria-label="Time of death"> <span class="mm-time-note" id="mmTimeNote"></span></span>
     <span class="mm-hint" id="mmHint"></span>`,
     ()=>{ const v = readMins(); if(v !== null) onSave(v); });
@@ -1471,7 +1471,7 @@ function timerColHTML(m){
       ? `<span class="tc-lbl">Up for</span><span class="tc-big tc-win">${fmtClock(now - m.lastDeath)}</span>`
       : `<span class="tc-lbl">Killed</span><span class="tc-big tc-dim">${formatTime(m.lastDeath)}</span>`;
   const min = m.lastDeath + m.min*60000, max = m.lastDeath + m.max*60000;
-  const died = `<span class="tc-sub">died ${formatTime(m.lastDeath)}${autoMark(m)}</span>`;
+  const died = `<span class="tc-sub">killed ${formatTime(m.lastDeath)}${autoMark(m)}</span>`;
   if(now < min) return `<span class="tc-lbl">Floating in</span><span class="tc-big tc-wait">${fmtClock(min - now)}</span>${died}`;
   if(now <= max) return `<span class="tc-lbl">Spawning in</span><span class="tc-big tc-win">${fmtClock(max - now)}</span>${died}`;
   return `<span class="tc-lbl">Overdue by</span><span class="tc-big tc-over">${fmtClock(now - max)}</span>${died}`;
@@ -2878,14 +2878,14 @@ async function openHistory(m){
   if(m.lastDeath && !rows.some(e=> e.t === m.lastDeath)){
     let who = '';
     try { if(m.by && userApi){ const ps = await userApi.profiles([m.by]); who = (ps[m.by] && ps[m.by].name) || ''; } } catch(e) {}
-    cur = `<div class="hist-row hist-cur"><span class="hist-tag k">Current timer</span><div class="hist-main"><b>${esc(who || 'a guildmate')}</b>${m.auto ? ' <span class="hist-auto">📡 Auto-detect</span>' : ''}<span>died ${day(m.lastDeath)} · logged from a tracker on the old version, so it isn’t in the history below</span></div><span class="hist-when"></span></div>`;
+    cur = `<div class="hist-row hist-cur"><span class="hist-tag k">Current timer</span><div class="hist-main"><b>${esc(who || 'a guildmate')}</b>${m.auto ? ' <span class="hist-auto">📡 Auto-detect</span>' : ''}<span>killed ${day(m.lastDeath)} · logged from a tracker on the old version, so it isn’t in the history below</span></div><span class="hist-when"></span></div>`;
   }
   if(!rows.length){ box.innerHTML = cur + '<div class="hist-none">No history entries yet. They’re recorded once each guildmate’s tracker has updated to the latest version.</div>'; return; }
   box.innerHTML = cur + rows.map(e=>{
     const [label, cls] = ACT[e.act] || ['Changed', 'u'];
     const who = e.name || (e.by && typeof nickNames !== 'undefined' && nickNames[e.by]) || 'a guildmate';
     const detail = e.act === 'location' ? esc(e.loc || '')
-      : (e.act === 'kill' || e.act === 'update') && e.t ? (Math.abs(e.t - e.at) > 90000 ? 'died ' + day(e.t) : '') + (e.killer ? ' · by ' + esc(e.killer) : '') + (e.loc && e.loc !== m.defaultLocation ? ' · ' + esc(e.loc) : '')
+      : (e.act === 'kill' || e.act === 'update') && e.t ? (Math.abs(e.t - e.at) > 90000 ? 'killed ' + day(e.t) : '') + (e.killer ? ' · by ' + esc(e.killer) : '') + (e.loc && e.loc !== m.defaultLocation ? ' · ' + esc(e.loc) : '')
       : e.act === 'spawn' && e.t ? 'at ' + day(e.t) + (e.loc ? ' · ' + esc(e.loc) : '') : '';
     return `<div class="hist-row"><span class="hist-tag ${cls}">${label}</span><div class="hist-main"><b>${esc(who)}</b>${e.auto ? ' <span class="hist-auto" title="Logged by their Auto-detect">📡 Auto-detect</span>' : ''}${detail ? `<span>${detail}</span>` : ''}</div><span class="hist-when">${day(e.at)}</span></div>`;
   }).join('');

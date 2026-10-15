@@ -87,7 +87,7 @@
         const when = m.min === m.max
           ? `Spawns ${at(open)} (${at(open, 'R')})`
           : `Floats ${at(open)} – ${at(close)} (${at(open, 'R')})`;
-        post('kill_' + m.id + '_' + m.lastDeath, `💀 **${m.name}** died ${at(m.lastDeath)}${who}${place ? ' · ' + place : ''}\n${when}`);
+        post('kill_' + m.id + '_' + m.lastDeath, `💀 **${m.name}** killed ${at(m.lastDeath)}${who}${place ? ' · ' + place : ''}\n${when}`);
       }
       // spawn window opens
       if(open >= since && now >= open && now - open < 3 * 60000){
