@@ -4506,10 +4506,10 @@ setInterval(()=>{
 
 <!-- Night scene behind the tracker (dark theme): the guild artwork, kept dark in the middle so the MVP list stays readable -->
 <style>
-#scene{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:#05020a;--px:0;--py:0}
+#scene{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:#05020a}
 :root[data-theme="light"] #scene{display:none}
-#scene .art{position:absolute;inset:-24px;background:#05020a url("bg.webp") 62% 40% / cover no-repeat;
-  transform:translate3d(calc(var(--px) * -10px),calc(var(--py) * -8px),0) scale(1.02);will-change:transform;filter:saturate(1.05)}
+#scene .art{position:absolute;inset:0;background:#05020a url("bg.webp") 62% 40% / cover no-repeat;
+  filter:saturate(1.05)}
 @media (max-width:820px){#scene .art{background-image:url("bg-small.webp");background-position:78% 30%}}
 /* dark, calm middle where the timers are; the artwork shows at the edges and top */
 #scene .shade{position:absolute;inset:0;background:
@@ -4517,13 +4517,6 @@ setInterval(()=>{
   linear-gradient(180deg,rgba(5,2,10,.15) 0%,rgba(5,2,10,.45) 45%,rgba(5,2,10,.78) 100%)}
 #scene .top{position:absolute;left:0;right:0;top:0;height:150px;background:linear-gradient(180deg,rgba(5,2,10,.72),rgba(5,2,10,.35) 60%,transparent)}
 #scene .edge{position:absolute;inset:0;background:radial-gradient(ellipse 110% 95% at 50% 40%,transparent 60%,rgba(2,1,5,.7) 100%)}
-/* a little slow mist over the water */
-#scene .fog{position:absolute;left:0;bottom:6%;width:200%;height:26%;opacity:.35;animation:scFog 160s linear infinite;
-  background:radial-gradient(ellipse 18% 50% at 12% 50%,rgba(150,100,230,.35),transparent 70%),radial-gradient(ellipse 22% 45% at 38% 55%,rgba(120,80,210,.28),transparent 70%),
-             radial-gradient(ellipse 18% 50% at 62% 50%,rgba(150,100,230,.35),transparent 70%),radial-gradient(ellipse 22% 45% at 88% 55%,rgba(120,80,210,.28),transparent 70%)}
-@keyframes scFog{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-#scene.paused .fog{animation-play-state:paused}
-@media (prefers-reduced-motion: reduce){#scene .fog{animation:none}#scene .art{transform:none}}
 
 /* translucent black / deep-purple panels over the artwork (dark theme) */
 :root:not([data-theme="light"]) body{background:#05020a}
@@ -4553,17 +4546,8 @@ setInterval(()=>{
 <script>
 (function(){
   const sc = document.createElement('div'); sc.id = 'scene'; sc.setAttribute('aria-hidden', 'true');
-  sc.innerHTML = '<div class="art"></div><div class="fog"></div><div class="shade"></div><div class="top"></div><div class="edge"></div>';
+  sc.innerHTML = '<div class="art"></div><div class="shade"></div><div class="top"></div><div class="edge"></div>';
   document.body.prepend(sc);
-  // gentle depth: the picture drifts a few pixels against the mouse
-  let tx = 0, ty = 0, cx = 0, cy = 0, raf = 0;
-  const tick = ()=>{ cx += (tx - cx) * .06; cy += (ty - cy) * .06; sc.style.setProperty('--px', cx.toFixed(3)); sc.style.setProperty('--py', cy.toFixed(3));
-    raf = (Math.abs(tx - cx) > .002 || Math.abs(ty - cy) > .002) ? requestAnimationFrame(tick) : 0; };
-  if(!matchMedia('(prefers-reduced-motion: reduce)').matches)
-    addEventListener('mousemove', e=>{ tx = e.clientX / innerWidth * 2 - 1; ty = e.clientY / innerHeight * 2 - 1; if(!raf) raf = requestAnimationFrame(tick); }, { passive: true });
-  // nothing moves while the tab is in the background (keeps the PC free for Auto-detect)
-  const vis = ()=> sc.classList.toggle('paused', document.visibilityState !== 'visible');
-  document.addEventListener('visibilitychange', vis); vis();
 })();
 </script>
 
@@ -5846,7 +5830,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015183319';
+  const BUILD = '20261015183555';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
