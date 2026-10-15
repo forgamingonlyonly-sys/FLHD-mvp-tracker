@@ -164,6 +164,7 @@ body.no-delete .st-del{display:none!important}
         : role === 'timer'
         ? 'You have <b>timer access</b> on this device: you can log MVP and MINI MVP kills. Storage is view only.'
         : 'You have <b>view-only access</b> on this device: you can see everything but can’t make changes.'}</div>
+      <button type="button" class="m-nm">🏷 In-game name: <b class="m-nm-v"></b></button>
       ${role !== 'admin' ? '<button type="button" class="m-up">🔑 Enter another password</button>' : ''}
       <button type="button" class="m-out">⎋ Log out of this device</button>
       ${role === 'admin' ? '<button type="button" class="m-rv">📋 Auto-detect log…</button>' : ''}
@@ -173,6 +174,8 @@ body.no-delete .st-del{display:none!important}
     b.onclick = e=>{
       e.stopPropagation();
       if(!menu.hidden){ menu.hidden = true; return; }
+      const nv = menu.querySelector('.m-nm-v');
+      if(nv) nv.textContent = (window.falsehoodMyName && window.falsehoodMyName()) || 'not set';
       const r = b.getBoundingClientRect();
       menu.hidden = false;
       menu.style.top = (r.bottom + 6) + 'px';
@@ -190,6 +193,8 @@ body.no-delete .st-del{display:none!important}
     if(rv) rv.onclick = ()=>{ menu.hidden = true; if(window.falsehoodReview) window.falsehoodReview(); };
     const dc = menu.querySelector('.m-dc');
     if(dc) dc.onclick = ()=>{ menu.hidden = true; if(window.falsehoodDiscordSetup) window.falsehoodDiscordSetup(); };
+    const nm = menu.querySelector('.m-nm');
+    if(nm) nm.onclick = ()=>{ menu.hidden = true; if(window.falsehoodSetName) window.falsehoodSetName(); };
     const up = menu.querySelector('.m-up');
     if(up) up.onclick = ()=>{ menu.hidden = true; window.falsehoodUnlock(); };
     menu.querySelector('.m-out').onclick = async ()=>{
@@ -1260,7 +1265,6 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
   .tabs { flex-wrap: wrap; max-width: 100%; box-sizing: border-box; }
   .tab { white-space: nowrap; padding: 6px 10px; }
 }
-}
 
 .st-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .st-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
@@ -1557,6 +1561,55 @@ body.compact .controls .btn-icon { width: 26px; padding: 0; }
   .nu-hero .nu-time { font-size: 22px; }
   .pt-row { width: 38px; height: 38px; }
   .item .controls { grid-column: 1 / -1; grid-row: auto; }
+}
+
+/* ===== STORAGE TIDY: icon tiles, open add form, dashed picture box, cards with ⋮ ===== */
+.st-summary { gap: 10px; }
+.st-stat { --t: var(--accent); display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border-left: 1px solid var(--border);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--t) 14%, var(--surface)), var(--surface) 70%);
+  border-color: color-mix(in srgb, var(--t) 30%, var(--border)); }
+.st-stat > div { display: grid; gap: 2px; min-width: 0; }
+.st-stat b { font-size: 20px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-stat span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-ic { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; color: var(--t);
+  background: color-mix(in srgb, var(--t) 18%, transparent); border: 1px solid color-mix(in srgb, var(--t) 35%, transparent); }
+.st-ic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.st-stat.t-store { --t: var(--accent); }
+.st-stat.t-sold { --t: var(--window); }
+.st-stat.t-fund { --t: var(--gold-ink, var(--waiting)); }
+.st-stat.t-fund b { color: var(--gold-ink, var(--waiting)); }
+.st-stat.t-owed { --t: var(--overdue); }
+.st-add { border-radius: 14px; padding: 14px 16px; gap: 12px; }
+.st-add .mp { padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--surface-2) 50%, transparent); }
+.st-drop { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 10px; background: color-mix(in srgb, var(--accent) 5%, transparent); cursor: pointer; color: var(--text-2); font-size: 13px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.st-drop:hover, .st-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, transparent); }
+.st-drop.has { border-style: solid; color: var(--text); }
+.st-drop > svg { width: 26px; height: 26px; flex: 0 0 auto; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.st-drop-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-drop-btn { font-size: 12.5px; padding: 6px 12px; pointer-events: none; }
+.st-drop input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.st-drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.st-add-foot { justify-content: flex-end; }
+.st-add-foot .st-hint { margin-right: auto; }
+.st-add-foot .btn { padding: 8px 18px; }
+.st-card { border-radius: 12px; grid-template-columns: minmax(0, 1fr); }
+.st-head { flex-wrap: nowrap; }
+.st-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-more { flex: 0 0 auto; margin-left: auto; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); font-size: 17px; line-height: 1; cursor: pointer; }
+.st-more:hover { color: var(--text); border-color: var(--accent); }
+.st-row { display: flex; align-items: center; gap: 10px; }
+.st-row .st-sell { margin-left: auto; font-size: 12.5px; padding: 6px 14px; }
+.st-foot .st-thumb-btn { width: 56px; height: 42px; }
+.rm-danger { color: var(--overdue) !important; }
+.st-me { display: none !important; }
+@media (max-width: 980px) { .st-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .st-stat { padding: 10px; gap: 9px; }
+  .st-ic { width: 32px; height: 32px; }
+  .st-stat b { font-size: 16px; }
+  .st-drop-txt { white-space: normal; }
+  .st-stat span { white-space: normal; line-height: 1.25; }
 }
 </style>
 
@@ -2625,15 +2678,41 @@ function fileNote(msg){
   if(typeof showToast === 'function') showToast(msg);
   else { const h = storageView.querySelector('#stAddHint'); if(h) h.textContent = msg; }
 }
-function fileHTML(x, can){
-  if(x.hasFile) return `<div class="st-file">
-      <button type="button" class="st-thumb-btn" data-act="view" aria-label="View picture of ${escX(x.item)}"><img class="st-thumb" data-fid="${escX(x.id)}" alt="Picture of ${escX(x.item)}"></button>
-      <span class="st-file-actions">
-        <button type="button" class="btn st-file-btn" data-act="view">View picture</button>
-        ${can ? `<button type="button" class="btn st-file-btn" data-act="replace">Replace</button><button type="button" class="btn st-file-btn st-file-rm" data-act="remove">Remove</button>` : ''}
-      </span>
-    </div>`;
-  return can ? `<div class="st-file"><button type="button" class="btn st-file-btn" data-act="attach">📎 Attach picture</button></div>` : '';
+// a small thumbnail on the card (click to see it full size); attach / replace / remove live in the card's ⋮ menu
+function fileHTML(x){
+  return x.hasFile ? `<button type="button" class="st-thumb-btn" data-act="view" title="View picture" aria-label="View picture of ${escX(x.item)}"><img class="st-thumb" data-fid="${escX(x.id)}" alt="Picture of ${escX(x.item)}"></button>` : '';
+}
+function removeFileOf(x){
+  openModal('Remove picture', `Remove the picture from <b>${escX(x.item)}</b> for everyone?`, ()=>{
+    dropFile(x.id);
+    saveItem(Object.assign({}, x, { hasFile: false }), 'unattached');
+  });
+}
+// the ⋮ menu on a storage card (reuses the MVP row menu's look)
+function openCardMenu(btn, x){
+  if(!rowMenu.hidden && rowMenu.dataset.id === 'st:' + x.id){ rowMenu.hidden = true; return; }
+  rowMenu.dataset.id = 'st:' + x.id;
+  const sold = x.status === 'sold';
+  rowMenu.innerHTML = (sold ? '<button type="button" data-a="unsell">↶ Undo sale</button>' : '<button type="button" data-a="edit">✎ Edit item…</button>')
+    + '<div class="rm-sep"></div>'
+    + (x.hasFile ? '<button type="button" data-a="view">🖼 View picture</button><button type="button" data-a="pic">🖼 Replace picture…</button><button type="button" data-a="nopic">✕ Remove picture</button>'
+                 : '<button type="button" data-a="pic">📎 Attach picture…</button>')
+    + '<div class="rm-sep"></div><button type="button" data-a="del" class="rm-danger">🗑 Delete item</button>';
+  rowMenu.querySelectorAll('button').forEach(b=> b.onclick = e=>{
+    e.stopPropagation(); rowMenu.hidden = true;
+    const a = b.dataset.a;
+    if(a === 'edit') openEditModal(x);
+    else if(a === 'unsell') openModal('Undo sale', `Move <b>${escX(x.item)}</b> back to storage? The sale price and paid checkmarks are cleared.`,
+      ()=> saveItem(Object.assign({}, x, { status:'storage', price:null, soldAt:null, paid:{} }), 'unsold'));
+    else if(a === 'view') viewFile(x);
+    else if(a === 'pic') attachTo(x);
+    else if(a === 'nopic') removeFileOf(x);
+    else if(a === 'del') openModal('Delete item', `Delete <b>${escX(x.item)}</b> from storage for everyone? This can't be undone.`, ()=> deleteItem(x.id));
+  });
+  rowMenu.hidden = false;
+  const r = btn.getBoundingClientRect();
+  rowMenu.style.top = (r.bottom + 4) + 'px';
+  rowMenu.style.left = Math.max(8, Math.min(r.right - rowMenu.offsetWidth, innerWidth - rowMenu.offsetWidth - 8)) + 'px';
 }
 function pickFile(){
   return new Promise(res=>{
@@ -2663,17 +2742,7 @@ function wireFiles(list){
   list.querySelectorAll('.st-card').forEach(card=>{
     const x = storageItems.find(i=>i.id === card.dataset.id);
     if(!x) return;
-    card.querySelectorAll('[data-act]').forEach(b=>{
-      b.onclick = ()=>{
-        const act = b.dataset.act;
-        if(act === 'view') viewFile(x);
-        else if(act === 'attach' || act === 'replace') attachTo(x);
-        else if(act === 'remove') openModal('Remove picture', `Remove the picture from <b>${escX(x.item)}</b> for everyone?`, ()=>{
-          dropFile(x.id);
-          saveItem(Object.assign({}, x, { hasFile: false }), 'unattached');
-        });
-      };
-    });
+    card.querySelectorAll('[data-act="view"]').forEach(b=>{ b.onclick = ()=> viewFile(x); });
   });
   list.querySelectorAll('img.st-thumb[data-fid]').forEach(async img=>{
     const d = await getFile(img.dataset.fid);
@@ -2722,17 +2791,26 @@ async function fillWho(){
   try { ps = await userApi.profiles([...new Set(rest.map(s=>s.dataset.uid))]); } catch(e) { return; }
   rest.forEach(s=>{ const p = ps[s.dataset.uid]; s.textContent = (p && p.name) || 'a member'; });
 }
+// storage tile icons
+const ST_IC = {
+  box: '<svg viewBox="0 0 24 24"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"/></svg>',
+  tag: '<svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.6"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+  coins: '<svg viewBox="0 0 24 24"><ellipse cx="9" cy="7" rx="6" ry="2.6"/><path d="M3 7v4c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6V7"/><path d="M9 16.2c-3.3 0-6-1.2-6-2.6V11"/><ellipse cx="16" cy="15" rx="5" ry="2.2"/><path d="M11 15v3.2c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V15"/></svg>',
+};
+// "Guildmates see you as…" lives in the account menu now (window.falsehoodSetName)
 function paintMyName(){
   const box = storageView.querySelector('#stMe');
-  if(!box) return;
+  if(box) box.hidden = true;
+}
+window.falsehoodMyName = ()=>{ const me = meId(); return (me && nickNames[me]) || ''; };
+window.falsehoodSetName = ()=>{
   const me = meId();
-  box.hidden = !(storageLive && me);
-  if(box.hidden) return;
+  if(!(storageLive && me)) return;
   const mine = nickNames[me];
-  box.innerHTML = `Guildmates see you as <b>${mine ? escX(mine) : 'a guildmate (no name set)'}</b> <button class="btn st-me-btn" type="button">${mine ? 'Change' : 'Set in-game name'}</button>`;
-  box.querySelector('.st-me-btn').onclick = ()=>{
+  {
     openModal('Your in-game name', `
-      <label class="mm-label" for="stMeName">Name guildmates see in Storage history</label>
+      <label class="mm-label" for="stMeName">The name guildmates see you as (Storage history and the tracker)</label>
       <input id="stMeName" class="st-modal-input" maxlength="24" placeholder="e.g. Scrumzilla" value="${escX(mine || '')}">`,
       ()=>{
         const v = document.getElementById('stMeName').value.trim().slice(0, 24);
@@ -2747,8 +2825,8 @@ function paintMyName(){
     const inp = document.getElementById('stMeName');
     inp.onkeydown = e=>{ if(e.key === 'Enter'){ e.preventDefault(); confirmBtn.click(); } };
     inp.focus(); inp.select();
-  };
-}
+  }
+};
 function auditHTML(x){
   const made = `Added by ${whoHTML(x.createdBy)} · ${fmtDay(x.addedAt)}`;
   const last = x.updatedAt ? ` <span class="sep">·</span> ${escX((ACTION_TEXT[x.lastAction] || 'updated').replace(/^./, c=>c.toUpperCase()))} by ${whoHTML(x.updatedBy)} · ${fmtDay(x.updatedAt)}` : '';
@@ -2823,7 +2901,14 @@ storageView.innerHTML = `
       <label class="st-field st-item"><span>Item</span><input id="stItem" required maxlength="80" placeholder="e.g. Osiris Card"></label>
       <div class="st-field st-wide"><span>Members</span><div class="mp" id="stMemberPick"></div></div>
       <label class="st-field st-wide"><span>Note</span><input id="stNote" maxlength="120" placeholder="Optional"></label>
-      <label class="st-field st-wide"><span>Picture (optional)</span><input type="file" id="stFile" accept="image/*"></label>
+      <div class="st-field st-wide"><span>Picture (optional)</span>
+        <label class="st-drop" id="stDrop">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M4 18l5.5-5.5 4 4 2.5-2.5L20 18"/></svg>
+          <span class="st-drop-txt" id="stDropTxt">Choose a picture or drop it here</span>
+          <span class="btn st-drop-btn">Choose file</span>
+          <input type="file" id="stFile" accept="image/*">
+        </label>
+      </div>
     </div>
     <div class="st-add-foot">
       <span class="st-hint" id="stAddHint">Add the item name and at least one member.</span>
@@ -2883,7 +2968,7 @@ function makeMemberPicker(host, initial, onChange){
         ? list.map(n=>`<span class="mp-item${picked.has(n.toLowerCase()) ? ' on' : ''}"><label><input type="checkbox" value="${escX(n)}" ${picked.has(n.toLowerCase()) ? 'checked' : ''}><span>${escX(n)}</span></label><button type="button" class="mp-x" data-name="${escX(n)}" title="Remove ${escX(n)} from the list" aria-label="Remove ${escX(n)} from the list">✕</button></span>`).join('')
         : '<span class="mp-empty">No members yet. Add the first name below.</span>'}</div>
       <div class="mp-add">
-        <input type="text" class="mp-input" maxlength="24" placeholder="Add a member who joined, e.g. Scrumzilla">
+        <input type="text" class="mp-input" maxlength="24" placeholder="Add a member…">
         <button type="button" class="btn mp-add-btn">+ Add</button>
       </div>
       <div class="mp-tools">${list.length ? `<button type="button" class="mp-link" data-all="1">Select all</button><button type="button" class="mp-link" data-all="0">Clear</button>` : ''}<span class="mp-count">${picked.size} selected</span></div>`;
@@ -2945,6 +3030,21 @@ function makeMemberPicker(host, initial, onChange){
   };
   picker = makeMemberPicker(f.querySelector('#stMemberPick'), [], check);
   storageView._picker = picker;
+  // the dashed picture box: shows the chosen file's name, and takes a dropped picture
+  const drop = f.querySelector('#stDrop'), fileIn = f.querySelector('#stFile'), dropTxt = f.querySelector('#stDropTxt');
+  const paintDrop = ()=>{
+    const fl = fileIn.files && fileIn.files[0];
+    drop.classList.toggle('has', !!fl);
+    dropTxt.textContent = fl ? '🖼 ' + fl.name : 'Choose a picture or drop it here';
+  };
+  fileIn.addEventListener('change', paintDrop);
+  drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', ()=> drop.classList.remove('over'));
+  drop.addEventListener('drop', e=>{
+    e.preventDefault(); drop.classList.remove('over');
+    const fl = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(fl && /^image\//.test(fl.type)){ try { const dt = new DataTransfer(); dt.items.add(fl); fileIn.files = dt.files; } catch(x) {} paintDrop(); }
+  });
   item.addEventListener('input', check);
   let adding = false;
   f.addEventListener('submit', async e=>{
@@ -2967,7 +3067,7 @@ function makeMemberPicker(host, initial, onChange){
       members: names, status: 'storage', addedAt: Date.now(),
       price: null, soldAt: null, paid: {}
     }, 'created');
-    item.value = ''; note.value = ''; picker.clear(); fileInput.value = '';
+    item.value = ''; note.value = ''; picker.clear(); fileInput.value = ''; paintDrop();
     storageFilter = 'storage';
     check(); item.focus();
   });
@@ -2986,11 +3086,12 @@ function renderStorage(){
     const s = splitSale(x.price || 0, x.members || []);
     return t + (x.members || []).filter(n=> !(x.paid || {})[n]).length * s.receives;
   }, 0);
-  storageView.querySelector('#stSummary').innerHTML = `
-    <div class="st-stat"><span>In storage</span><b>${inStore.length}</b></div>
-    <div class="st-stat"><span>Sold</span><b>${sold.length}</b></div>
-    <div class="st-stat st-fund"><span>Falsehood fund (10%)</span><b>${zeny(fund)} z</b></div>
-    <div class="st-stat"><span>Still to pay members</span><b>${zeny(owed)} z</b></div>`;
+  const tile = (cls, ic, label, val, tip)=> `<div class="st-stat ${cls}"${tip ? ` title="${tip}"` : ''}><i class="st-ic">${ic}</i><div><span>${label}</span><b>${val}</b></div></div>`;
+  storageView.querySelector('#stSummary').innerHTML =
+    tile('t-store', ST_IC.box, 'In storage', inStore.length)
+    + tile('t-sold', ST_IC.tag, 'Sold', sold.length)
+    + tile('t-fund', ST_IC.shield, 'Falsehood fund (10%)', zeny(fund) + ' z')
+    + tile('t-owed', ST_IC.coins, 'Owed to members', zeny(owed) + ' z', 'Zeny from sold loot that members haven’t been paid yet (not ticked as Paid)');
   storageView.querySelector('#stCountStorage').textContent = inStore.length;
   storageView.querySelector('#stCountSold').textContent = sold.length;
   storageView.querySelectorAll('.st-seg').forEach(b=>{
@@ -2998,7 +3099,7 @@ function renderStorage(){
     b.setAttribute('aria-selected', String(b.dataset.f === storageFilter));
   });
   storageView.querySelector('#stMemberList').innerHTML = knownMembers().map(n=>`<option value="${escX(n)}"></option>`).join('');
-  storageView.querySelector('#stAdd').hidden = storageFilter !== 'storage';
+  storageView.querySelector('#stAdd').hidden = !canEditStorage();   // always open for Admin / FLHD; hidden for roles that can't add
   if(storageView._picker) storageView._picker.refresh();
   if(storageView._check) storageView._check();
   storageView.querySelector('#stNo').value = fmtNo(localMaxNo() + 1);
@@ -3010,7 +3111,7 @@ function renderStorage(){
   if(!rows.length){
     list.innerHTML = `<div class="st-empty">${storageFilter === 'sold'
       ? 'Nothing sold yet. Use "Mark as sold" on an item in storage.'
-      : 'Storage is empty. Add the first loot above.'}</div>`;
+      : 'Storage is empty.' + (can ? ' Add the first loot above.' : '')}</div>`;
     return;
   }
   list.innerHTML = rows.map(x=>{
@@ -3018,18 +3119,17 @@ function renderStorage(){
     const head = `
       <div class="st-head">
         ${x.no ? `<span class="st-no-badge">${fmtNo(x.no)}</span>` : ''}<div class="st-name">${escX(x.item)}</div>
+        ${can ? `<button type="button" class="st-more" title="More" aria-label="More for ${escX(x.item)}">⋮</button>` : ''}
       </div>
       ${x.note ? `<div class="st-meta">${escX(x.note)}</div>` : ''}`;
     if(x.status !== 'sold'){
       return `<article class="st-card" data-id="${escX(x.id)}">
         ${head}
         <div class="st-chips">${chips}</div>
-        <div class="st-actions">
-          <button class="btn btn-primary st-sell" ${can ? '' : 'disabled'}>Mark as sold</button>
-          <button class="btn st-edit" ${can ? '' : 'disabled'}>Edit</button>
-          <button class="btn btn-icon st-del" title="Delete" aria-label="Delete ${escX(x.item)}" ${can ? '' : 'disabled'}>✕</button>
+        <div class="st-row">
+          ${fileHTML(x)}
+          ${can ? '<button class="btn btn-primary st-sell">Mark as sold</button>' : ''}
         </div>
-        ${fileHTML(x, can)}
         ${auditHTML(x)}
       </article>`;
     }
@@ -3055,13 +3155,9 @@ function renderStorage(){
       </table>
       <div class="st-foot">
         <span>${paidCount}/${x.members.length} paid · ${zeny(s.taxLost)} z lost to trade tax</span>
-        <span class="st-actions">
-          <button class="btn st-unsell" ${can ? '' : 'disabled'}>Undo sale</button>
-          <button class="btn btn-icon st-del" title="Delete" aria-label="Delete ${escX(x.item)}" ${can ? '' : 'disabled'}>✕</button>
-        </span>
+        ${fileHTML(x)}
       </div>
-      ${fileHTML(x, can)}
-        ${auditHTML(x)}
+      ${auditHTML(x)}
     </article>`;
   }).join('');
 
@@ -3072,11 +3168,8 @@ function renderStorage(){
     if(!x) return;
     const on = (sel, fn)=>{ const b = card.querySelector(sel); if(b) b.onclick = fn; };
     on('.st-sell', ()=> openSaleModal(x));
-    on('.st-edit', ()=> openEditModal(x));
-    on('.st-unsell', ()=> openModal('Undo sale', `Move <b>${escX(x.item)}</b> back to storage? The sale price and paid checkmarks are cleared.`,
-      ()=> saveItem(Object.assign({}, x, { status:'storage', price:null, soldAt:null, paid:{} }), 'unsold')));
-    on('.st-del', ()=> openModal('Delete item', `Delete <b>${escX(x.item)}</b> from storage for everyone? This can't be undone.`,
-      ()=> deleteItem(x.id)));
+    const more = card.querySelector('.st-more');
+    if(more) more.onclick = e=>{ e.stopPropagation(); openCardMenu(more, x); };
     card.querySelectorAll('.st-paid').forEach(cb=>{
       cb.onchange = ()=>{
         const paid = Object.assign({}, x.paid || {});
@@ -5422,7 +5515,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015085915';
+  const BUILD = '20261015092205';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
