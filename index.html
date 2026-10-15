@@ -4794,8 +4794,9 @@ setInterval(()=>{
     if((m = /^(.+?)\s+ha[s5]\s+[s5]pawn\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'spawn', boss: canonBoss(m[1]), map: word(mapAt(body, /[s5]pawn\S*\s+[il1]n\s+/i)) };
     if((m = /gather\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'gather', boss: '', map: word(m[1]) };
     if((m = /^(.+?)\s+ha[s5]\s+been\s+defeat\S*\s+[il1]n\s+\S/i.exec(body))){
-      const by = /\sby\s+(.+?)(?:\s+o[ft]\s+[\[\(].*)?$/i.exec(body);
-      return { kind: 'dead', boss: canonBoss(m[1]), map: word(mapAt(body, /defeat\S*\s+[il1]n\s+/i)), killer: by ? by[1].replace(/[\[\]\(\)!.,]+$/g, '').trim() : '' };
+      const by = /\s[bh8][yv]\s+(.+?)(?:\s+o[ft]\s+[\[\(].*)?$/i.exec(body);
+      const rawMap = mapAt(body, /defeat\S*\s+[il1]n\s+/i);
+      return { kind: 'dead', boss: canonBoss(m[1]), rawMap, map: word(rawMap), killer: by ? by[1].replace(/[\[\]\(\)!.,]+$/g, '').trim() : '' };
     }
     return null;
   }
@@ -4829,8 +4830,15 @@ setInterval(()=>{
     add(lower.replace(/[!|]/g, ''));
     add(lower.replace(/[!|l1i]$/, ''));            // a "!" after the map name read as l / 1 / i
     let best = null, bs = 0, second = 0;
+    const numberOk = (c, mp)=>{
+      const stem = mp.replace(/\d+$/, '');
+      if(stem === mp || !c.startsWith(stem)) return true;
+      // only digits and digit look-alikes after the name; anything else and we can't tell which field it is
+      return /^[0-9oOdDiIlLsSzZ!|]*$/.test(c.slice(stem.length)) || MAP_LIST.filter(x=> x.startsWith(stem) && x !== mp).length === 0;
+    };
     for(const c of cands) for(const mp of MAP_LIST){
       if(c === mp) return mp;
+      if(!numberOk(c, mp)) continue;
       const sc = 1 - lev(c, mp) / Math.max(c.length, mp.length);
       if(sc > bs){ if(best !== mp) second = Math.max(second, bs); bs = sc; best = mp; }
       else if(mp !== best && sc > second) second = sc;
@@ -4888,6 +4896,14 @@ setInterval(()=>{
     try { can = A.canKill(); } catch(x) {}
     if(!can){ addLog('miss', 'Boss Event: you can’t log kills', who); return; }
     recent.set(m.id, now);
+    if(m.ev === 'spawn'){
+      const sp = /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
+      if(sp && e.map !== sp[1] && norm(sp[2]) === norm(e.boss)){
+        const a = String(e.rawMap || e.map || '').toLowerCase(), b2 = sp[1].toLowerCase();
+        if(a && 1 - lev(a, b2) / Math.max(a.length, b2.length) >= 0.6) e.map = sp[1];
+      }
+      if(!e.map && sp && norm(sp[2]) === norm(e.boss)) e.map = sp[1];
+    }
     if(!(await claim('ev_dead'))){ addLog('skip', `Boss Event (${e.boss}) already logged by another watcher`, who); return; }
     const prevD = snap(m);
     try {
@@ -5378,7 +5394,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015080050';
+  const BUILD = '20261015080734';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
