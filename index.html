@@ -1602,6 +1602,12 @@ body.compact .controls .btn-icon { width: 26px; padding: 0; }
 .st-row .st-sell { margin-left: auto; font-size: 12.5px; padding: 6px 14px; }
 .st-foot .st-thumb-btn { width: 56px; height: 42px; }
 .rm-danger { color: var(--overdue) !important; }
+.st-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.st-add-toggle { font-size: 13px; padding: 8px 16px; }
+.st-add-toggle.open { background: var(--surface-2); color: var(--text); border-color: var(--border); box-shadow: none; }
+.st-add-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.st-add-x { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); cursor: pointer; font-size: 13px; }
+.st-add-x:hover { color: var(--text); border-color: var(--accent); }
 .st-me { display: none !important; }
 @media (max-width: 980px) { .st-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) {
@@ -2894,8 +2900,15 @@ storageView.setAttribute('aria-label', 'Guild storage');
 storageView.innerHTML = `
   <div class="st-me" id="stMe" hidden></div>
   <div class="st-summary" id="stSummary"></div>
+  <div class="st-bar">
+    <div class="st-filter" role="tablist" aria-label="Storage filter">
+      <button class="st-seg" data-f="storage" role="tab">In storage <span class="count" id="stCountStorage">0</span></button>
+      <button class="st-seg" data-f="sold" role="tab">Sold <span class="count" id="stCountSold">0</span></button>
+    </div>
+    <button type="button" class="btn btn-primary st-add-toggle" id="stAddToggle" aria-expanded="false" aria-controls="stAdd" hidden>+ Add loot</button>
+  </div>
   <form class="st-add" id="stAdd" autocomplete="off">
-    <div class="st-add-title">Add loot to storage</div>
+    <div class="st-add-head"><div class="st-add-title">Add loot to storage</div><button type="button" class="st-add-x" id="stAddX" title="Close" aria-label="Close the add loot form">✕</button></div>
     <div class="st-fields">
       <label class="st-field st-no"><span>Item No.</span><input id="stNo" disabled aria-describedby="stNoHint"></label>
       <label class="st-field st-item"><span>Item</span><input id="stItem" required maxlength="80" placeholder="e.g. Osiris Card"></label>
@@ -2917,10 +2930,6 @@ storageView.innerHTML = `
     <datalist id="stMvpList"></datalist>
     <datalist id="stMemberList"></datalist>
   </form>
-  <div class="st-filter" role="tablist" aria-label="Storage filter">
-    <button class="st-seg" data-f="storage" role="tab">In storage <span class="count" id="stCountStorage">0</span></button>
-    <button class="st-seg" data-f="sold" role="tab">Sold <span class="count" id="stCountSold">0</span></button>
-  </div>
   <div class="st-list" id="stList"></div>
   <div class="st-activity" id="stActivity"></div>`;
 document.getElementById('mvpList').after(storageView);
@@ -3013,6 +3022,8 @@ function makeMemberPicker(host, initial, onChange){
   };
 }
 
+let stAddOpen = false;
+try { stAddOpen = localStorage.getItem('falsehood-add-open') === '1'; } catch(e) {}
 (function wireStorageForm(){
   const f = storageView.querySelector('#stAdd');
   const item = f.querySelector('#stItem'),
@@ -3075,6 +3086,14 @@ function makeMemberPicker(host, initial, onChange){
     b.onclick = ()=>{ storageFilter = b.dataset.f; renderStorage(); };
   });
   storageView._check = check;
+  const setOpen = open=>{
+    stAddOpen = open;
+    try { localStorage.setItem('falsehood-add-open', open ? '1' : ''); } catch(x) {}
+    renderStorage();
+    if(open){ f.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); item.focus({ preventScroll: true }); }
+  };
+  storageView.querySelector('#stAddToggle').onclick = ()=> setOpen(!stAddOpen);
+  storageView.querySelector('#stAddX').onclick = ()=> setOpen(false);
 })();
 
 function renderStorage(){
@@ -3099,7 +3118,13 @@ function renderStorage(){
     b.setAttribute('aria-selected', String(b.dataset.f === storageFilter));
   });
   storageView.querySelector('#stMemberList').innerHTML = knownMembers().map(n=>`<option value="${escX(n)}"></option>`).join('');
-  storageView.querySelector('#stAdd').hidden = !canEditStorage();   // always open for Admin / FLHD; hidden for roles that can't add
+  // Admin / FLHD get a "+ Add loot" button that opens the form; roles that can't add see neither
+  const canAdd = canEditStorage(), tg = storageView.querySelector('#stAddToggle');
+  storageView.querySelector('#stAdd').hidden = !(canAdd && stAddOpen);
+  tg.hidden = !canAdd;
+  tg.textContent = stAddOpen ? '✕ Close' : '+ Add loot';
+  tg.classList.toggle('open', stAddOpen);
+  tg.setAttribute('aria-expanded', String(stAddOpen));
   if(storageView._picker) storageView._picker.refresh();
   if(storageView._check) storageView._check();
   storageView.querySelector('#stNo').value = fmtNo(localMaxNo() + 1);
@@ -3111,7 +3136,7 @@ function renderStorage(){
   if(!rows.length){
     list.innerHTML = `<div class="st-empty">${storageFilter === 'sold'
       ? 'Nothing sold yet. Use "Mark as sold" on an item in storage.'
-      : 'Storage is empty.' + (can ? ' Add the first loot above.' : '')}</div>`;
+      : 'Storage is empty.' + (can ? ' Press + Add loot to add the first item.' : '')}</div>`;
     return;
   }
   list.innerHTML = rows.map(x=>{
@@ -5515,7 +5540,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015092205';
+  const BUILD = '20261015092703';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
