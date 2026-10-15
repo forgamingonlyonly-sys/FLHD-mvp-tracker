@@ -433,7 +433,7 @@ body.no-delete .st-del{display:none!important}
         <p>${upgrade ? 'Enter a higher-access password (Timers, FLHD or Admin) for this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 24 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
         ${upgrade ? '' : `<label class="g-field">${G_IC.user}<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="In-game name (e.g. Scrumzilla)" aria-label="Your in-game name"></label>`}
         <label class="g-field pw">${G_IC.lock}<input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password"><button type="button" class="g-eye" title="Show password" aria-label="Show password">${G_IC.eyeOff}</button></label>
-        ${upgrade ? '' : `<div class="g-note">${G_IC.warn}<div><b>Use your real in-game name (IGN).</b>Guildmates see it on kills, storage and the online list. Placeholder names like “admin”, “guest” or “no name” are blocked.</div></div>`}
+        ${upgrade ? '' : `<div class="g-note">${G_IC.warn}<div><b>Only recognized in-game names (IGNs) are allowed.</b>Users with unrecognized IGNs will be automatically logged out. Placeholder names like “admin”, “guest” or “no name” are blocked.</div></div>`}
         <div class="g-err" role="alert"></div>
         <button class="g-go">${G_IC.go}Enter</button>
       </form>`;
