@@ -2233,8 +2233,8 @@ function timerColHTML(m){
       : `<span class="tc-lbl">Killed</span><span class="tc-big tc-dim">${formatTime(m.lastDeath)}</span>`;
   const min = m.lastDeath + m.min*60000, max = m.lastDeath + m.max*60000;
   const died = `<span class="tc-sub">died ${formatTime(m.lastDeath)}${autoMark(m)}</span>`;
-  if(now < min) return `<span class="tc-lbl">Window opens in</span><span class="tc-big tc-wait">${fmtClock(min - now)}</span>${died}`;
-  if(now <= max) return `<span class="tc-lbl">Window closes in</span><span class="tc-big tc-win">${fmtClock(max - now)}</span>${died}`;
+  if(now < min) return `<span class="tc-lbl">Floating in</span><span class="tc-big tc-wait">${fmtClock(min - now)}</span>${died}`;
+  if(now <= max) return `<span class="tc-lbl">Spawning in</span><span class="tc-big tc-win">${fmtClock(max - now)}</span>${died}`;
   return `<span class="tc-lbl">Overdue by</span><span class="tc-big tc-over">${fmtClock(now - max)}</span>${died}`;
 }
 function getStatusHTML(m){
@@ -5890,7 +5890,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015185803';
+  const BUILD = '20261015185919';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
