@@ -4554,8 +4554,8 @@ setInterval(()=>{
 :root:not([data-theme="light"]) body{background:#05020a}
 :root:not([data-theme="light"]) body::before{display:none}
 :root:not([data-theme="light"]){
-  --surface:rgba(12,7,22,.80);--surface-2:rgba(22,13,38,.84);--border:rgba(120,80,190,.28);
-  --row-waiting:rgba(30,24,10,.84);--row-window:rgba(10,32,22,.84);--row-overdue:rgba(38,10,24,.86)}
+  --surface:rgba(12,7,22,.66);--surface-2:rgba(22,13,38,.74);--border:rgba(120,80,190,.28);
+  --row-waiting:rgba(30,24,10,.7);--row-window:rgba(10,32,22,.7);--row-overdue:rgba(38,10,24,.72)}
 :root:not([data-theme="light"]) .item{box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.35)}
 /* the big panels get a soft frosted blur (only a few, so it stays light on the PC) */
 :root:not([data-theme="light"]) .nextup,:root:not([data-theme="light"]) .bebar,:root:not([data-theme="light"]) .ctl-bar,:root:not([data-theme="light"]) .tabs{
@@ -5886,7 +5886,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015185009';
+  const BUILD = '20261015185159';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
