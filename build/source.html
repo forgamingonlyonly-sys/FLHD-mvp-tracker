@@ -1179,8 +1179,8 @@ function handleWriteError(e){
     canWrite = false;
     showNotice('<b>View only.</b> You can see the timers and storage but can’t make changes.<button class="unlock" onclick="falsehoodUnlock()">🔑 Enter editor password</button>');
     requestRender();
-  } else if(code === 'quota_exceeded'){
-    showToast('The shared board is full and couldn’t save. Ask the page owner to check it.');
+  } else if(code === 'quota_exceeded' || code === 'resource-exhausted'){
+    showToast('Not saved: Firebase’s free daily limit is used up. It resets about 3 PM Manila time (or the Admin can switch Firebase to the Blaze plan).');
   } else {
     showToast('Couldn’t save that kill. Check your connection and log it again.');
   }
