@@ -255,11 +255,11 @@
   const FAMILIES = [
     { names: ['Baphomet'], pick: map=> /glast|gl_|church|heim/i.test(map) ? 'bapho_gh' : 'bapho_maze' },
     { names: ['Ghostring'], pick: map=> /sunken|ship|treasure/i.test(map) ? 'ghost_sunken' : 'ghost_poring' },
-    { names: ['Angeling'], pick: map=> /magma/i.test(map) ? 'angel_magma' : /toy/i.test(map) ? 'angel_toy' : /mjol|mjöl/i.test(map) ? 'angel_mjolnir' : 'angel_poring' },
-    { names: ['Deviling'], pick: ()=> 'devil_magma' },
-    { names: ['Archangeling', 'Arcangeling', 'Arcangel'], pick: ()=> 'arch_magma' },
+    { names: ['Angeling'], pick: map=> /toy|xmas|warehouse/i.test(map) ? 'angel_toy' : /yuno|el\s*mes|plateau/i.test(map) ? 'angel_yuno' : 'angel_poring' },
+    { names: ['Deviling'], pick: map=> /yuno|el\s*mes|plateau/i.test(map) ? 'devil_yuno' : 'devil_payon' },
+    { names: ['Archangeling', 'Arcangeling', 'Arcangel'], pick: ()=> 'arch_yuno' },
   ];
-  const FAMILY_OF = { bapho_maze: 0, bapho_gh: 0, ghost_sunken: 1, ghost_poring: 1, angel_magma: 2, angel_toy: 2, angel_mjolnir: 2, angel_poring: 2, devil_magma: 3, arch_magma: 4 };
+  const FAMILY_OF = { bapho_maze: 0, bapho_gh: 0, ghost_sunken: 1, ghost_poring: 1, angel_toy: 2, angel_yuno: 2, angel_poring: 2, devil_payon: 3, devil_yuno: 3, arch_yuno: 4 };
   const placeOf = m=> String(m.location || '').replace(/\s*\(.*$/, '');
   // name (and, when readable, the map) decide which MVP it is; a shaky name is accepted when the map agrees
   function matchMvp(name, map, withScore){

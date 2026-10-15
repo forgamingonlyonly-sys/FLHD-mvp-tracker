@@ -1615,14 +1615,14 @@ let mvps = [
   { id:'bapho_maze',   name:'Baphomet Maze',     min:60, max:70,  location:'Labyrinth Forest F3 (prt_maze03)' },
   { id:'bapho_gh',     name:'Baphomet GH',       min:60, max:70, location:'Glast Heim' },
   { id:'boss_event',   name:'Boss Event',        min:60, max:60, location:'Random map ([PW2 Boss Event])' },
-  { id:'ghost_poring', name:'Ghostring Poring',  min:30, max:30,  location:'Payon Field (pay_fild04)' },
-  { id:'angel_poring', name:'Angeling Poring',   min:30, max:30,  location:'Payon Field (pay_fild04)' },
-  { id:'angel_magma',  name:'Angeling Magma',    min:60, max:90,  location:'Magma Dungeon' },
-  { id:'devil_magma',  name:'Deviling Magma',    min:60, max:90,  location:'Magma Dungeon' },
-  { id:'arch_magma',   name:'Arcangel Magma',    min:60, max:90,  location:'Magma Dungeon' },
-  { id:'angel_toy',    name:'Angeling TOY',      min:60, max:90,  location:'Toy Factory' },
-  { id:'angel_mjolnir', name:'Angeling Mjolnir', min:60, max:90,  location:'Mjolnir Mountains' },
-  { id:'ghost_sunken', name:'Ghostring Sunken',  min:30, max:30,  location:'Sunken Ship' }
+  { id:'ghost_poring', name:'Ghostring Payon',   min:30, max:30,  location:'Sograt Desert, Payon Field 4 (pay_fild04)' },
+  { id:'angel_poring', name:'Angeling Payon',    min:30, max:30,  location:'Sograt Desert, Payon Field 4 (pay_fild04)' },
+  { id:'angel_toy',    name:'Angeling Toy',      min:60, max:90,  location:'Toy Factory Warehouse (xmas_dun01)' },
+  { id:'angel_yuno',   name:'Angeling Yuno',     min:60, max:90,  location:'El Mes Plateau, Yuno Field 3 (yuno_fild03)' },
+  { id:'devil_payon',  name:'Deviling Payon',    min:60, max:90,  location:'Sograt Desert, Payon Field 4 (pay_fild04)' },
+  { id:'devil_yuno',   name:'Deviling Yuno',     min:60, max:90,  location:'El Mes Plateau, Yuno Field 3 (yuno_fild03)' },
+  { id:'arch_yuno',    name:'Archangeling Yuno', min:60, max:90,  location:'El Mes Plateau, Yuno Field 5 (yuno_fild05)' },
+  { id:'ghost_sunken', name:'Ghostring Sunken',  min:30, max:30,  location:'Sunken Ship F2 (treasure02)' }
 ];
 const byId = {};
 mvps.forEach(m=>{ m.lastDeath = null; m.by = null; m.defaultLocation = m.location; byId[m.id] = m; });
@@ -1720,7 +1720,9 @@ function applySnapshot(snap){
     }
     m.by = typeof b.by === 'string' ? b.by : null;
     m.auto = b.auto === true;
-    m.location = (typeof b.location === 'string' && b.location) ? b.location : m.defaultLocation;
+    // an old default location saved earlier (before the MINI MVP list was corrected) shows the new one
+    const OLD_DEFAULT = { ghost_poring: 'Payon Field (pay_fild04)', angel_poring: 'Payon Field (pay_fild04)', angel_toy: 'Toy Factory', ghost_sunken: 'Sunken Ship' };
+    m.location = (typeof b.location === 'string' && b.location && b.location !== OLD_DEFAULT[m.id]) ? b.location : m.defaultLocation;
   });
   if(firstSnapshot){
     // Seed alert tracking from the real data so nothing fires on load
@@ -1982,7 +1984,7 @@ async function fillNames(){
 
 
 /* ================= MVP / MINI MVP TABS ================= */
-const MINI_IDS = ['angel_toy','angel_mjolnir','ghost_poring','angel_poring','angel_magma','devil_magma','arch_magma','ghost_sunken','Ghost','Angel','Ghost_sun'];
+const MINI_IDS = ['ghost_poring','angel_poring','angel_toy','angel_yuno','devil_payon','devil_yuno','arch_yuno','ghost_sunken'];
 mvps.forEach(m=>{ m.type = MINI_IDS.includes(m.id) ? 'mini' : 'mvp'; });
 let tabSig = '';
 let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); return t === 'mini' || t === 'storage' || t === 'timer' ? t : 'mvp'; } catch(e) { return 'mvp'; } })();
@@ -4396,11 +4398,11 @@ setInterval(()=>{
   const FAMILIES = [
     { names: ['Baphomet'], pick: map=> /glast|gl_|church|heim/i.test(map) ? 'bapho_gh' : 'bapho_maze' },
     { names: ['Ghostring'], pick: map=> /sunken|ship|treasure/i.test(map) ? 'ghost_sunken' : 'ghost_poring' },
-    { names: ['Angeling'], pick: map=> /magma/i.test(map) ? 'angel_magma' : /toy/i.test(map) ? 'angel_toy' : /mjol|mjöl/i.test(map) ? 'angel_mjolnir' : 'angel_poring' },
-    { names: ['Deviling'], pick: ()=> 'devil_magma' },
-    { names: ['Archangeling', 'Arcangeling', 'Arcangel'], pick: ()=> 'arch_magma' },
+    { names: ['Angeling'], pick: map=> /toy|xmas|warehouse/i.test(map) ? 'angel_toy' : /yuno|el\s*mes|plateau/i.test(map) ? 'angel_yuno' : 'angel_poring' },
+    { names: ['Deviling'], pick: map=> /yuno|el\s*mes|plateau/i.test(map) ? 'devil_yuno' : 'devil_payon' },
+    { names: ['Archangeling', 'Arcangeling', 'Arcangel'], pick: ()=> 'arch_yuno' },
   ];
-  const FAMILY_OF = { bapho_maze: 0, bapho_gh: 0, ghost_sunken: 1, ghost_poring: 1, angel_magma: 2, angel_toy: 2, angel_mjolnir: 2, angel_poring: 2, devil_magma: 3, arch_magma: 4 };
+  const FAMILY_OF = { bapho_maze: 0, bapho_gh: 0, ghost_sunken: 1, ghost_poring: 1, angel_toy: 2, angel_yuno: 2, angel_poring: 2, devil_payon: 3, devil_yuno: 3, arch_yuno: 4 };
   const placeOf = m=> String(m.location || '').replace(/\s*\(.*$/, '');
   // name (and, when readable, the map) decide which MVP it is; a shaky name is accepted when the map agrees
   function matchMvp(name, map, withScore){
@@ -5352,7 +5354,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015002811';
+  const BUILD = '20261015005313';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
