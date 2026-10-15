@@ -288,7 +288,11 @@
   // ---------- capture loop ----------
   let stream = null, track = null, grabber = null, video = null, ticker = null, busy = false;
   const seenSig = new Map(), recent = new Map(), log = [], seenKill = new Map(), seenEvt = new Map(), missSeen = new Map();
-  const seenLine = new Set(), scrollNoted = new Set(), geoCache = [];
+  // line memory is short: a line counts as "already seen" only while it stays on screen (plus a little slack);
+  // after that, the same MVP's line is a new kill (respawns) or an old one shown by scrolling (the scroll check decides)
+  const KNOWN_MS = 3 * 60000;
+  const seenLine = new Map(), scrollNoted = new Map(), geoCache = [];
+  const recentlySeen = (map, k, now)=> map.has(k) && now - (map.get(k).at != null ? map.get(k).at : map.get(k)) <= KNOWN_MS;
   const byIdSafe = id=> (typeof byId !== 'undefined' && byId) ? byId[id] : null;
   // the same kill line counts again only after that MVP could have respawned (scrolling back to it isn't a new kill)
   const killMemMs = m=> Math.max(25, (m && m.min ? m.min : 60) - 2) * 60000;
@@ -309,9 +313,9 @@
       // every line that was showing is gone at once: the chat jumped (scrolled far)
       const jumped = wasHere.size > 0 && stayed.length === 0;
       // lines seen before (earlier this session) tell us where in the chat history we are
-      const knownNow = g.list.filter(c=> linePos.has(c.key));
+      const knownNow = g.list.filter(c=> recentlySeen(linePos, c.key, now));
       for(const c of g.list){
-        if(linePos.has(c.key)) continue;                 // seen before: not new either way
+        if(recentlySeen(linePos, c.key, now)) continue;  // still the line we've been seeing: not new either way
         const knownBelow = knownNow.some(o=> o.y > c.y);
         const knownAbove = knownNow.some(o=> o.y < c.y);
         // a jump with nothing familiar on screen = scrolled far up into old history;
@@ -359,7 +363,7 @@
     ok.onclick = ()=>{
       area = { x: sel.x / cv.width, y: sel.y / cv.height, w: sel.w / cv.width, h: sel.h / cv.height };
       try { localStorage.setItem(AREA_KEY, JSON.stringify(area)); } catch(e) {}
-      seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; hot = []; warm = false;      // whatever is in chat right now counts as old
+      seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); seenLine.clear(); scrollNoted.clear(); prevGroups = []; hot = []; warm = false;      // whatever is in chat right now counts as old
       ov.remove();
       addLog('ok', 'Chat area set', 'Only kills in your chat box are read');
       status = 'Watching'; paintBtn();
@@ -368,7 +372,7 @@
   const diag = { size: '', black: false, lines: 0, lastLineAt: 0, lastText: '', lastTextAt: 0, outside: 0, frozenSince: 0, sum: -1, frozen: false };
   // small copy of the last frame, for the preview in the panel
   const thumb = document.createElement('canvas');
-  let scanN = 0, hot = [], hotAt = 0;
+  let scanN = 0, hot = [], hotAt = 0, lastGeom = '';
 
   function addLog(kind, title, sub){
     log.unshift({ kind, title, sub, at: Date.now() });
@@ -408,17 +412,25 @@
       scanN++;
       // after a full look finds the chat lines, only the strips around them are read (much less work);
       // the whole area is looked at again every 8th check, and whenever no strips are known
-      const doFull = !hot.length || scanN % 8 === 0 || Date.now() - hotAt > 10 * 60000;
-      const rects = doFull ? [{ x: 0, y: 0, w: aw, h: ah }] : hot;
-      const lines = [], evLines = [];
-      for(const rc of rects){
-        const im = cx.getImageData(ax + rc.x, ay + rc.y, rc.w, rc.h);
-        const mk = buildMasks(im);
-        const shift = l=>{ l.x0 += rc.x; l.x1 += rc.x; l.y0 += rc.y; l.y1 += rc.y; return l; };
-        lines.push(...findLines(im, mk.k, true).map(shift));
-        evLines.push(...findLines(im, mk.r, true).map(l=> (l.sig = 'e0' + l.sig, shift(l))));
-        evLines.push(...findLines(im, mk.y, true).map(l=> (l.sig = 'e1' + l.sig, shift(l))));
-      }
+      let doFull = !hot.length || scanN % 8 === 0 || Date.now() - hotAt > 10 * 60000;
+      let lines = [], evLines = [];
+      const readRects = rects=>{
+        lines = []; evLines = [];
+        for(const rc of rects){
+          const im = cx.getImageData(ax + rc.x, ay + rc.y, rc.w, rc.h);
+          const mk = buildMasks(im);
+          const shift = l=>{ l.x0 += rc.x; l.x1 += rc.x; l.y0 += rc.y; l.y1 += rc.y; return l; };
+          lines.push(...findLines(im, mk.k, true).map(shift));
+          evLines.push(...findLines(im, mk.r, true).map(l=> (l.sig = 'e0' + l.sig, shift(l))));
+          evLines.push(...findLines(im, mk.y, true).map(l=> (l.sig = 'e1' + l.sig, shift(l))));
+        }
+      };
+      const geomOf = ()=> lines.concat(evLines).filter(l=> !l.short).map(l=> l.y0 + ':' + l.x0).sort().join('|');
+      readRects(doFull ? [{ x: 0, y: 0, w: aw, h: ah }] : hot);
+      // the chat moved since the last look (new lines push older ones up, maybe out of the strips):
+      // look at the whole box now, so lines that moved are still recognised and new ones aren't taken for old
+      if(!doFull && geomOf() !== lastGeom){ doFull = true; readRects([{ x: 0, y: 0, w: aw, h: ah }]); }
+      lastGeom = geomOf();
       lines.sort((p, q)=> p.y0 - q.y0 || p.x0 - q.x0);
       evLines.sort((p, q)=> p.y0 - q.y0 || p.x0 - q.x0);
       if(doFull){
@@ -502,8 +514,10 @@
       const known = killChains.concat(evChains).filter(c=> c.sem);
       for(const c of known) c.key = c.sem + '@' + Math.round(c.x0 / 50);    // the same message in another chat window is its own line
       const fresh = new Set(), older = scrolledLines(known, now);
-      for(const c of known) if(!older.has(c.key) && !seenLine.has(c.key)) fresh.add(c.key);
-      for(const c of known) seenLine.add(c.key);
+      for(const c of known) if(!older.has(c.key) && !recentlySeen(seenLine, c.key, now)) fresh.add(c.key);
+      for(const c of known) seenLine.set(c.key, now);
+      for(const [k, t] of seenLine) if(now - t > KNOWN_MS) seenLine.delete(k);
+      for(const [k, t] of scrollNoted) if(now - t > KNOWN_MS) scrollNoted.delete(k);
       const visible = [];
       for(const c of killChains){
         diag.lastText = c.text; diag.lastTextAt = now;
@@ -529,7 +543,7 @@
         const isNew = fresh.has(e.key) && !seenEvt.has(k);
         seenEvt.set(k, now);
         if(!isNew){
-          if(older.has(e.key) && warm && !scrollNoted.has(e.key)){ scrollNoted.add(e.key); addLog('skip', `Boss event: ${evTitle(e)} — older line (chat scrolled), not logged`, ''); }
+          if(older.has(e.key) && warm && !scrollNoted.has(e.key)){ scrollNoted.set(e.key, now); addLog('skip', `Boss event: ${evTitle(e)} — older line (chat scrolled), not logged`, ''); }
           continue;
         }
         if(warm) handleEvent(e);
@@ -543,7 +557,7 @@
         if(same) same.seen = now; else arr.push({ killer: p.killer, seen: now });
         seenKill.set(m.id, arr);
         if(!fresh.has(key) || same){
-          if(older.has(key) && warm && !scrollNoted.has(key)){ scrollNoted.add(key); addLog('skip', `${m.name}: older kill line (chat scrolled), not logged`, p.killer ? 'by ' + p.killer : ''); }
+          if(older.has(key) && warm && !scrollNoted.has(key)){ scrollNoted.set(key, now); addLog('skip', `${m.name}: older kill line (chat scrolled), not logged`, p.killer ? 'by ' + p.killer : ''); }
           continue;
         }
         if(warm) handleKill(p, m);
@@ -806,7 +820,7 @@
       stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 2, max: 5 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
     } catch(e) { return; }   // they cancelled the share box
     track = stream.getVideoTracks()[0];
-    warm = false; seenKill.clear(); seenSig.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; hot = [];
+    warm = false; seenKill.clear(); seenSig.clear(); seenEvt.clear(); linePos.clear(); seenLine.clear(); scrollNoted.clear(); prevGroups = []; hot = [];
     track.addEventListener('ended', stop);
     grabber = (typeof ImageCapture !== 'undefined') ? new ImageCapture(track) : null;
     if(!grabber){ video = document.createElement('video'); video.muted = true; video.srcObject = stream; video.play().catch(()=>{}); }
@@ -870,7 +884,7 @@
     if(go) go.onclick = ()=>{ start(); };
     if(st) st.onclick = ()=>{ stop(); };
     const rs = pop.querySelector('.kd-reset');
-    if(rs) rs.onclick = ()=>{ area = DEFAULT_AREA; try { localStorage.removeItem(AREA_KEY); } catch(e) {} seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); prevGroups = []; hot = []; warm = false; addLog('ok', 'Reading the whole game window', ''); paintPop(); };
+    if(rs) rs.onclick = ()=>{ area = DEFAULT_AREA; try { localStorage.removeItem(AREA_KEY); } catch(e) {} seenSig.clear(); seenKill.clear(); seenEvt.clear(); linePos.clear(); seenLine.clear(); scrollNoted.clear(); prevGroups = []; hot = []; warm = false; addLog('ok', 'Reading the whole game window', ''); paintPop(); };
     const mk = pop.querySelector('.kd-mark'); if(mk) mk.onclick = ()=>{ pop.hidden = true; pickArea(); };
   }
   function mount(){
