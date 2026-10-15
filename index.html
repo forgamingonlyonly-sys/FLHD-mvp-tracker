@@ -1801,7 +1801,6 @@ body.compact .controls .btn-icon { width: 26px; padding: 0; }
 
 </div>
 
-<button class="theme-btn" id="themeBtn">◐ Theme</button>
 <div class="toast" id="toast" hidden></div>
 
 <!-- MODAL -->
@@ -1822,19 +1821,9 @@ function lsGet(k){ try { return localStorage.getItem(k); } catch(e) { return nul
 function lsSet(k,v){ try { localStorage.setItem(k,v); } catch(e) {} }
 
 /* ================= THEME ================= */
-(function(){
-  const root = document.documentElement;
-  const saved = lsGet('falsehood-theme');
-  // dark by default; light only when someone picks it with the Theme button
-  root.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
-  document.getElementById('themeBtn').onclick = ()=>{
-    const current = root.getAttribute('data-theme') ||
-      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    const next = current === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
-    lsSet('falsehood-theme', next);
-  };
-})();
+// dark theme only (the guild artwork background is made for it)
+document.documentElement.setAttribute('data-theme', 'dark');
+try { localStorage.removeItem('falsehood-theme'); } catch(e) {}
 
 /* ================= MVP LIST ================= */
 let mvps = [
@@ -5830,7 +5819,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015183555';
+  const BUILD = '20261015183656';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
