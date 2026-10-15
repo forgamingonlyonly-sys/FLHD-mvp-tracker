@@ -70,10 +70,15 @@ service cloud.firestore {
       allow create: if timer();
       allow read, update: if admin();
     }
+    // MVP pictures: everyone signed in sees them; only the Admin adds, changes or removes them
+    match /portraits/{id} {
+      allow read: if member();
+      allow write: if admin();
+    }
     match /{col}/{id} {
-      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog']);
-      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog']) && !(col == 'meta' && id == 'session');
-      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog']);
+      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits']);
+      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits']) && !(col == 'meta' && id == 'session');
+      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits']);
       allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer'] && member()
         && (request.resource == null || request.resource.data.keys().hasOnly(['at']));
     }

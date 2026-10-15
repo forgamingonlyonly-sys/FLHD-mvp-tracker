@@ -1450,6 +1450,87 @@ body.compact .controls .btn.undo { font-size: 11px; padding: 2px 7px; }
   .toolbar-right .summary { width: 100%; }
   .toolbar-right .summary .chip { flex: 1 1 auto; justify-content: center; padding: 0 6px; font-size: 11.5px; gap: 4px; }
 }
+/* ================= NEW LOOK ================= */
+body::before { content: ''; position: fixed; inset: 0 0 auto auto; width: min(760px, 70vw); height: 340px; pointer-events: none; z-index: 0;
+  background: no-repeat right top / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 340'%3E%3Cdefs%3E%3CradialGradient id='g' cx='.5' cy='.5' r='.5'%3E%3Cstop offset='0' stop-color='%23b79cff' stop-opacity='.55'/%3E%3Cstop offset='.6' stop-color='%236c4bc4' stop-opacity='.25'/%3E%3Cstop offset='1' stop-color='%236c4bc4' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='560' cy='110' r='120' fill='url(%23g)'/%3E%3Ccircle cx='560' cy='110' r='62' fill='%23a58be8' fill-opacity='.35'/%3E%3Cpath fill='%23140b24' fill-opacity='.85' d='M360 340V250h14v-22l12-16 12 16v22h16v-60l14-22 14 22v60h18v-96l10-26 10-26 10 26 10 26v96h18v-44l12-16 12 16v44h16v-70l14-24 14 24v70h18v-30l10-14 10 14v30h20v-58l12-18 12 18v58h22v-26l10-12 10 12v26h40v90z'/%3E%3C/svg%3E"); opacity: .9; }
+:root { --gold-ink: #f2c94c; }
+:root[data-theme="light"] { --gold-ink: #946c00; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --gold-ink: #946c00; } :root:not([data-theme="dark"]) body::before { opacity: 0; } }
+:root[data-theme="light"] body::before { opacity: 0; }
+.wrap { position: relative; z-index: 1; }
+/* header */
+.emblem, .emblem img { width: 58px; height: 58px; }
+h1 { font-size: 30px; }
+h1 small { display: block; margin: 7px 0 0 2px; font-size: 11px; letter-spacing: .5em; }
+.hdr-id .alert-btn, .hdr-id #apBtn { height: 36px; box-sizing: border-box; border-radius: 10px; }
+.hdr-id .alert-btn { padding: 0 14px; font-size: 13px; }
+.hdr-id #apBtn { width: 36px; padding: 0; font-size: 15px; }
+.hdr-id .fb-role { height: 36px; padding: 0 16px; border-radius: 10px; font-size: 13px; letter-spacing: .08em; }
+.hdr-id .fb-role.admin { border: 1.5px solid #d4a72c; color: var(--gold-ink); background: color-mix(in srgb, #d4a72c 12%, transparent); }
+.ctl .sync { height: 30px; box-sizing: border-box; padding: 0 11px; }
+.ctl { background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(6px); }
+/* next spawns */
+.nu-hero { padding: 10px 6px; gap: 0; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border)); border-left: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: 14px; background: color-mix(in srgb, var(--surface) 80%, transparent); box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 22%, transparent); backdrop-filter: blur(6px); }
+.nu-hero .nu-label { display: flex; align-items: center; gap: 10px; background: none; color: var(--gold-ink); font-size: 13px; letter-spacing: .22em; padding: 0 16px; margin: 0; line-height: 1.3; }
+.nu-hero .nu-label svg { width: 30px; height: 30px; fill: none; stroke: var(--gold-ink); stroke-width: 2; stroke-linecap: round; }
+.nu-hero .nu-item { flex: 1 1 200px; display: flex; align-items: center; gap: 12px; padding: 4px 16px; border-left: 1px solid var(--border); border-radius: 0; text-align: left; }
+.nu-hero .nu-item:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.nu-txt { display: grid; gap: 1px; min-width: 0; }
+.nu-hero .nu-name { font-size: 15px; }
+.nu-hero .nu-time { font: 700 26px/1.1 var(--font-display, Georgia, serif); color: var(--gold-ink); letter-spacing: .02em; }
+.nu-map { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nu-hero .nu-empty { padding: 8px 16px; }
+/* pictures */
+.pt { display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 12px; overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); color: var(--text-2); font-weight: 700; letter-spacing: .02em; }
+.pt img { width: 100%; height: 100%; object-fit: contain; image-rendering: auto; }
+.pt-row { width: 44px; height: 44px; font-size: 13px; grid-row: 1 / 3; grid-column: 1; }
+.pt-card { width: 64px; height: 64px; font-size: 18px; background: transparent; }
+.pt-card .pt-i { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--gold-ink) 18%, var(--surface-2)); color: var(--gold-ink); }
+.pt-bar { width: 34px; height: 34px; font-size: 11px; background: transparent; }
+.item.s-overdue .pt-row:not(:has(img)) { background: var(--overdue-bg); color: var(--overdue); }
+.item.s-window .pt-row:not(:has(img)) { background: var(--window-bg); color: var(--window); }
+.item.s-waiting .pt-row:not(:has(img)) { background: var(--waiting-bg); color: var(--waiting); }
+.pt:has(img) { background: transparent; }
+/* rows */
+.grid { gap: 8px 14px; }
+.item { grid-template-columns: auto minmax(0,1fr) auto; padding: 8px 12px; border-radius: 12px; gap: 3px 12px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent); }
+.item .line1, .item .line2 { grid-column: 2; }
+.item .controls { grid-column: 3; grid-row: 1 / 3; gap: 6px; }
+.mvp-name { font-size: 15.5px; }
+.status .spawn-text { font-size: 14px; }
+.line2 { font-size: 12.5px; }
+.pin { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; }
+.controls .btn { height: 32px; box-sizing: border-box; border-radius: 8px; padding: 0 14px; font-size: 13px; }
+.controls .btn-icon { width: 32px; padding: 0; }
+.controls .more { font-size: 16px; font-weight: 700; color: var(--text-2); }
+body.compact .pt-row { width: 28px; height: 28px; font-size: 10px; grid-row: 1; }
+body.compact .controls .btn { height: 26px; padding: 0 9px; font-size: 11px; }
+body.compact .controls .btn-icon { width: 26px; padding: 0; }
+.row-menu { position: fixed; z-index: 9990; min-width: 190px; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.row-menu[hidden] { display: none; }
+.row-menu button { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 7px; background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.row-menu button:hover { background: var(--surface-2); }
+.rm-sep { height: 1px; background: var(--border); margin: 4px 2px; }
+/* tabs */
+.tab { gap: 8px; padding: 9px 16px; font-size: 13.5px; letter-spacing: .06em; }
+.tab-ic { display: inline-flex; width: 17px; height: 17px; }
+.tab-ic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.tabs { border-radius: 12px; padding: 4px; }
+/* boss bar */
+.bebar { gap: 10px; }
+.last-upd { text-align: right; font-size: 12px; color: var(--text-3); margin: 6px 2px 40px; min-height: 14px; }
+@media (max-width: 760px) {
+  .emblem, .emblem img { width: 44px; height: 44px; }
+  h1 { font-size: 22px; }
+  .nu-hero .nu-label { width: 100%; padding: 4px 12px 8px; }
+  .nu-hero .nu-item { border-left: 0; border-top: 1px solid var(--border); padding: 8px 12px; }
+  .nu-hero .nu-time { font-size: 22px; }
+  .pt-row { width: 38px; height: 38px; }
+  .item .controls { grid-column: 1 / -1; grid-row: auto; }
+}
 </style>
 
 <div class="wrap">
@@ -1647,8 +1728,10 @@ function applySnapshot(snap){
     firstSnapshot = false;
   }
   sweepStale();
+  lastSyncAt = Date.now();
   requestRender();
 }
+let lastSyncAt = 0;
 
 async function connect(){
   let c = null;
@@ -1906,6 +1989,12 @@ let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); r
 const inTab = m => m.type === currentTab && m.id !== 'boss_event';
 function tabSignature(){ return currentTab + ['mvp','mini'].map(t=>mvps.some(m=>m.type===t && getStatus(m)==='window')).join(); }
 const TAB_LABEL = { mvp:'MVP', mini:'MINI MVP', storage:'STORAGE', timer:'TIMER' };
+const TAB_IC = {
+  mvp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-7 7v3l2 2v3h3v-2h4v2h3v-3l2-2v-3a7 7 0 0 0-7-7z"/><circle cx="9.5" cy="11" r="1.4"/><circle cx="14.5" cy="11" r="1.4"/></svg>',
+  mini: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4c-6 0-11 4-13 10l-3 6 6-3c6-2 10-7 10-13z"/><path d="M14 10l-7 7"/></svg>',
+  storage: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-5 9 5v11H3z"/><path d="M8 20v-6h8v6M8 17h8"/></svg>',
+  timer: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>',
+};
 function renderTabs(){
   tabSig = tabSignature();
   const box = document.getElementById('tabs');
@@ -1914,16 +2003,16 @@ function renderTabs(){
   box.innerHTML = tabList.map(t=>{
     if(t === 'timer'){
       const run = typeof cycle !== 'undefined' && cycle.startedAt;
-      return `<button class="tab tab-timer${t === currentTab ? ' active' : ''}" data-tab="timer" role="tab" aria-selected="${t === currentTab}">${run ? '<span class="live-dot" title="Timer running"></span>' : ''}TIMER</button>`;
+      return `<button class="tab tab-timer${t === currentTab ? ' active' : ''}" data-tab="timer" role="tab" aria-selected="${t === currentTab}">${run ? '<span class="live-dot" title="Timer running"></span>' : ''}<i class="tab-ic">${TAB_IC.timer}</i>TIMER</button>`;
     }
     if(t === 'storage'){
       const n = (typeof storageItems !== 'undefined' ? storageItems : []).filter(x=>x.status !== 'sold').length;
-      return `<button class="tab tab-storage${t === currentTab ? ' active' : ''}" data-tab="storage" role="tab" aria-selected="${t === currentTab}">STORAGE<span class="count">${n}</span></button>`;
+      return `<button class="tab tab-storage${t === currentTab ? ' active' : ''}" data-tab="storage" role="tab" aria-selected="${t === currentTab}"><i class="tab-ic">${TAB_IC.storage}</i>STORAGE<span class="count">${n}</span></button>`;
     }
     const list = mvps.filter(m=>m.type === t && m.id !== 'boss_event' && !isHidden(m));
     const live = list.some(m=>getStatus(m) === 'window');
     return `<button class="tab${t === currentTab ? ' active' : ''}" data-tab="${t}" role="tab" aria-selected="${t === currentTab}">`
-      + `${live ? '<span class="live-dot" title="Something is floating"></span>' : ''}${TAB_LABEL[t]}<span class="count">${list.length}</span></button>`;
+      + `${live ? '<span class="live-dot" title="Something is floating"></span>' : ''}<i class="tab-ic">${TAB_IC[t]}</i>${TAB_LABEL[t]}<span class="count">${list.length}</span></button>`;
   }).join('');
   box.querySelectorAll('.tab').forEach(btn=>{
     btn.onclick = ()=>{
@@ -2180,7 +2269,7 @@ function paintExtras(el, m){
 
 /* ---- "Next up" strip ---- */
 const nextUp = document.createElement('div');
-nextUp.className = 'nextup';
+nextUp.className = 'nextup nu-hero';
 nextUp.setAttribute('aria-label', 'Next MVPs to float');
 document.querySelector('header').after(nextUp);
 let nextSig = null;   // null so the empty-state message draws on first load
@@ -2206,11 +2295,12 @@ function renderBossBar(){
   }
   const can = A.canKill() && mode !== 'connecting';
   const undo = m && canUndo(m);
-  const sig = state + (m && m.lastDeath) + (m && m.location) + (m && m.killer) + can + undo;
+  const sig = state + (m && m.lastDeath) + (m && m.location) + (m && m.killer) + can + undo + Object.keys(portraits).length;
   if(sig !== beSig && !(document.activeElement && document.activeElement.classList.contains('be-edit'))){
     beSig = sig;
     beBar.className = 'nextup bebar' + (state === 'none' ? ' is-none' : state === 'dead' ? ' is-dead' : '');
-    beBar.innerHTML = '<span class="nu-label">Boss Event</span>' + (state === 'none'
+    const bm0 = state === 'none' ? null : mvpByBossName(boss), bm = bm0 && portraits[bm0.id] ? bm0 : null;
+    beBar.innerHTML = '<span class="nu-label">Boss Event</span>' + (bm ? portraitHTML(bm, 'pt-bar') : '') + (state === 'none'
       ? '<span class="nu-empty">No event recorded yet · random, about hourly</span>'
       : `<span class="nu-name">${escX(boss)}</span>${map ? `<span class="be-map">${escX(map)}</span>` : ''}<span class="sep">·</span>` + (state === 'up'
         ? '<span class="be-up"></span>'
@@ -2241,11 +2331,11 @@ function renderNextUp(){
     .filter(m=> getStatus(m) === 'waiting' && !isHidden(m))
     .sort((a,b)=> (a.lastDeath + a.min*60000) - (b.lastDeath + b.min*60000))
     .slice(0, 3);
-  const sig = list.map(m=>m.id).join('|');
+  const sig = list.map(m=>m.id + (portraits[m.id] ? 'p' : '')).join('|');
   if(sig !== nextSig){
     nextSig = sig;
-    nextUp.innerHTML = '<span class="nu-label">Next up</span>' + (list.length
-      ? list.map((m,i)=>`${i ? '<span class="sep">·</span>' : ''}<button class="nu-item" data-id="${escX(m.id)}"><span class="nu-name">${escX(m.name)}</span>${m.type === 'mini' ? '<span class="mini-tag">MINI</span>' : ''}<span class="nu-time"></span></button>`).join('')
+    nextUp.innerHTML = '<span class="nu-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l9 9M20 4l-9 9M7 17l-3 3M17 17l3 3M6 14l4 4M18 14l-4 4"/></svg><span>Next<br>spawns</span></span>' + (list.length
+      ? list.map(m=>`<button class="nu-item" data-id="${escX(m.id)}">${portraitHTML(m, 'pt-card')}<span class="nu-txt"><span class="nu-name">${escX(m.name)}${m.type === 'mini' ? ' <span class="mini-tag">MINI</span>' : ''}</span><span class="nu-time"></span><span class="nu-map">${PIN}${escX(String(m.location || '').replace(/\s*\(.*\)\s*$/, ''))} (${m.min}~${m.max})</span></span></button>`).join('')
       : '<span class="nu-empty">Nothing waiting. Log a kill to start a timer.</span>');
     nextUp.querySelectorAll('.nu-item').forEach(b=>{
       b.onclick = ()=>{
@@ -3084,6 +3174,83 @@ function clearKill(m){
   persist(m);
 }
 
+/* ================= MVP PICTURES (uploaded by the Admin, shown to everyone) ================= */
+let portraits = {};                 // mvp id -> data URL (GIF animations kept as uploaded)
+let portraitsLive = false;
+const PORTRAIT_MAX = 700 * 1024;    // one Firebase record holds about 1 MB
+const initials = name=> String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w=> w[0]).join('').toUpperCase() || '?';
+function portraitHTML(m, cls){
+  const src = m && portraits[m.id];
+  return `<span class="pt ${cls || ''}">${src ? `<img src="${src}" alt="" loading="lazy">` : `<span class="pt-i">${esc(initials(m ? m.name : '?'))}</span>`}</span>`;
+}
+// the Boss Event's boss -> the matching MVP's picture (Moonlight Flower -> Moonlight, Baphomet -> Baphomet Maze)
+function mvpByBossName(boss){
+  const n = String(boss || '').toLowerCase().replace(/[^a-z]/g, '');
+  if(!n) return null;
+  return mvps.find(m=> m.id !== 'boss_event' && portraits[m.id] && (n.startsWith(m.name.toLowerCase().replace(/[^a-z]/g, '')) || m.name.toLowerCase().replace(/[^a-z]/g, '').startsWith(n)))
+    || mvps.find(m=> m.id !== 'boss_event' && (n.startsWith(m.name.toLowerCase().replace(/[^a-z]/g, '')) || m.name.toLowerCase().replace(/[^a-z]/g, '').startsWith(n))) || null;
+}
+function startPortraits(){
+  if(portraitsLive || !db) return;
+  portraitsLive = true;
+  db.collection('portraits').onSnapshot(snap=>{
+    const next = {};
+    snap.docs.forEach(d=>{ const x = d.data() || {}; if(typeof x.data === 'string' && x.data.startsWith('data:image/')) next[d.id] = x.data; });
+    portraits = next;
+    requestRender(); beSig = null; nextSig = null;
+  }, ()=>{});
+}
+setInterval(()=>{ if(mode === 'live' && db) startPortraits(); }, 1000);
+const isAdmin = ()=> window.FALSEHOOD_ROLE === 'admin';
+function pickPortrait(m){
+  if(!isAdmin()) return;
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/gif,image/png,image/webp,image/jpeg';
+  inp.onchange = ()=>{
+    const f = inp.files && inp.files[0];
+    if(!f) return;
+    if(!/^image\//.test(f.type)){ showToast('Pick a picture file (GIF, PNG, WebP or JPG).'); return; }
+    if(f.size > PORTRAIT_MAX){ showToast(`That file is ${Math.round(f.size / 1024)} KB. Pictures can be up to 700 KB.`); return; }
+    const rd = new FileReader();
+    rd.onload = ()=>{
+      db.collection('portraits').doc(m.id).set({ data: rd.result, type: f.type, at: Date.now(), by: myId || null })
+        .then(()=> showToast(`Picture saved for ${m.name}.`))
+        .catch(e=> showToast('Couldn’t save the picture (' + ((e && e.code) || 'error') + '). Update the Firebase rules first.'));
+    };
+    rd.readAsDataURL(f);
+  };
+  inp.click();
+}
+function removePortrait(m){
+  if(!isAdmin() || !portraits[m.id]) return;
+  openModal('Remove picture?', `Remove the picture for <b>${esc(m.name)}</b> for everyone?`, ()=>{
+    db.collection('portraits').doc(m.id).delete().then(()=> showToast(`Picture removed for ${m.name}.`)).catch(()=> showToast('Couldn’t remove the picture.'));
+  });
+  confirmBtn.textContent = 'Remove';
+}
+// the ⋮ menu on each row: Hide for everyone; picture options for the Admin
+const rowMenu = document.createElement('div');
+rowMenu.className = 'row-menu'; rowMenu.hidden = true;
+document.body.appendChild(rowMenu);
+document.addEventListener('click', e=>{ if(!rowMenu.hidden && !rowMenu.contains(e.target)) rowMenu.hidden = true; });
+function openRowMenu(btn, m){
+  if(!rowMenu.hidden && rowMenu.dataset.id === m.id){ rowMenu.hidden = true; return; }
+  rowMenu.dataset.id = m.id;
+  const has = !!portraits[m.id];
+  rowMenu.innerHTML = (isAdmin() ? `<button type="button" data-a="pic">🖼 ${has ? 'Change picture…' : 'Add picture…'}</button>${has ? '<button type="button" data-a="nopic">✕ Remove picture</button>' : ''}<div class="rm-sep"></div>` : '')
+    + `<button type="button" data-a="hide">👁 Hide this MVP</button>`;
+  rowMenu.querySelectorAll('button').forEach(b=> b.onclick = e=>{
+    e.stopPropagation(); rowMenu.hidden = true;
+    if(b.dataset.a === 'pic') pickPortrait(m);
+    else if(b.dataset.a === 'nopic') removePortrait(m);
+    else { prefs.hidden[m.id] = true; savePrefs(); render(); }
+  });
+  rowMenu.hidden = false;
+  const r = btn.getBoundingClientRect();
+  rowMenu.style.top = (r.bottom + 4) + 'px';
+  rowMenu.style.left = Math.max(8, Math.min(r.right - rowMenu.offsetWidth, innerWidth - rowMenu.offsetWidth - 8)) + 'px';
+}
+const PIN = '<svg class="pin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 const autoMark = m=> m.auto ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat. If it’s wrong, Undo or Reset it.">📡</span>' : '';
 function render(){
   pendingRender = false;
@@ -3098,13 +3265,14 @@ function render(){
     const el = document.createElement('div');
     el.className = 'item' + (isFav(m) ? ' fav' : '');
     el.innerHTML = `
+      ${portraitHTML(m, 'pt-row')}
       <div class="line1">
         <button class="star" title="${isFav(m) ? 'Remove from favorites' : 'Add to favorites'}" aria-label="Favorite ${esc(m.name)}">${isFav(m) ? '★' : '☆'}</button>
         <span class="mvp-name">${esc(m.name)}</span>${searchQ && m.type === 'mini' ? '<span class="mini-tag">MINI</span>' : ''}
         <span class="status">${getStatusHTML(m)}</span>
       </div>
       <div class="line2">
-        <span class="loc" spellcheck="false"></span>
+        ${PIN}<span class="loc" spellcheck="false"></span>
         <span class="sep">·</span>
         ${m.id === 'boss_event'
           ? (m.lastDeath ? `<span>${m.ev === 'spawn' ? 'spawned' : 'killed'} ${formatTime(m.lastDeath)}${autoMark(m)}</span>` : '<span>random, about hourly</span>')
@@ -3114,7 +3282,7 @@ function render(){
         <button class="btn btn-primary kill" title="Log a kill at the current time" ${locked ? 'disabled' : ''}>Killed</button>
         <button class="btn update" title="Log a kill that happened earlier" ${locked ? 'disabled' : ''}>Update</button>
         <button class="btn btn-icon reset" title="Reset timer" aria-label="Reset ${esc(m.name)}" ${locked ? 'disabled' : ''}>↺</button>
-        <button class="btn btn-icon hide" title="Hide this MVP" aria-label="Hide ${esc(m.name)}">✕</button>
+        <button class="btn btn-icon more" title="More" aria-label="More options for ${esc(m.name)}">⋮</button>
       </div>
     `;
     applyStatus(el, m);
@@ -3123,9 +3291,7 @@ function render(){
       if(prefs.fav[m.id]) delete prefs.fav[m.id]; else prefs.fav[m.id] = true;
       savePrefs(); render();
     };
-    el.querySelector('.hide').onclick = ()=>{
-      prefs.hidden[m.id] = true; savePrefs(); render();
-    };
+    el.querySelector('.more').onclick = e=>{ e.stopPropagation(); openRowMenu(e.currentTarget, m); };
 
     const loc = el.querySelector('.loc');
     loc.textContent = m.location || '';
@@ -3922,21 +4088,28 @@ setInterval(()=>{
   const $ = q=> document.querySelector(q);
   const put = (el, box, first)=>{ if(el && el.parentNode !== box){ if(first) box.prepend(el); else box.appendChild(el); } };
   function arrange(){
-    put($('#sync'), idBox); put($('#fbRole'), idBox);
     const g1 = ctl.querySelector('.ctl-online'), g2 = ctl.querySelector('.ctl-auto'), g3 = ctl.querySelector('.ctl-right');
-    put($('.fb-online'), g1);
+    put($('#alertBtn'), idBox); put($('.ap-wrap'), idBox); put($('#fbRole'), idBox);
+    put($('#sync'), g1); put($('.fb-online'), g1);
     const kd = $('.kd-btn'), w = $('.fb-watch');
     if(kd && kd.parentNode !== g2) g2.insertBefore(kd, g2.querySelector('.fb-watch'));
     put(w, g2);
-    put($('#alertBtn'), g3); put($('.ap-wrap'), g3);
     const right = $('.toolbar-right'); if(right) put($('#summary'), right, true);
-    g1.classList.toggle('empty', !g1.querySelector('.fb-online'));
+    g1.classList.toggle('empty', !g1.children.length);
     g2.classList.toggle('empty', !kd && !w);
     ctl.querySelector('.ctl-div').hidden = g1.classList.contains('empty') || g2.classList.contains('empty');
   }
   arrange();
   let n = 0;
   const t = setInterval(()=>{ arrange(); if(++n > 150) { clearInterval(t); setInterval(arrange, 5000); } }, 400);
+})();
+
+/* Last updated (bottom right) */
+(function(){
+  const el = document.createElement('div'); el.className = 'last-upd';
+  document.getElementById('mvpList').parentNode.appendChild(el);
+  const paint = ()=>{ el.textContent = lastSyncAt ? 'Last updated ' + new Date(lastSyncAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''; };
+  paint(); setInterval(paint, 5000);
 })();
 
 /* ================= START ================= */
@@ -5179,7 +5352,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015001359';
+  const BUILD = '20261015002811';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
