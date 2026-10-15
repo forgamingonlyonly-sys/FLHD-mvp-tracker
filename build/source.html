@@ -983,7 +983,9 @@ body.compact .controls .btn-icon { width: 26px; padding: 0; }
 .st-row .st-sell { margin-left: auto; font-size: 12.5px; padding: 6px 14px; }
 .st-foot .st-thumb-btn { width: 56px; height: 42px; }
 .rm-danger { color: var(--overdue) !important; }
-.st-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.st-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.st-addrow { display: flex; }
+.st-addrow:has(> [hidden]) { display: none; }
 .st-add-toggle { font-size: 13px; padding: 8px 16px; }
 .st-add-toggle.open { background: var(--surface-2); color: var(--text); border-color: var(--border); box-shadow: none; }
 .st-add-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -2281,12 +2283,8 @@ storageView.setAttribute('aria-label', 'Guild storage');
 storageView.innerHTML = `
   <div class="st-me" id="stMe" hidden></div>
   <div class="st-summary" id="stSummary"></div>
-  <div class="st-bar">
-    <div class="st-filter" role="tablist" aria-label="Storage filter">
-      <button class="st-seg" data-f="storage" role="tab">In storage <span class="count" id="stCountStorage">0</span></button>
-      <button class="st-seg" data-f="sold" role="tab">Sold <span class="count" id="stCountSold">0</span></button>
-    </div>
-    <button type="button" class="btn btn-primary st-add-toggle" id="stAddToggle" aria-expanded="false" aria-controls="stAdd" hidden>+ Add loot</button>
+  <div class="st-addrow">
+      <button type="button" class="btn btn-primary st-add-toggle" id="stAddToggle" aria-expanded="false" aria-controls="stAdd" hidden>+ Add loot</button>
   </div>
   <form class="st-add" id="stAdd" autocomplete="off">
     <div class="st-add-head"><div class="st-add-title">Add loot to storage</div><button type="button" class="st-add-x" id="stAddX" title="Close" aria-label="Close the add loot form">✕</button></div>
@@ -2311,6 +2309,12 @@ storageView.innerHTML = `
     <datalist id="stMvpList"></datalist>
     <datalist id="stMemberList"></datalist>
   </form>
+  <div class="st-bar">
+    <div class="st-filter" role="tablist" aria-label="Storage filter">
+      <button class="st-seg" data-f="storage" role="tab">In storage <span class="count" id="stCountStorage">0</span></button>
+      <button class="st-seg" data-f="sold" role="tab">Sold <span class="count" id="stCountSold">0</span></button>
+    </div>
+  </div>
   <div class="st-list" id="stList"></div>
   <div class="st-activity" id="stActivity"></div>`;
 document.getElementById('mvpList').after(storageView);
@@ -2502,7 +2506,7 @@ function renderStorage(){
   // Admin / FLHD get a "+ Add loot" button that opens the form; roles that can't add see neither
   const canAdd = canEditStorage(), tg = storageView.querySelector('#stAddToggle');
   storageView.querySelector('#stAdd').hidden = !(canAdd && stAddOpen);
-  tg.hidden = !canAdd;
+  tg.hidden = !canAdd || stAddOpen;   // once open, the form's own ✕ closes it
   tg.textContent = stAddOpen ? '✕ Close' : '+ Add loot';
   tg.classList.toggle('open', stAddOpen);
   tg.setAttribute('aria-expanded', String(stAddOpen));
