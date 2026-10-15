@@ -1738,6 +1738,21 @@ body.compact .controls .btn-icon { width: 26px; padding: 0; }
   .st-drop-txt { white-space: normal; }
   .st-stat span { white-space: normal; line-height: 1.25; }
 }
+
+/* per-MVP log history (Admin) */
+.hist-list { display: grid; gap: 6px; max-height: 60vh; overflow-y: auto; margin-top: 4px; text-align: left; }
+.hist-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); font-size: 13px; }
+.hist-main { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; min-width: 0; }
+.hist-main span { color: var(--text-2); font-size: 12.5px; }
+.hist-main .hist-auto { font-size: 11px; color: var(--text-3); }
+.hist-when { color: var(--text-3); font-size: 11.5px; white-space: nowrap; }
+.hist-tag { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.hist-tag.k { background: var(--overdue-bg); color: var(--overdue); }
+.hist-tag.u { background: var(--waiting-bg); color: var(--waiting); }
+.hist-tag.r { background: var(--surface); color: var(--text-2); border: 1px solid var(--border); }
+.hist-tag.s { background: var(--window-bg); color: var(--window); }
+.hist-none { color: var(--text-3); font-size: 13px; padding: 6px 2px; }
+@media (max-width: 560px) { .hist-row { grid-template-columns: auto minmax(0, 1fr); } .hist-when { grid-column: 2; } }
 </style>
 
 <div class="wrap">
@@ -1876,6 +1891,26 @@ function persist(m){
   const body = { lastDeath: m.lastDeath, by: m.by || null, location: m.location || '', updatedAt: Date.now(), auto: !!m.auto };
   if(m.id === 'boss_event'){ body.ev = m.ev || null; body.killer = m.killer || ''; }
   writeChain = writeChain.then(()=> db.collection('mvps').doc(m.id).set(body)).catch(handleWriteError);
+  logHistory(m);
+}
+/* Per-MVP history (Admin only): every change adds one entry to mvplog/<mvp id>/entries; the ⋮ menu shows the last 10 */
+function logHistory(m){
+  const was = m._synced || {}, quiet = m._quiet;
+  let act = m._act || null;
+  m._act = null; m._quiet = false;
+  if(!act){
+    if(!m.lastDeath) act = was.lastDeath ? 'reset' : null;
+    else if(m.lastDeath !== was.lastDeath) act = m.id === 'boss_event' && m.ev === 'spawn' ? 'spawn' : 'kill';
+    else if(m.id === 'boss_event' && m.ev !== was.ev) act = m.ev === 'spawn' ? 'spawn' : 'kill';
+    else if(m.location !== was.location && !quiet) act = 'location';
+  }
+  m._synced = { lastDeath: m.lastDeath, location: m.location, ev: m.ev || null };
+  if(!act || !db || !db.collection) return;
+  let name = '';
+  try { name = (window.falsehoodMyName && window.falsehoodMyName()) || localStorage.getItem('falsehood-nick') || ''; } catch(e) {}
+  const e = { act, at: Date.now(), by: myId || null, name: name || null, t: m.lastDeath || null, loc: m.location || '', auto: !!m.auto };
+  if(m.id === 'boss_event' && m.killer) e.killer = m.killer;
+  writeChain = writeChain.then(()=> db.collection('mvplog').doc(m.id).collection('entries').add(e)).catch(()=>{});
 }
 function handleWriteError(e){
   const code = e && e.code;
@@ -1932,6 +1967,7 @@ function applySnapshot(snap){
     const OLD_DEFAULT = { ghost_poring: ['Payon Field (pay_fild04)'], angel_poring: ['Payon Field (pay_fild04)'], angel_toy: ['Toy Factory'],
       ghost_sunken: ['Sunken Ship', 'Sunken Ship F2 (treasure02)'], angel_mjolnir: ['Mjolnir Mountains'] };
     m.location = (typeof b.location === 'string' && b.location && !(OLD_DEFAULT[m.id] || []).includes(b.location)) ? b.location : m.defaultLocation;
+    m._synced = { lastDeath: m.lastDeath, location: m.location, ev: m.ev || null };
   });
   if(firstSnapshot){
     // Seed alert tracking from the real data so nothing fires on load
@@ -2501,7 +2537,7 @@ function renderBossBar(){
     const fixed = window.falsehoodFixMap(map);
     if(fixed && fixed !== map){
       map = fixed;
-      if(A.canKill() && mode === 'live' && renderBossBar.fixedFor !== m.lastDeath + fixed){ renderBossBar.fixedFor = m.lastDeath + fixed; m.location = fixed + ' (' + boss + ')'; persist(m); }
+      if(A.canKill() && mode === 'live' && renderBossBar.fixedFor !== m.lastDeath + fixed){ renderBossBar.fixedFor = m.lastDeath + fixed; m.location = fixed + ' (' + boss + ')'; m._quiet = true; persist(m); }
     }
   }
   const can = A.canKill() && mode !== 'connecting';
@@ -2626,6 +2662,7 @@ function undoKill(m){
   m.by = u.prevBy;
   m.auto = !!u.prevAuto;
   if(m.id === 'boss_event'){ m.ev = u.prevEv || (u.prev ? 'dead' : null); m.killer = u.prevKiller || ''; }
+  m._act = 'undo';
   persist(m);
   delete undoLog[m.id]; saveUndo();
   if(typeof prevStatus !== 'undefined') prevStatus[m.id] = getStatus(m);
@@ -3428,6 +3465,7 @@ function logKill(m, minutesAgo){
   if(m.id === 'boss_event'){ m.ev = m._ev || 'dead'; m.killer = m._killer || ''; m._ev = m._killer = null; }
   m.lastDeath = Date.now() - minutesAgo*60000;
   m.by = myId;
+  m._act = m.id === 'boss_event' && m.ev === 'spawn' ? 'spawn' : minutesAgo ? 'update' : 'kill';
   recordUndo(m, prev, prevBy);
   undoLog[m.id].prevAuto = prevAuto; saveUndo();
   if(m.id === 'boss_event'){ undoLog[m.id].prevEv = prevEv || null; undoLog[m.id].prevKiller = prevKiller || ''; saveUndo(); }
@@ -3441,6 +3479,7 @@ function clearKill(m){
   m.auto = false;
   if(m.id === 'boss_event'){ m.ev = null; m.killer = ''; }
   m.by = myId;
+  m._act = 'reset';
   prefs.input[m.id] = 0; savePrefs();
   prevStatus[m.id] = 'unknown';
   persist(m);
@@ -3512,6 +3551,7 @@ function openRowMenu(btn, m){
   const canReset = !(!canWrite || mode === 'connecting') && !!m.lastDeath;
   rowMenu.innerHTML = (canReset ? '<button type="button" data-a="reset">↺ Reset timer</button><div class="rm-sep"></div>' : '')
     + (isAdmin() ? `<button type="button" data-a="pic">🖼 ${has ? 'Change picture…' : 'Add picture…'}</button>${has ? '<button type="button" data-a="nopic">✕ Remove picture</button>' : ''}<div class="rm-sep"></div>` : '')
+    + (isAdmin() && mode === 'live' ? '<button type="button" data-a="hist">🕘 Log history</button>' : '')
     + `<button type="button" data-a="hide">👁 Hide this MVP</button>`;
   rowMenu.querySelectorAll('button').forEach(b=> b.onclick = e=>{
     e.stopPropagation(); rowMenu.hidden = true;
@@ -3520,12 +3560,36 @@ function openRowMenu(btn, m){
     }
     else if(b.dataset.a === 'pic') pickPortrait(m);
     else if(b.dataset.a === 'nopic') removePortrait(m);
+    else if(b.dataset.a === 'hist') openHistory(m);
     else { prefs.hidden[m.id] = true; savePrefs(); render(); }
   });
   rowMenu.hidden = false;
   const r = btn.getBoundingClientRect();
   rowMenu.style.top = (r.bottom + 4) + 'px';
   rowMenu.style.left = Math.max(8, Math.min(r.right - rowMenu.offsetWidth, innerWidth - rowMenu.offsetWidth - 8)) + 'px';
+}
+async function openHistory(m){
+  if(!isAdmin()) return;
+  openModal(`🕘 ${m.name}`, '<div class="hist-list"><div class="hist-none">Loading…</div></div>', null);
+  const md = document.querySelector('.modal'); md.classList.add('wide');
+  confirmBtn.textContent = 'Close';
+  document.getElementById('modalCancel').hidden = true;
+  const box = md.querySelector('.hist-list');
+  let rows = [];
+  try { rows = (await db.collection('mvplog').doc(m.id).collection('entries').orderBy('at', 'desc').limit(10).get()).docs.map(d=> d.data() || {}); }
+  catch(e) { box.innerHTML = `<div class="hist-none">Couldn’t load the history (${esc((e && e.code) || 'error')}). Update the Firebase rules first.</div>`; return; }
+  if(!rows.length){ box.innerHTML = '<div class="hist-none">No changes recorded yet. New kills, updates, resets and undos show up here.</div>'; return; }
+  const ACT = { kill: ['Killed', 'k'], update: ['Updated time', 'u'], reset: ['Reset timer', 'r'], undo: ['Undid last change', 'r'], location: ['Changed location', 'u'], spawn: ['Spawned', 's'] };
+  const day = t=>{ const d = new Date(t), today = new Date(); const same = d.toDateString() === today.toDateString();
+    return (same ? '' : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ') + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+  box.innerHTML = rows.map(e=>{
+    const [label, cls] = ACT[e.act] || ['Changed', 'u'];
+    const who = e.name || (e.by && typeof nickNames !== 'undefined' && nickNames[e.by]) || 'a guildmate';
+    const detail = e.act === 'location' ? esc(e.loc || '')
+      : (e.act === 'kill' || e.act === 'update') && e.t ? (Math.abs(e.t - e.at) > 90000 ? 'died ' + day(e.t) : '') + (e.killer ? ' · by ' + esc(e.killer) : '') + (e.loc && e.loc !== m.defaultLocation ? ' · ' + esc(e.loc) : '')
+      : e.act === 'spawn' && e.t ? 'at ' + day(e.t) + (e.loc ? ' · ' + esc(e.loc) : '') : '';
+    return `<div class="hist-row"><span class="hist-tag ${cls}">${label}</span><div class="hist-main"><b>${esc(who)}</b>${e.auto ? ' <span class="hist-auto" title="Logged by their Auto-detect">📡 Auto-detect</span>' : ''}${detail ? `<span>${detail}</span>` : ''}</div><span class="hist-when">${day(e.at)}</span></div>`;
+  }).join('');
 }
 const PIN = '<svg class="pin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 const autoMark = m=> m.auto ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat. If it’s wrong, Undo or Reset it.">📡</span>' : '';
@@ -5636,6 +5700,7 @@ setInterval(()=>{
         if(m.id === 'boss_event'){ m.ev = p.ev || null; m.killer = p.killer || ''; }
         if(p.location) m.location = p.location;
         try { prevStatus[m.id] = getStatus(m); } catch(e) {}
+        m._act = 'undo';
         persist(m);
         try { await fs.collection('autolog').doc(d.id).set(Object.assign({}, x, { undone: true, undoneAt: Date.now() })); } catch(e) {}
         try { render(); } catch(e) {}
@@ -5664,7 +5729,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015095853';
+  const BUILD = '20261015103450';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';

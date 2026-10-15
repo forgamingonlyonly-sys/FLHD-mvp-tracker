@@ -82,6 +82,11 @@ service cloud.firestore {
       allow create: if timer();
       allow read, update: if admin();
     }
+    // per-MVP log history: anyone who can log kills adds entries; only the Admin reads them
+    match /mvplog/{mvp}/entries/{e} {
+      allow create: if timer() && request.resource.data.by == request.auth.uid;
+      allow read: if admin();
+    }
     // MVP pictures: everyone signed in sees them; only the Admin adds, changes or removes them
     match /portraits/{id} {
       allow read: if member();

@@ -69,6 +69,7 @@
         if(m.id === 'boss_event'){ m.ev = p.ev || null; m.killer = p.killer || ''; }
         if(p.location) m.location = p.location;
         try { prevStatus[m.id] = getStatus(m); } catch(e) {}
+        m._act = 'undo';
         persist(m);
         try { await fs.collection('autolog').doc(d.id).set(Object.assign({}, x, { undone: true, undoneAt: Date.now() })); } catch(e) {}
         try { render(); } catch(e) {}
