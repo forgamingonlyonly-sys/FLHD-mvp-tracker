@@ -1097,7 +1097,6 @@ let mvps = [
   { id:'evil_snake',   name:'Evil Snake Lord',   min:60, max:120, location:'Gonryun Dungeon F3 (gon_dun03)' },
   { id:'lod',          name:'Lord Of Death',     min:60, max:120, location:'Niflheim (niflheim)' },
   { id:'moonlight',    name:'Moonlight',         min:60, max:180, location:'Payon Cave F5 (pay_dun04)' },
-  { id:'bapho_maze',   name:'Baphomet Maze',     min:60, max:70,  location:'Labyrinth Forest F3 (prt_maze03)' },
   { id:'bapho_gh',     name:'Baphomet GH',       min:60, max:70, location:'Glast Heim' },
   { id:'boss_event',   name:'Boss Event',        min:60, max:60, location:'Random map ([PW2 Boss Event])' },
   { id:'ghost_poring', name:'Ghostring Poring Island', min:30, max:30,  location:'Sograt Desert, Payon Field 4 (pay_fild04)' },
@@ -2756,7 +2755,7 @@ function portraitHTML(m, cls){
   const src = m && portraits[m.id];
   return `<span class="pt ${cls || ''}">${src ? `<img src="${src}" alt="" loading="lazy">` : `<span class="pt-i">${esc(initials(m ? m.name : '?'))}</span>`}</span>`;
 }
-// the Boss Event's boss -> the matching MVP's picture (Moonlight Flower -> Moonlight, Baphomet -> Baphomet Maze)
+// the Boss Event's boss -> the matching MVP's picture (Moonlight Flower -> Moonlight, Baphomet -> Baphomet GH)
 function mvpByBossName(boss){
   const n = String(boss || '').toLowerCase().replace(/[^a-z]/g, '');
   if(!n) return null;

@@ -1835,7 +1835,6 @@ let mvps = [
   { id:'evil_snake',   name:'Evil Snake Lord',   min:60, max:120, location:'Gonryun Dungeon F3 (gon_dun03)' },
   { id:'lod',          name:'Lord Of Death',     min:60, max:120, location:'Niflheim (niflheim)' },
   { id:'moonlight',    name:'Moonlight',         min:60, max:180, location:'Payon Cave F5 (pay_dun04)' },
-  { id:'bapho_maze',   name:'Baphomet Maze',     min:60, max:70,  location:'Labyrinth Forest F3 (prt_maze03)' },
   { id:'bapho_gh',     name:'Baphomet GH',       min:60, max:70, location:'Glast Heim' },
   { id:'boss_event',   name:'Boss Event',        min:60, max:60, location:'Random map ([PW2 Boss Event])' },
   { id:'ghost_poring', name:'Ghostring Poring Island', min:30, max:30,  location:'Sograt Desert, Payon Field 4 (pay_fild04)' },
@@ -3494,7 +3493,7 @@ function portraitHTML(m, cls){
   const src = m && portraits[m.id];
   return `<span class="pt ${cls || ''}">${src ? `<img src="${src}" alt="" loading="lazy">` : `<span class="pt-i">${esc(initials(m ? m.name : '?'))}</span>`}</span>`;
 }
-// the Boss Event's boss -> the matching MVP's picture (Moonlight Flower -> Moonlight, Baphomet -> Baphomet Maze)
+// the Boss Event's boss -> the matching MVP's picture (Moonlight Flower -> Moonlight, Baphomet -> Baphomet GH)
 function mvpByBossName(boss){
   const n = String(boss || '').toLowerCase().replace(/[^a-z]/g, '');
   if(!n) return null;
@@ -4737,7 +4736,7 @@ setInterval(()=>{
   };
   // MVPs that share a name: pick by the map in the announcement
   const FAMILIES = [
-    { names: ['Baphomet'], pick: map=> /glast|gl_|church|heim/i.test(map) ? 'bapho_gh' : 'bapho_maze' },
+    { names: ['Baphomet'], pick: map=> /glast|gl_|church|heim/i.test(map) ? 'bapho_gh' : null },   // Baphomet Maze isn't tracked
     { names: ['Ghostring'], pick: map=> /sunken|ship|treasure/i.test(map) ? 'ghost_sunken' : 'ghost_poring' },
     { names: ['Angeling'], pick: map=> /toy|xmas|warehouse/i.test(map) ? 'angel_toy' : /yuno|el\s*mes|plateau/i.test(map) ? 'angel_yuno' : /mjol|mjöl/i.test(map) ? 'angel_mjolnir' : 'angel_poring' },
     { names: ['Deviling'], pick: ()=> 'devil_yuno' },
@@ -5750,7 +5749,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015151813';
+  const BUILD = '20261015170547';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';

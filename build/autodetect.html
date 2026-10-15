@@ -253,7 +253,7 @@
   };
   // MVPs that share a name: pick by the map in the announcement
   const FAMILIES = [
-    { names: ['Baphomet'], pick: map=> /glast|gl_|church|heim/i.test(map) ? 'bapho_gh' : 'bapho_maze' },
+    { names: ['Baphomet'], pick: map=> /glast|gl_|church|heim/i.test(map) ? 'bapho_gh' : null },   // Baphomet Maze isn't tracked
     { names: ['Ghostring'], pick: map=> /sunken|ship|treasure/i.test(map) ? 'ghost_sunken' : 'ghost_poring' },
     { names: ['Angeling'], pick: map=> /toy|xmas|warehouse/i.test(map) ? 'angel_toy' : /yuno|el\s*mes|plateau/i.test(map) ? 'angel_yuno' : /mjol|mjöl/i.test(map) ? 'angel_mjolnir' : 'angel_poring' },
     { names: ['Deviling'], pick: ()=> 'devil_yuno' },
