@@ -2541,6 +2541,7 @@ function hideTip(){ tip.hidden = true; tipAnchor = null; }
 function paintExtras(el, m){
   const name = el.querySelector('.mvp-name');
   if(name && name.tabIndex !== 0){ name.tabIndex = 0; name.title = ''; }
+  return;   // the progress bar under each row was removed (the timer column shows the time instead)
   let bar = el.querySelector('.prog');
   if(!bar){
     bar = document.createElement('span');
@@ -5886,7 +5887,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015185159';
+  const BUILD = '20261015185619';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
