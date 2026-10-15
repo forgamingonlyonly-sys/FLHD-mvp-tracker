@@ -2599,7 +2599,7 @@ function renderNextUp(){
   const list = mvps
     .filter(m=> getStatus(m) === 'waiting' && !isHidden(m))
     .sort((a,b)=> (a.lastDeath + a.min*60000) - (b.lastDeath + b.min*60000))
-    .slice(0, 3);
+    .slice(0, 4);
   const sig = list.map(m=>m.id + (portraits[m.id] ? 'p' : '')).join('|');
   if(sig !== nextSig){
     nextSig = sig;
@@ -5846,7 +5846,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015182923';
+  const BUILD = '20261015183158';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
