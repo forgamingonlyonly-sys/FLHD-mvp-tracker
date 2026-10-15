@@ -1049,7 +1049,8 @@ function lsSet(k,v){ try { localStorage.setItem(k,v); } catch(e) {} }
 (function(){
   const root = document.documentElement;
   const saved = lsGet('falsehood-theme');
-  if(saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+  // dark by default; light only when someone picks it with the Theme button
+  root.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
   document.getElementById('themeBtn').onclick = ()=>{
     const current = root.getAttribute('data-theme') ||
       (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
