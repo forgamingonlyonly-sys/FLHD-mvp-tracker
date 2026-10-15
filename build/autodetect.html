@@ -586,6 +586,19 @@
     if(!m) m = byMap(p.map);
     return m;
   }
+  // "I'll take this one": the first watcher to claim an MVP's kill logs it; everyone else skips it
+  async function claim(key){
+    const f = window.FALSEHOOD_FS; if(!f) return true;
+    const ref = f.collection('killclaim').doc(key);
+    try {
+      return await f.runTransaction(async tx=>{
+        const s = await tx.get(ref), d = s.exists ? (s.data() || {}) : null;
+        if(d && Date.now() - (+d.at || 0) < SAME_KILL_MS) return false;
+        tx.set(ref, { at: Date.now(), by: window.FALSEHOOD_UID || null });
+        return true;
+      });
+    } catch(e) { return true; }        // lock not reachable (e.g. rules not updated yet): log as before
+  }
   const snap = m=> ({ lastDeath: m.lastDeath || null, by: m.by || null, auto: !!m.auto, ev: m.ev || null, killer: m.killer || '', location: m.location || '' });
   function record(kind, m, prev, info){
     try {
@@ -595,7 +608,7 @@
         killer: info.killer || '', map: info.map || '', boss: info.boss || '', setTo: m.lastDeath || null, prev, by: window.FALSEHOOD_UID || null }).catch(()=>{});
     } catch(e) {}
   }
-  function handleKill(p, m){
+  async function handleKill(p, m){
     m = m || resolve(p);
     const who = p.killer ? `by ${p.killer}${p.guild ? ' (' + p.guild + ')' : ''}` : '';
     if(!m){ addLog('miss', `Couldn’t match “${p.mvp}”`, [p.map, who].filter(Boolean).join(' · ')); return; }
@@ -609,6 +622,7 @@
     try { can = A.canKill(); } catch(e) {}
     if(!can){ addLog('miss', `${m.name}: you can’t log kills`, who); return; }
     recent.set(m.id, now);
+    if(!(await claim('k_' + m.id))){ addLog('skip', `${m.name} already logged by another watcher`, who); return; }
     const prevK = snap(m);
     try { m._auto = true; logKill(m, 0); } catch(e) { addLog('miss', `${m.name}: couldn’t log`, String(e && e.message || e)); return; }
     record('kill', m, prevK, { text: p.text, killer: p.killer ? p.killer + (p.guild ? ' (' + p.guild + ')' : '') : '', map: p.map });
@@ -717,7 +731,7 @@
   }
   const evTitle = e=> e.kind === 'gather' ? `gathering in ${e.map || '?'}` : `${e.boss || 'MVP'} ${e.kind === 'dead' ? 'defeated' : 'spawned'} in ${e.map || '?'}`;
   // the yellow "has been defeated" line: Boss Event row → died now, location = that map (and which boss it was)
-  function handleEvent(e){
+  async function handleEvent(e){
     if(e.kind === 'spawn') return handleSpawn(e);
     if(e.kind !== 'dead') return;
     const m = (typeof byId !== 'undefined' && byId) ? byId.boss_event : null;
@@ -731,6 +745,7 @@
     try { can = A.canKill(); } catch(x) {}
     if(!can){ addLog('miss', 'Boss Event: you can’t log kills', who); return; }
     recent.set(m.id, now);
+    if(!(await claim('ev_dead'))){ addLog('skip', `Boss Event (${e.boss}) already logged by another watcher`, who); return; }
     const prevD = snap(m);
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');
@@ -743,7 +758,7 @@
   }
 
   // red "has spawned" line: show the Boss Event row as up right now, at the new map
-  function handleSpawn(e){
+  async function handleSpawn(e){
     const m = (typeof byId !== 'undefined' && byId) ? byId.boss_event : null;
     if(!m){ addLog('miss', 'Boss Event row not found', evTitle(e)); return; }
     const now = Date.now();
@@ -754,6 +769,7 @@
     try { can = A.canKill(); } catch(x) {}
     if(!can){ addLog('miss', 'Boss Event: you can’t log it', evTitle(e)); return; }
     recent.set('boss_event_spawn', now);
+    if(!(await claim('ev_spawn'))){ addLog('skip', `Boss Event spawn (${e.boss}) already logged by another watcher`, e.map || ''); return; }
     const prevS = snap(m);
     try {
       if(e.map) m.location = e.map + (e.boss ? ' (' + e.boss + ')' : '');

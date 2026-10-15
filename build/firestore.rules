@@ -75,10 +75,14 @@ service cloud.firestore {
       allow read: if member();
       allow write: if admin();
     }
+    // Auto-detect: watchers claim each kill so exactly one of them logs it
+    match /killclaim/{k} {
+      allow read, write: if timer();
+    }
     match /{col}/{id} {
-      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits']);
-      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits']) && !(col == 'meta' && id == 'session');
-      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits']);
+      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim']);
+      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim']) && !(col == 'meta' && id == 'session');
+      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim']);
       allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer'] && member()
         && (request.resource == null || request.resource.data.keys().hasOnly(['at']));
     }
