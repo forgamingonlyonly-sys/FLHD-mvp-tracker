@@ -1846,8 +1846,8 @@ function paintUndo(el, m){
     b.title = 'Undo the kill you just logged and restore the previous timer';
     b.setAttribute('aria-label', 'Undo kill for ' + m.name);
     b.onclick = ()=> undoKill(m);
-    const reset = el.querySelector('.reset');
-    if(reset) reset.before(b); else el.querySelector('.controls').appendChild(b);
+    const more = el.querySelector('.more');
+    if(more) more.before(b); else el.querySelector('.controls').appendChild(b);
   }
   b.hidden = !canUndo(m);
 }
@@ -2653,11 +2653,16 @@ function openRowMenu(btn, m){
   if(!rowMenu.hidden && rowMenu.dataset.id === m.id){ rowMenu.hidden = true; return; }
   rowMenu.dataset.id = m.id;
   const has = !!portraits[m.id];
-  rowMenu.innerHTML = (isAdmin() ? `<button type="button" data-a="pic">🖼 ${has ? 'Change picture…' : 'Add picture…'}</button>${has ? '<button type="button" data-a="nopic">✕ Remove picture</button>' : ''}<div class="rm-sep"></div>` : '')
+  const canReset = !(!canWrite || mode === 'connecting') && !!m.lastDeath;
+  rowMenu.innerHTML = (canReset ? '<button type="button" data-a="reset">↺ Reset timer</button><div class="rm-sep"></div>' : '')
+    + (isAdmin() ? `<button type="button" data-a="pic">🖼 ${has ? 'Change picture…' : 'Add picture…'}</button>${has ? '<button type="button" data-a="nopic">✕ Remove picture</button>' : ''}<div class="rm-sep"></div>` : '')
     + `<button type="button" data-a="hide">👁 Hide this MVP</button>`;
   rowMenu.querySelectorAll('button').forEach(b=> b.onclick = e=>{
     e.stopPropagation(); rowMenu.hidden = true;
-    if(b.dataset.a === 'pic') pickPortrait(m);
+    if(b.dataset.a === 'reset'){
+      openModal('Confirm Reset', `Reset the timer for <b>${esc(m.name)}</b> for everyone?`, ()=>{ clearKill(m); render(); });
+    }
+    else if(b.dataset.a === 'pic') pickPortrait(m);
     else if(b.dataset.a === 'nopic') removePortrait(m);
     else { prefs.hidden[m.id] = true; savePrefs(); render(); }
   });
@@ -2697,7 +2702,6 @@ function render(){
       <div class="controls">
         <button class="btn btn-primary kill" title="Log a kill at the current time" ${locked ? 'disabled' : ''}>Killed</button>
         <button class="btn update" title="Log a kill that happened earlier" ${locked ? 'disabled' : ''}>Update</button>
-        <button class="btn btn-icon reset" title="Reset timer" aria-label="Reset ${esc(m.name)}" ${locked ? 'disabled' : ''}>↺</button>
         <button class="btn btn-icon more" title="More" aria-label="More options for ${esc(m.name)}">⋮</button>
       </div>
     `;
@@ -2726,10 +2730,6 @@ function render(){
     el.querySelector('.kill').onclick = ()=> logKill(m, 0);
     el.querySelector('.update').onclick = ()=> openMinutesModal(m, mins=> logKill(m, mins));
 
-    el.querySelector('.reset').onclick = ()=>{
-      openModal('Confirm Reset', `Reset the timer for <b>${esc(m.name)}</b> for everyone?`,
-        ()=>{ clearKill(m); render(); });
-    };
 
     list.appendChild(el);
   });
