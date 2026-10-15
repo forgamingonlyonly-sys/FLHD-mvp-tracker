@@ -6,6 +6,7 @@ firebase-shim.html   Firebase sign-in, roles, presence; goes into <head>
 autodetect.html      Auto-detect (reads kill / Boss Event lines from the shared game window)
 discord.html         Discord board and posts
 review.html          Admin review list of Auto-detect logs
+scene.html           night scene behind the tracker (dark theme)
 updater.html         "new version" bar and version label (gets the build id)
 Writes ../index.html and ../version.json."""
 import pathlib, time, json
@@ -22,7 +23,7 @@ def add_before_body(html):
     global src
     i = src.rfind('</body>')
     src = src[:i] + html + '\n' + src[i:]
-for name in ['autodetect.html', 'discord.html', 'review.html', 'updater.html']:
+for name in ['scene.html', 'autodetect.html', 'discord.html', 'review.html', 'updater.html']:
     add_before_body((root / name).read_text().replace('__BUILD__', build_id))
 
 (root.parent / 'version.json').write_text(json.dumps({'build': build_id}))
