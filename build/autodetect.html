@@ -816,18 +816,6 @@
     if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
       alert('Auto-detect needs Chrome or Edge on a computer.'); return;
     }
-    // only 2 guildmates run Auto-detect at a time
-    try {
-      const w = window.FALSEHOOD_WATCH;
-      const c = w && w.canStart ? await w.canStart() : { ok: true };
-      if(!c.ok){
-        const who = c.names && c.names.length ? ` (${c.names.map(n=> esc(n)).join(' and ')})` : '';
-        const msg = `<b>${c.n} guildmates are already running Auto-detect${who}.</b><br>Only 2 can run it at the same time, and kills they see are logged for everyone. Try again when one of them stops — a spot frees up within about 3 minutes.`;
-        try { openModal('📡 Auto-detect is full', msg, null); confirmBtn.textContent = 'OK'; document.getElementById('modalCancel').hidden = true; }
-        catch(x) { alert(msg.replace(/<[^>]+>/g, '')); }
-        return;
-      }
-    } catch(e) {}
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 2, max: 5 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
     } catch(e) { return; }   // they cancelled the share box

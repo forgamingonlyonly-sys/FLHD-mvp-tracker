@@ -244,7 +244,7 @@ body.no-delete .st-del{display:none!important}
     };
   }
   // Who's online: each open tracker checks in every 2 minutes; counts use cheap server-side count queries
-  const ONLINE_MS = 5 * 60000, BEAT_MS = 2 * 60000, WATCH_MS = 3 * 60000, WATCH_MAX = 2;
+  const ONLINE_MS = 5 * 60000, BEAT_MS = 2 * 60000, WATCH_MS = 3 * 60000;
   async function countSince(col, since){
     const token = await auth.currentUser.getIdToken();
     const url = 'https://firestore.googleapis.com/v1/projects/' + cfg.projectId + '/databases/(default)/documents:runAggregationQuery';
@@ -315,19 +315,6 @@ body.no-delete .st-del{display:none!important}
       stop(){ watching = false; clearInterval(wTimer);
         Promise.all([fs.collection('watchers').doc(PTOKEN).delete(), fs.collection('watchers_who').doc(PTOKEN).delete()]).catch(()=>{}).then(wRefresh); },
       refresh: wRefresh,
-      // at most WATCH_MAX people run Auto-detect at once (saves the Firebase daily allowance)
-      async canStart(){
-        try {
-          const since = Date.now() - WATCH_MS;
-          const snap = await fs.collection('watchers').where('at', '>', since).get();
-          const others = snap.docs.filter(d=> d.id !== PTOKEN).length;
-          let names = [];
-          if(role === 'admin'){
-            try { names = (await fs.collection('watchers_who').where('at', '>', since).get()).docs.filter(d=> d.id !== PTOKEN).map(d=> (d.data() || {}).name).filter(Boolean); } catch(e) {}
-          }
-          return { ok: others < WATCH_MAX, n: others, names };
-        } catch(e) { return { ok: true, n: 0, names: [] }; }   // can't check: don't block
-      },
     };
     window.addEventListener('pagehide', ()=>{ if(watching){ try { fs.collection('watchers').doc(PTOKEN).delete(); fs.collection('watchers_who').doc(PTOKEN).delete(); } catch(e) {} } });
     if(role === 'admin'){
@@ -5334,18 +5321,6 @@ setInterval(()=>{
     if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
       alert('Auto-detect needs Chrome or Edge on a computer.'); return;
     }
-    // only 2 guildmates run Auto-detect at a time
-    try {
-      const w = window.FALSEHOOD_WATCH;
-      const c = w && w.canStart ? await w.canStart() : { ok: true };
-      if(!c.ok){
-        const who = c.names && c.names.length ? ` (${c.names.map(n=> esc(n)).join(' and ')})` : '';
-        const msg = `<b>${c.n} guildmates are already running Auto-detect${who}.</b><br>Only 2 can run it at the same time, and kills they see are logged for everyone. Try again when one of them stops — a spot frees up within about 3 minutes.`;
-        try { openModal('📡 Auto-detect is full', msg, null); confirmBtn.textContent = 'OK'; document.getElementById('modalCancel').hidden = true; }
-        catch(x) { alert(msg.replace(/<[^>]+>/g, '')); }
-        return;
-      }
-    } catch(e) {}
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 2, max: 5 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
     } catch(e) { return; }   // they cancelled the share box
@@ -5796,7 +5771,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015171944';
+  const BUILD = '20261015172046';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
