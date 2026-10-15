@@ -252,7 +252,11 @@ body.no-delete .st-del{display:none!important}
       structuredQuery: { from: [{ collectionId: col }],
         where: { fieldFilter: { field: { fieldPath: 'at' }, op: 'GREATER_THAN', value: { integerValue: String(since) } } } },
       aggregations: [{ alias: 'n', count: {} }] } };
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+    const ac = new AbortController(), to = setTimeout(()=> ac.abort(), 12000);
+    let r;
+    try { r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body), signal: ac.signal }); }
+    catch(e) { throw new Error(e && e.name === 'AbortError' ? 'no answer from Firebase (timed out)' : 'couldn’t reach Firebase (' + ((e && e.message) || 'network') + ')'); }
+    finally { clearTimeout(to); }
     if(!r.ok){
       let msg = ''; try { const j = await r.json(); msg = ((Array.isArray(j) ? j[0] : j) || {}).error?.message || ''; } catch(e) {}
       const why = r.status === 429 || /quota|exhausted/i.test(msg) ? 'Firebase daily limit reached'
@@ -304,8 +308,8 @@ body.no-delete .st-del{display:none!important}
         ? 'Nobody is running Auto-detect right now, so kills must be logged by hand.' + (role !== 'viewer' ? ' Start it with the Auto-detect button.' : '')
         : `${n} guildmate${n === 1 ? ' is' : 's are'} running Auto-detect, so kills in chat are logged automatically.`;
     };
-    const wRefresh = async ()=>{ try { wPaint(await countSince('watchers', Date.now() - WATCH_MS)); }
-      catch(x) { wchip.classList.remove('none'); wchip.innerHTML = '📡 ⚠'; wchip.title = 'Couldn’t count Auto-detect watchers: ' + ((x && x.message) || 'no connection') + (x && x.detail ? ' (' + x.detail + ')' : ''); } };
+    const wRefresh = async ()=>{ try { wPaint(await countSince('watchers', Date.now() - WATCH_MS)); delete wchip.dataset.why; }
+      catch(x) { wchip.classList.remove('none'); wchip.innerHTML = '📡 ⚠'; wchip.dataset.why = ((x && x.message) || 'no connection') + (x && x.detail ? ' (' + x.detail + ')' : ''); wchip.title = 'Couldn’t count Auto-detect watchers: ' + ((x && x.message) || 'no connection') + (x && x.detail ? ' (' + x.detail + ')' : ''); } };
     window.FALSEHOOD_WATCH = {
       start(){ watching = true; wBeat().then(wRefresh); clearInterval(wTimer); wTimer = setInterval(wBeat, 60000); },
       stop(){ watching = false; clearInterval(wTimer);
@@ -368,9 +372,9 @@ body.no-delete .st-del{display:none!important}
         chip.title = beatErr
           ? `You aren’t being counted (${beatErr}). Ask the board owner to update the Firebase rules.`
           : `Online in the last 5 minutes: ${a ? 'Admin, ' : ''}${e} FLHD, ${t} timer${t === 1 ? '' : 's'}, ${v} view-only` + (role === 'admin' ? ' · click to see who' : '');
-        chip.classList.remove('cnt-err');
+        chip.classList.remove('cnt-err'); delete chip.dataset.why;
       } catch(x) {
-        chip.classList.add('cnt-err');
+        chip.classList.add('cnt-err'); chip.dataset.why = ((x && x.message) || 'no connection') + (x && x.detail ? ' (' + x.detail + ')' : '');
         chip.querySelectorAll('b .n').forEach(n=> n.textContent = '⚠');
         chip.title = 'Couldn’t count who’s online: ' + ((x && x.message) || 'no connection') + (x && x.detail ? ' (' + x.detail + ')' : '');
       }
@@ -434,9 +438,16 @@ body.no-delete .st-del{display:none!important}
       document.addEventListener('click', ()=>{ pop.hidden = true; });
       chip.title = 'Click to see who’s online';
     }
-    beat().then(refresh);
+    refresh(); beat().finally(refresh);
     setInterval(()=>{ beat(); refresh(); }, BEAT_MS);
-    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ beat().then(refresh); } });
+    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ beat().finally(refresh); } });
+    // when a count fails, clicking the chip says why (works on phones too, where there's no hover)
+    const whyClick = (el, what)=> el.addEventListener('click', e=>{
+      if(!el.dataset.why) return;
+      e.stopImmediatePropagation();
+      try { showToast(what + ': ' + el.dataset.why); } catch(x) { alert(what + ': ' + el.dataset.why); }
+    }, true);
+    whyClick(chip, 'Couldn’t count who’s online'); whyClick(wchip, 'Couldn’t count Auto-detect watchers');
   }
   // ---- login card artwork: moonlit castles, the guild emblem from the header, ornaments ----
   const G_SKY = `<svg class="g-sky" viewBox="0 0 500 640" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
@@ -5785,7 +5796,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015171435';
+  const BUILD = '20261015171944';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
