@@ -373,7 +373,7 @@ body.no-delete .st-del{display:none!important}
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
         <h2>Falsehood</h2>
-        <p>${upgrade ? 'Enter a higher-access password (Timers, FLHD or Admin) for this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 3 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
+        <p>${upgrade ? 'Enter a higher-access password (Timers, FLHD or Admin) for this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 24 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
         ${upgrade ? '' : `<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="Your in-game name (e.g. Scrumzilla)" aria-label="Your in-game name">`}
         <input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
         <div class="g-err" role="alert"></div>
@@ -409,8 +409,8 @@ body.no-delete .st-del{display:none!important}
       };
     });
   }
-  // ---- Log out after 3 hours with no activity (clicks, keys, taps, scrolling) on this device ----
-  const IDLE_MS = 3 * 60 * 60000, ACT_KEY = 'falsehood-last-active', IDLE_FLAG = 'falsehood-idle-out';
+  // ---- Log out after 24 hours with no activity (clicks, keys, taps, scrolling) on this device ----
+  const IDLE_MS = 24 * 60 * 60000, ACT_KEY = 'falsehood-last-active', IDLE_FLAG = 'falsehood-idle-out';
   const lsGetX = k=>{ try { return localStorage.getItem(k); } catch(e) { return null; } };
   const lsSetX = (k, v)=>{ try { localStorage.setItem(k, v); } catch(e) {} };
   const lastActive = ()=> +lsGetX(ACT_KEY) || 0;
@@ -4768,7 +4768,15 @@ setInterval(()=>{
     const word = s=> fixMap(String(s || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm')
       .replace(/[0-9OoSsIl]+$/, d=> /\d/.test(d) ? d.replace(/[Oo]/g, '0').replace(/[Ss]/g, '5').replace(/[Il]/g, '1') : d));
     let m;
-    const mapAt = (txt, re)=>{ const mm = re.exec(txt); if(!mm) return ''; const toks = txt.slice(mm.index + mm[0].length).trim().split(/\s+/); return toks[0] && toks[0].length < 4 && toks[1] ? toks[0] + toks[1] : (toks[0] || ''); };
+    // the map name right after "in": OCR sometimes splits it ("yuno fild06", "a nthell01"), so try joining the next word too
+    const mapAt = (txt, re)=>{
+      const mm = re.exec(txt); if(!mm) return '';
+      const toks = txt.slice(mm.index + mm[0].length).trim().split(/\s+/);
+      const t0 = toks[0] || '', t1 = toks[1] || '';
+      if(!t1) return t0;
+      for(const c of [t0 + '_' + t1.replace(/^_+/, ''), t0 + t1]) if(snapMap(c.replace(/[^A-Za-z0-9_!|]/g, '').replace(/rn/g, 'm'))) return c;
+      return t0.length < 4 ? t0 + t1 : t0;
+    };
     if((m = /^(.+?)\s+ha[s5]\s+[s5]pawn\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'spawn', boss: canonBoss(m[1]), map: word(mapAt(body, /[s5]pawn\S*\s+[il1]n\s+/i)) };
     if((m = /gather\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'gather', boss: '', map: word(m[1]) };
     if((m = /^(.+?)\s+ha[s5]\s+been\s+defeat\S*\s+[il1]n\s+\S/i.exec(body))){
@@ -5354,7 +5362,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015005313';
+  const BUILD = '20261015073459';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';

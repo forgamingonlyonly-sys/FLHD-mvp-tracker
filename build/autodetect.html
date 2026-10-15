@@ -625,7 +625,15 @@
     const word = s=> fixMap(String(s || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm')
       .replace(/[0-9OoSsIl]+$/, d=> /\d/.test(d) ? d.replace(/[Oo]/g, '0').replace(/[Ss]/g, '5').replace(/[Il]/g, '1') : d));
     let m;
-    const mapAt = (txt, re)=>{ const mm = re.exec(txt); if(!mm) return ''; const toks = txt.slice(mm.index + mm[0].length).trim().split(/\s+/); return toks[0] && toks[0].length < 4 && toks[1] ? toks[0] + toks[1] : (toks[0] || ''); };
+    // the map name right after "in": OCR sometimes splits it ("yuno fild06", "a nthell01"), so try joining the next word too
+    const mapAt = (txt, re)=>{
+      const mm = re.exec(txt); if(!mm) return '';
+      const toks = txt.slice(mm.index + mm[0].length).trim().split(/\s+/);
+      const t0 = toks[0] || '', t1 = toks[1] || '';
+      if(!t1) return t0;
+      for(const c of [t0 + '_' + t1.replace(/^_+/, ''), t0 + t1]) if(snapMap(c.replace(/[^A-Za-z0-9_!|]/g, '').replace(/rn/g, 'm'))) return c;
+      return t0.length < 4 ? t0 + t1 : t0;
+    };
     if((m = /^(.+?)\s+ha[s5]\s+[s5]pawn\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'spawn', boss: canonBoss(m[1]), map: word(mapAt(body, /[s5]pawn\S*\s+[il1]n\s+/i)) };
     if((m = /gather\S*\s+[il1]n\s+([A-Za-z0-9_]+)/i.exec(body))) return { kind: 'gather', boss: '', map: word(m[1]) };
     if((m = /^(.+?)\s+ha[s5]\s+been\s+defeat\S*\s+[il1]n\s+\S/i.exec(body))){

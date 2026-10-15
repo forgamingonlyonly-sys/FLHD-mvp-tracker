@@ -365,7 +365,7 @@ body.no-delete .st-del{display:none!important}
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
         <h2>Falsehood</h2>
-        <p>${upgrade ? 'Enter a higher-access password (Timers, FLHD or Admin) for this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 3 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
+        <p>${upgrade ? 'Enter a higher-access password (Timers, FLHD or Admin) for this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 24 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
         ${upgrade ? '' : `<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="Your in-game name (e.g. Scrumzilla)" aria-label="Your in-game name">`}
         <input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password">
         <div class="g-err" role="alert"></div>
@@ -401,8 +401,8 @@ body.no-delete .st-del{display:none!important}
       };
     });
   }
-  // ---- Log out after 3 hours with no activity (clicks, keys, taps, scrolling) on this device ----
-  const IDLE_MS = 3 * 60 * 60000, ACT_KEY = 'falsehood-last-active', IDLE_FLAG = 'falsehood-idle-out';
+  // ---- Log out after 24 hours with no activity (clicks, keys, taps, scrolling) on this device ----
+  const IDLE_MS = 24 * 60 * 60000, ACT_KEY = 'falsehood-last-active', IDLE_FLAG = 'falsehood-idle-out';
   const lsGetX = k=>{ try { return localStorage.getItem(k); } catch(e) { return null; } };
   const lsSetX = (k, v)=>{ try { localStorage.setItem(k, v); } catch(e) {} };
   const lastActive = ()=> +lsGetX(ACT_KEY) || 0;
