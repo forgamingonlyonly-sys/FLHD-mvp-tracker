@@ -236,7 +236,7 @@ body.no-delete .st-del{display:none!important}
     };
   }
   // Who's online: each open tracker checks in every 2 minutes; counts use cheap server-side count queries
-  const ONLINE_MS = 5 * 60000, BEAT_MS = 2 * 60000, WATCH_MS = 3 * 60000;
+  const ONLINE_MS = 5 * 60000, BEAT_MS = 2 * 60000, WATCH_MS = 3 * 60000, WATCH_MAX = 2;
   async function countSince(col, since){
     const token = await auth.currentUser.getIdToken();
     const url = 'https://firestore.googleapis.com/v1/projects/' + cfg.projectId + '/databases/(default)/documents:runAggregationQuery';
@@ -303,6 +303,19 @@ body.no-delete .st-del{display:none!important}
       stop(){ watching = false; clearInterval(wTimer);
         Promise.all([fs.collection('watchers').doc(PTOKEN).delete(), fs.collection('watchers_who').doc(PTOKEN).delete()]).catch(()=>{}).then(wRefresh); },
       refresh: wRefresh,
+      // at most WATCH_MAX people run Auto-detect at once (saves the Firebase daily allowance)
+      async canStart(){
+        try {
+          const since = Date.now() - WATCH_MS;
+          const snap = await fs.collection('watchers').where('at', '>', since).get();
+          const others = snap.docs.filter(d=> d.id !== PTOKEN).length;
+          let names = [];
+          if(role === 'admin'){
+            try { names = (await fs.collection('watchers_who').where('at', '>', since).get()).docs.filter(d=> d.id !== PTOKEN).map(d=> (d.data() || {}).name).filter(Boolean); } catch(e) {}
+          }
+          return { ok: others < WATCH_MAX, n: others, names };
+        } catch(e) { return { ok: true, n: 0, names: [] }; }   // can't check: don't block
+      },
     };
     window.addEventListener('pagehide', ()=>{ if(watching){ try { fs.collection('watchers').doc(PTOKEN).delete(); fs.collection('watchers_who').doc(PTOKEN).delete(); } catch(e) {} } });
     if(role === 'admin'){
