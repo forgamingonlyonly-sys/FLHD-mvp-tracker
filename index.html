@@ -4604,8 +4604,46 @@ setInterval(()=>{
   }
   // map codes: snap a misread name part to a known Ragnarok map name (antheli01 → anthell01)
   const MAP_STEMS = ['anthell','prt_sewb','prt_maze','prt_fild','prt_gld','pay_fild','pay_dun','moc_fild','moc_pryd','gef_fild','gef_dun','gl_chyard','gl_church','gl_knt','gl_prison','gl_sew','gl_dun','gl_step','gl_cas','cmd_fild','mjolnir_','mjo_dun','treasure','xmas_dun','xmas_fild','tur_dun','in_sphinx','ama_dun','ama_fild','gon_dun','gon_fild','niflheim','nif_fild','iz_dun','orcsdun','alde_dun','c_tower','ein_fild','ein_dun','hu_fild','lou_fild','lou_dun','yuno_fild','ra_fild','ve_fild','um_fild','ice_dun','thor_v','abyss_','juperos_','kh_dun','lhz_dun','odin_tem','beach_dun','mag_dun','tha_t','ayo_fild','ayo_dun','abbey','spl_fild','bra_fild','dic_fild','mosk_fild','teg_dun','lhz_fild','hu_fild','ra_san','pay_arche','glast_'];
+  // full Ragnarok map names: a misread is snapped to the closest real one (h_churchl → gl_church)
+  const MAP_LIST = (()=>{
+    const out = [], r = (base, a, b, w)=>{ for(let i = a; i <= b; i++) out.push(base + String(i).padStart(w, '0')); };
+    [['prt_fild',0,11,2],['pay_fild',1,11,2],['moc_fild',1,22,2],['gef_fild',0,14,2],['cmd_fild',1,9,2],['mjolnir_',1,12,2],['um_fild',1,4,2],
+     ['ve_fild',1,7,2],['yuno_fild',1,12,2],['ein_fild',1,10,2],['hu_fild',1,7,2],['ra_fild',1,13,2],['nif_fild',1,2,2],['ayo_fild',1,2,2],
+     ['iz_dun',0,5,2],['pay_dun',0,4,2],['moc_pryd',1,6,2],['gef_dun',0,3,2],['anthell',1,2,2],['treasure',1,2,2],['xmas_dun',1,2,2],
+     ['tur_dun',1,6,2],['in_sphinx',1,5,1],['ama_dun',1,3,2],['gon_dun',1,3,2],['orcsdun',1,2,2],['alde_dun',1,4,2],['c_tower',1,4,1],
+     ['mjo_dun',1,3,2],['prt_sewb',1,4,1],['prt_maze',1,3,2],['gl_knt',1,2,2],['gl_sew',1,4,2],['gl_dun',1,2,2],['gl_cas',1,2,2],
+     ['lhz_dun',1,3,2],['kh_dun',1,2,2],['odin_tem',1,3,2],['abbey',1,3,2],['thor_v',1,3,2],['ice_dun',1,3,2],['mag_dun',1,2,2],
+     ['tha_t',1,12,2],['juperos_',1,2,2],['ein_dun',1,2,2],['lou_dun',1,3,2],['lou_fild',1,1,2],['spl_fild',1,3,2],['dic_fild',1,2,2],
+     ['teg_dun',1,2,2],['abyss_',1,3,2],['lhz_fild',1,3,2],['ra_san',1,5,2],['xmas_fild',1,1,2],['ama_fild',1,1,2],['gon_fild',1,1,2],
+     ['bra_fild',1,1,2],['gl_in',1,1,2],['glast_',1,1,2]].forEach(([b, x, y, w])=> r(b, x, y, w));
+    out.push('gl_church', 'gl_chyard', 'gl_prison', 'gl_prison1', 'gl_step', 'niflheim', 'pay_arche', 'beach_dun', 'beach_dun2', 'beach_dun3');
+    return out;
+  })();
+  function lev(a, b){
+    const m = a.length, n = b.length; let prev = Array.from({ length: n + 1 }, (_, j)=> j);
+    for(let i = 1; i <= m; i++){ const cur = [i]; for(let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1)); prev = cur; }
+    return prev[n];
+  }
+  function snapMap(raw){
+    const lower = String(raw || '').toLowerCase().replace(/[^a-z0-9_!|]/g, '');
+    if(!lower) return null;
+    const cands = new Set();
+    const add = c=>{ if(c && c.length >= 4){ cands.add(c); cands.add(c.replace(/rn|ra|ri|nn|in/g, 'm')); } };
+    add(lower.replace(/[!|]/g, ''));
+    add(lower.replace(/[!|l1i]$/, ''));            // a "!" after the map name read as l / 1 / i
+    let best = null, bs = 0, second = 0;
+    for(const c of cands) for(const mp of MAP_LIST){
+      if(c === mp) return mp;
+      const sc = 1 - lev(c, mp) / Math.max(c.length, mp.length);
+      if(sc > bs){ if(best !== mp) second = Math.max(second, bs); bs = sc; best = mp; }
+      else if(mp !== best && sc > second) second = sc;
+    }
+    return bs >= 0.75 && bs - second >= 0.06 ? best : null;
+  }
   function fixMap(m){
     if(!m) return m;
+    const snapped = snapMap(m);
+    if(snapped) return snapped;
     const lower = m.toLowerCase();
     // the number after the name: fix look-alike letters, and keep at most 2 digits (a trailing "!" is often read as l/1)
     const num = r=>{ const n = r.replace(/[od]/g, '0').replace(/[il|!]/g, '1').replace(/s/g, '5').replace(/z/g, '2').replace(/b/g, '8'); return /^\d+$/.test(n) ? n.slice(0, 2) : n; };
@@ -5141,7 +5179,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261014235439';
+  const BUILD = '20261015001359';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
