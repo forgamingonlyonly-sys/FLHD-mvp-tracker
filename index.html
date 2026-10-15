@@ -4200,7 +4200,6 @@ timerView.innerHTML = `
       <span class="cyc-alarm-lbl">My alarm</span>
       <button type="button" class="cyc-tg" data-k="on">🔔 Alarm</button>
       <button type="button" class="cyc-tg" data-k="sound">Sound</button>
-      <button type="button" class="cyc-tg" data-k="repeat">Repeat 30s</button>
       <button type="button" class="cyc-tg" data-k="voice">Voice</button>
       <button type="button" class="btn cyc-test" id="cycTestLure">▶ Test Lure na</button>
       <button type="button" class="btn cyc-test" id="cycTestKill">▶ Test Kill na</button>
@@ -4319,7 +4318,7 @@ setInterval(()=>{
   if(cycRing.hidden) return;
   if(!cycleAlertsOn() || !cycle.startedAt){ hideCycRing(); return; }
   const now = Date.now();
-  if(tcfg.repeat && tcfg.sound && now - cycRingRepeat >= 30000){ cycRingRepeat = now; playChime(); }
+  if(false && tcfg.repeat && tcfg.sound && now - cycRingRepeat >= 30000){ cycRingRepeat = now; playChime(); }   // Repeat 30s removed
 }, 1000);
 function paintCycle(){
   const now = Date.now(), c = cycleMath(now), allowed = cycleAllowed();
@@ -5888,7 +5887,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015190030';
+  const BUILD = '20261015190427';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
