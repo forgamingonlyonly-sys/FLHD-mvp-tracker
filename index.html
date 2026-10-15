@@ -3575,14 +3575,21 @@ async function openHistory(m){
   confirmBtn.textContent = 'Close';
   document.getElementById('modalCancel').hidden = true;
   const box = md.querySelector('.hist-list');
-  let rows = [];
-  try { rows = (await db.collection('mvplog').doc(m.id).collection('entries').orderBy('at', 'desc').limit(10).get()).docs.map(d=> d.data() || {}); }
-  catch(e) { box.innerHTML = `<div class="hist-none">Couldn’t load the history (${esc((e && e.code) || 'error')}). Update the Firebase rules first.</div>`; return; }
-  if(!rows.length){ box.innerHTML = '<div class="hist-none">No changes recorded yet. New kills, updates, resets and undos show up here.</div>'; return; }
   const ACT = { kill: ['Killed', 'k'], update: ['Updated time', 'u'], reset: ['Reset timer', 'r'], undo: ['Undid last change', 'r'], location: ['Changed location', 'u'], spawn: ['Spawned', 's'] };
   const day = t=>{ const d = new Date(t), today = new Date(); const same = d.toDateString() === today.toDateString();
     return (same ? '' : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ') + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
-  box.innerHTML = rows.map(e=>{
+  let rows = [];
+  try { rows = (await db.collection('mvplog').doc(m.id).collection('entries').orderBy('at', 'desc').limit(10).get()).docs.map(d=> d.data() || {}); }
+  catch(e) { box.innerHTML = `<div class="hist-none">Couldn’t load the history (${esc((e && e.code) || 'error')}). Update the Firebase rules first.</div>`; return; }
+  // the current timer came from a tracker that hasn't updated yet (or from before history started): still say who set it
+  let cur = '';
+  if(m.lastDeath && !rows.some(e=> e.t === m.lastDeath)){
+    let who = '';
+    try { if(m.by && userApi){ const ps = await userApi.profiles([m.by]); who = (ps[m.by] && ps[m.by].name) || ''; } } catch(e) {}
+    cur = `<div class="hist-row hist-cur"><span class="hist-tag k">Current timer</span><div class="hist-main"><b>${esc(who || 'a guildmate')}</b>${m.auto ? ' <span class="hist-auto">📡 Auto-detect</span>' : ''}<span>died ${day(m.lastDeath)} · logged from a tracker on the old version, so it isn’t in the history below</span></div><span class="hist-when"></span></div>`;
+  }
+  if(!rows.length){ box.innerHTML = cur + '<div class="hist-none">No history entries yet. They’re recorded once each guildmate’s tracker has updated to the latest version.</div>'; return; }
+  box.innerHTML = cur + rows.map(e=>{
     const [label, cls] = ACT[e.act] || ['Changed', 'u'];
     const who = e.name || (e.by && typeof nickNames !== 'undefined' && nickNames[e.by]) || 'a guildmate';
     const detail = e.act === 'location' ? esc(e.loc || '')
@@ -5729,7 +5736,7 @@ setInterval(()=>{
 </style>
 <script>
 (function(){
-  const BUILD = '20261015103450';
+  const BUILD = '20261015112302';
   const bar = document.createElement('div');
   bar.id = 'fbUpdate'; bar.hidden = true; bar.setAttribute('role', 'status');
   bar.innerHTML = '<span>🔄 <b>A new version of the tracker is out.</b> Refresh to get the latest features and fixes.</span><button type="button" class="u-go">Refresh now</button><button type="button" class="u-x" aria-label="Later">Later</button>';
