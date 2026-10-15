@@ -13,7 +13,13 @@ service cloud.firestore {
         || s.get('by', '') == request.auth.uid
         || (j is timestamp && j > s.resetAt);
     }
-    function member() { return signedIn() && (!exists(sessPath()) || fresh()); }
+    // Admin "Log out" on one person: their login from before kicks/<uid>.at stops working (they can log in again)
+    function kickPath() { return /databases/$(db)/documents/kicks/$(request.auth.uid); }
+    function notKicked() {
+      let j = get(mePath()).data.get('joinedAt', null);
+      return !exists(kickPath()) || (j is timestamp && j > get(kickPath()).data.at);
+    }
+    function member() { return signedIn() && (!exists(sessPath()) || fresh()) && notKicked(); }
     function role() { return get(mePath()).data.get('role', 'editor'); }
     function admin() { return member() && role() == 'admin'; }
     function editor() { return member() && role() in ['editor', 'admin']; }
@@ -37,6 +43,11 @@ service cloud.firestore {
     match /mvps/{id} { allow write: if timer(); }
     match /cycle/{id} { allow write: if timer(); }
     match /loot/{id} { allow delete: if admin(); }
+    // log out one person: only the Admin sets it; each device reads only its own
+    match /kicks/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if admin() && uid != request.auth.uid && request.resource.data.at == request.time;
+    }
     match /meta/{id} {
       allow create, update: if id == 'session' && admin() && request.resource.data.resetAt == request.time;
     }
@@ -81,9 +92,9 @@ service cloud.firestore {
       allow read, write: if timer();
     }
     match /{col}/{id} {
-      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim']);
-      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim']) && !(col == 'meta' && id == 'session');
-      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim']);
+      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks']);
+      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks']) && !(col == 'meta' && id == 'session');
+      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks']);
       allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer'] && member()
         && (request.resource == null || request.resource.data.keys().hasOnly(['at']));
     }

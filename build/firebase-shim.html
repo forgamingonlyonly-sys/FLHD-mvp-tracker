@@ -99,6 +99,11 @@ body.no-delete .st-del{display:none!important}
 .fb-who .w-row{display:flex;justify-content:space-between;gap:12px;padding:5px 4px;font-size:13px}
 .fb-who .w-row em{color:#b9aecb;font-style:normal;font-size:11.5px}
 .fb-who .w-row small{color:#8f82a6;font-size:11px}
+.fb-who .w-row{align-items:center}
+.fb-who .w-end{display:inline-flex;align-items:center;gap:8px}
+.fb-menu .fb-who .w-kick,.fb-who .w-kick{display:inline-block;width:auto;margin:0;padding:2px 8px;border-radius:7px;border:1px solid rgba(255,138,152,.45);background:transparent;color:#ff8a98;font:600 11px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.fb-who .w-kick:hover{background:rgba(255,138,152,.12)}
+.fb-who .w-kick:disabled{opacity:.6;cursor:default}
 .fb-who .w-none{padding:5px 4px;font-size:12px;color:#8f82a6}
 #fbGate input + input{margin-top:8px}
 .fb-online.err .dot{background:#e0a100;box-shadow:0 0 0 3px rgba(224,161,0,.2)}
@@ -360,7 +365,7 @@ body.no-delete .st-del{display:none!important}
             const snap = await fs.collection('presence_' + rl).where('at', '>', since).get();
             const who = await Promise.all(snap.docs.map(d=> fs.collection('presence_who').doc(d.id).get().then(w=> w.exists ? (w.data() || {}) : {}).catch(()=> ({}))));
             // older trackers (before the update) wrote their name straight into the check-in
-            return [rl, snap.docs.map((d, i)=>({ id: who[i].uid || d.id, at: (d.data() || {}).at || 0, name: who[i].name || names[who[i].uid] || (d.data() || {}).name || names[d.id] || '', old: !who[i].uid }))
+            return [rl, snap.docs.map((d, i)=>({ tok: d.id, id: who[i].uid || d.id, at: (d.data() || {}).at || 0, name: who[i].name || names[who[i].uid] || (d.data() || {}).name || names[d.id] || '', old: !who[i].uid }))
               .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'))];
           }));
           // someone who switched access level shows only under their current (highest) level
@@ -368,10 +373,26 @@ body.no-delete .st-del{display:none!important}
           groups.forEach(g=>{ g[1] = g[1].filter(p=>{ if(seen.has(p.id)) return false; seen.add(p.id); return true; }); });
           pop.innerHTML = `<div class="m-info w-top"><span>Online in the last 5 minutes</span><button type="button" class="w-ref">↻ Refresh</button></div>` + groups.map(([rl, list])=>
             `<div class="w-grp"><div class="w-h">${LBL[rl]} <span>${list.length}</span></div>${list.length
-              ? list.map(p=>`<div class="w-row"><span>${p.name ? esc(p.name) : '<i>Unnamed</i>'}${p.old ? ' <em>(old version)</em>' : ''}${p.id === uid ? ' <em>(you)</em>' : ''}</span><small>${ago(p.at)}</small></div>`).join('')
+              ? list.map(p=>`<div class="w-row"><span>${p.name ? esc(p.name) : '<i>Unnamed</i>'}${p.old ? ' <em>(old version)</em>' : ''}${p.id === uid ? ' <em>(you)</em>' : ''}</span><span class="w-end"><small>${ago(p.at)}</small>${p.id !== uid && !p.old ? `<button type="button" class="w-kick" data-uid="${esc(p.id)}" data-tok="${esc(p.tok)}" data-rl="${rl}" data-name="${esc(p.name || 'this guildmate')}" title="Log this person out">⎋ Log out</button>` : ''}</span></div>`).join('')
               : '<div class="w-none">Nobody</div>'}</div>`).join('');
           pop.style.left = Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)) + 'px';
           pop.querySelector('.w-ref').onclick = async ()=>{ await beat(); refresh(); open(true); };
+          pop.querySelectorAll('.w-kick').forEach(b=> b.onclick = async ev=>{
+            ev.stopPropagation();
+            const nm = b.dataset.name;
+            if(!confirm(`Log out ${nm}?\n\nTheir tracker closes and asks for the guild password again. They can log back in if they know it — change that password in Firebase to keep them out for good.`)) return;
+            b.disabled = true; b.textContent = 'Logging out…';
+            try {
+              await fs.collection('kicks').doc(b.dataset.uid).set({ at: firebase.firestore.FieldValue.serverTimestamp(), by: uid, byName: myNick || null });
+              // take them off the online list right away
+              try { await fs.collection('presence_' + b.dataset.rl).doc(b.dataset.tok).delete(); } catch(x) {}
+              try { await fs.collection('presence_who').doc(b.dataset.tok).delete(); } catch(x) {}
+              refresh(); open(true);
+            } catch(x) {
+              b.disabled = false; b.textContent = '⎋ Log out';
+              alert('Couldn’t log them out (' + ((x && x.code) || 'error') + '). Update the Firebase rules first.');
+            }
+          });
         } catch(x) { pop.innerHTML = '<div class="m-info">Couldn’t load the list right now.</div>'; }
       };
       chip.onclick = e=>{ e.stopPropagation(); if(!pop.hidden){ pop.hidden = true; return; } refresh(); open(); };
@@ -424,13 +445,15 @@ body.no-delete .st-del{display:none!important}
     let idleOut = false, kicked = false;
     try { idleOut = sessionStorage.getItem(IDLE_FLAG) === '1'; sessionStorage.removeItem(IDLE_FLAG); } catch(e) {}
     try { kicked = sessionStorage.getItem(KICK_FLAG) === '1'; sessionStorage.removeItem(KICK_FLAG); } catch(e) {}
+    let kickedOne = false;
+    try { kickedOne = sessionStorage.getItem('falsehood-kicked-one') === '1'; sessionStorage.removeItem('falsehood-kicked-one'); } catch(e) {}
     return new Promise(resolve=>{
       const g = document.createElement('div');
       g.id = 'fbGate';
       g.innerHTML = `<form class="g-card">
         ${G_HEAD()}
         ${upgrade ? '<button type="button" class="g-x g-skip" title="Cancel" aria-label="Cancel">✕</button>' : ''}
-        <p>${upgrade ? 'Enter a higher-access password (Timers, FLHD or Admin) for this device.' : (kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 24 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
+        <p>${upgrade ? 'Enter a higher-access password (Timers, FLHD or Admin) for this device.' : (kickedOne ? '<b>The Admin logged you out.</b> Enter your name and the guild password to continue.' : kicked ? '<b>An officer logged out all devices.</b> Enter your name and the current guild password to continue.' : idleOut ? '<b>You were logged out after 24 hours of inactivity.</b> Enter the guild password to continue.' : 'Enter the guild password to open the shared timers and storage.')}</p>
         ${upgrade ? '' : `<label class="g-field">${G_IC.user}<input type="text" class="g-nick" maxlength="24" autocomplete="nickname" placeholder="In-game name (e.g. Scrumzilla)" aria-label="Your in-game name"></label>`}
         <label class="g-field pw">${G_IC.lock}<input type="password" class="g-pass" autocomplete="current-password" placeholder="Guild password" aria-label="Guild password"><button type="button" class="g-eye" title="Show password" aria-label="Show password">${G_IC.eyeOff}</button></label>
         ${upgrade ? '' : `<div class="g-note">${G_IC.warn}<div><b>Only recognized in-game names (IGNs) are allowed.</b>Users with unrecognized IGNs will be automatically logged out. Placeholder names like “admin”, “guest” or “no name” are blocked.</div></div>`}
@@ -602,6 +625,23 @@ body.no-delete .st-del{display:none!important}
       if(await staleLogin(uid, d.exists ? d.data() : null)) forcedLogout();
     }, e=>{ if(e && e.code === 'permission-denied') forcedLogout(); });
   }
+  // the Admin logged this one person out (kicks/<uid>): sign out if it's newer than this login
+  const ONE_FLAG = 'falsehood-kicked-one';
+  function watchKick(uid){
+    fs.collection('kicks').doc(uid).onSnapshot(async d=>{
+      const k = d.exists ? (d.data() || {}).at : null;
+      if(!k || typeof k.toMillis !== 'function') return;
+      try {
+        const me = await fs.collection('members').doc(uid).get();
+        const j = me.exists ? (me.data() || {}).joinedAt : null;
+        if(j && typeof j.toMillis === 'function' && j.toMillis() > k.toMillis()) return;   // logged in again since
+      } catch(e) {}
+      try { sessionStorage.setItem(ONE_FLAG, '1'); } catch(e) {}
+      await dropPresence();
+      try { await auth.signOut(); } catch(e) {}
+      location.reload();
+    }, ()=>{});
+  }
   async function logoutAll(){
     lsSetX(LOGIN_KEY, String(Date.now() + 1000));
     await fs.doc('meta/session').set({ resetAt: firebase.firestore.FieldValue.serverTimestamp(), by: auth.currentUser ? auth.currentUser.uid : null, byName: myNick || null });
@@ -626,6 +666,16 @@ body.no-delete .st-del{display:none!important}
         try {
           const me = await fs.collection('members').doc(uid).get();
           if(me.exists){ member = true; const r = (me.data() || {}).role; role = r === 'viewer' || r === 'timer' || r === 'admin' ? r : 'editor'; }
+          // logged out by the Admin (just this person) since this login? ask for the password again
+          if(member){
+            try {
+              const kd = await fs.collection('kicks').doc(uid).get();
+              const k = kd.exists ? (kd.data() || {}).at : null, j = (me.data() || {}).joinedAt;
+              if(k && typeof k.toMillis === 'function' && !(j && typeof j.toMillis === 'function' && j.toMillis() > k.toMillis())){
+                member = false; try { sessionStorage.setItem('falsehood-kicked-one', '1'); } catch(x) {}
+              }
+            } catch(e) {}
+          }
           // logged in before the last "Log out all devices"? then ask for the password again
           if(member){
             try {
@@ -643,7 +693,7 @@ body.no-delete .st-del{display:none!important}
         if(member){ window.FALSEHOOD_FS = fs; window.FALSEHOOD_UID = uid; }
         if(member && role === 'viewer') document.body.classList.add('viewonly');
         if(member && role === 'timer') document.body.classList.add('storage-ro');
-        if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); watchSession(uid); }
+        if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); watchSession(uid); watchKick(uid); }
         if(member && role !== 'admin') document.body.classList.add('no-delete');   // only the Admin deletes Storage items
         return member ? uid : null;
       } catch(e) {
