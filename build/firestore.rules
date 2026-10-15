@@ -23,7 +23,8 @@ service cloud.firestore {
       allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.joinedAt == request.time && (
         (request.resource.data.role == 'admin' && (request.resource.data.pass == secret().adminpass
-          || (secret().get('adminpass2', '') != '' && request.resource.data.pass == secret().get('adminpass2', '')))) ||
+          || (secret().get('adminpass2', '') != '' && request.resource.data.pass == secret().get('adminpass2', ''))
+          || (secret().get('adminpass3', '') != '' && request.resource.data.pass == secret().get('adminpass3', '')))) ||
         (request.resource.data.role == 'editor' && request.resource.data.pass == secret().pass) ||
         (request.resource.data.role == 'timer' && request.resource.data.pass == secret().timerpass) ||
         (request.resource.data.role == 'viewer' && request.resource.data.pass == secret().viewpass));
