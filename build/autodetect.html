@@ -611,7 +611,18 @@
         tx.set(ref, { at: Date.now(), by: window.FALSEHOOD_UID || null });
         return true;
       });
-    } catch(e) { return true; }        // lock not reachable (e.g. rules not updated yet): log as before
+    } catch(e) {
+      // the lock can't be reached (Firebase busy or over its limit): wait a moment and see whether
+      // another watcher already logged this kill, so the same kill isn't written twice
+      const ev = key === 'ev_dead' ? 'dead' : key === 'ev_spawn' ? 'spawn' : null;
+      const m = byIdSafe(ev ? 'boss_event' : key.replace(/^k_/, ''));
+      const before = m ? m.lastDeath : null;
+      await new Promise(r=> setTimeout(r, 1500 + Math.random() * 2500));
+      const me = window.FALSEHOOD_UID || null;
+      const someoneElse = m && m.lastDeath && m.lastDeath !== before && m.by && m.by !== me
+        && Date.now() - m.lastDeath < SAME_KILL_MS && (!ev || m.ev === ev);
+      return !someoneElse;
+    }
   }
   const snap = m=> ({ lastDeath: m.lastDeath || null, by: m.by || null, auto: !!m.auto, ev: m.ev || null, killer: m.killer || '', location: m.location || '' });
   function record(kind, m, prev, info){
