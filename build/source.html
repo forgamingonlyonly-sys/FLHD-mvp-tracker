@@ -2913,6 +2913,7 @@ async function cleanupLogs(manual){
   const add = (col, snap)=> snap.docs.forEach(d=> doomed.push(col.doc(d.id)));
   try { const c = db.collection('discordlog'); add(c, await c.where('at', '<', cutoff).get()); } catch(e) {}
   try { const c = db.collection('autolog'); add(c, await c.where('at', '<', cutoff).get()); } catch(e) {}
+  try { const c = db.collection('errlog'); add(c, await c.where('at', '<', cutoff).get()); } catch(e) {}
   for(const m of mvps){
     try {
       const ent = db.collection('mvplog').doc(m.id).collection('entries');
@@ -2938,7 +2939,7 @@ async function cleanupLogs(manual){
 }
 window.falsehoodCleanup = async ()=>{
   if(!isAdmin()) return;
-  openModal('🧹 Clean up old logs', 'Delete Discord post records, Auto-detect log entries and MVP history older than <b>30 days</b>?<br><br>MVP history always keeps the last 10 entries per MVP. Timers, Storage and pictures aren’t touched. This also runs by itself once a week.', async ()=>{
+  openModal('🧹 Clean up old logs', 'Delete Discord post records, Auto-detect log entries, error reports and MVP history older than <b>30 days</b>?<br><br>MVP history always keeps the last 10 entries per MVP. Timers, Storage and pictures aren’t touched. This also runs by itself once a week.', async ()=>{
     showToast('Cleaning up old logs…');
     const n = await cleanupLogs(true);
     showToast(n ? `Removed ${n} old log entr${n === 1 ? 'y' : 'ies'}.` : 'Nothing old enough to remove.');

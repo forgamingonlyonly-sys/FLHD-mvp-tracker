@@ -88,6 +88,13 @@ service cloud.firestore {
       allow create: if timer() && request.resource.data.by == request.auth.uid;
       allow read, delete: if admin();
     }
+    // error reports from guildmates' trackers: anyone signed in adds their own (small); only the Admin reads and deletes
+    match /errlog/{e} {
+      allow create: if member() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.msg is string && request.resource.data.msg.size() <= 300
+        && request.resource.data.get('stack', '').size() <= 700;
+      allow read, delete: if admin();
+    }
     // MVP pictures: everyone signed in sees them; only the Admin adds, changes or removes them
     match /portraits/{id} {
       allow read: if member();
@@ -98,9 +105,9 @@ service cloud.firestore {
       allow read, write: if timer();
     }
     match /{col}/{id} {
-      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks']);
-      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks']) && !(col == 'meta' && id == 'session');
-      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks']);
+      allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks', 'errlog']);
+      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks', 'errlog']) && !(col == 'meta' && id == 'session');
+      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks', 'errlog']);
       allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer'] && member()
         && (request.resource == null || request.resource.data.keys().hasOnly(['at']));
     }

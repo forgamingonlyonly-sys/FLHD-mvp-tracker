@@ -128,6 +128,34 @@ body.no-delete .st-del{display:none!important}
   firebase.initializeApp(cfg);
   const auth = firebase.auth();
   const fs = firebase.firestore();
+  // ---- Error reports: a tracker that hits a bug records it (Admin-only log). Once per error per visit, max 5 a day per device ----
+  const errQueue = [], errSeen = new Set();
+  let errReady = false;
+  const IGNORE = /ResizeObserver loop|Script error\.?$|Failed to fetch|NetworkError|Load failed|network error|AbortError|The operation was aborted|Quota exceeded|resource-exhausted|unavailable|offline|permission-denied|Missing or insufficient permissions|play\(\) (request|failed)|NotAllowedError|user gesture/i;
+  function errReport(msg, where, stack){
+    msg = String(msg || '').slice(0, 300); where = String(where || '').slice(0, 200);
+    if(!msg || IGNORE.test(msg) || /extension:\/\/|^chrome:|moz-extension/.test(where + ' ' + stack)) return;
+    const key = msg + '|' + where;
+    if(errSeen.has(key)) return; errSeen.add(key);
+    const day = new Date().toISOString().slice(0, 10);
+    let n = 0; try { const c = JSON.parse(localStorage.getItem('falsehood-errs') || '{}'); n = c.day === day ? c.n : 0; if(n >= 5) return; localStorage.setItem('falsehood-errs', JSON.stringify({ day, n: n + 1 })); } catch(e) {}
+    const entry = { at: Date.now(), msg, where, stack: String(stack || '').split('\n').slice(0, 6).join('\n').slice(0, 700),
+      ua: navigator.userAgent.slice(0, 160), tab: (typeof currentTab !== 'undefined' && currentTab) || '' };
+    errQueue.push(entry); errFlush();
+  }
+  function errFlush(){
+    if(!errReady) return;
+    while(errQueue.length){
+      const e = errQueue.shift();
+      const u = auth.currentUser;
+      fs.collection('errlog').doc(Date.now().toString(36) + Math.random().toString(36).slice(2, 7))
+        .set(Object.assign(e, { uid: u ? u.uid : null, name: myNick || null, role, ver: window.FALSEHOOD_BUILD || '' })).catch(()=>{});
+    }
+  }
+  window.addEventListener('error', ev=>{ try { errReport(ev.message || (ev.error && ev.error.message), (ev.filename || '').split('/').pop() + ':' + (ev.lineno || 0) + ':' + (ev.colno || 0), ev.error && ev.error.stack); } catch(x) {} });
+  window.addEventListener('unhandledrejection', ev=>{ try { const r = ev.reason || {}; errReport('Unhandled: ' + (r.message || r), '', r.stack); } catch(x) {} });
+  window.falsehoodReportError = (msg, where, stack)=> errReport(msg, where, stack);
+
   // keep a copy of the data in this browser (all tabs share it), so a refresh downloads only what changed
   try { if(fs.enablePersistence) fs.enablePersistence({ synchronizeTabs: true }).catch(()=>{}); } catch(e) {}
 
@@ -204,6 +232,7 @@ body.no-delete .st-del{display:none!important}
       <button type="button" class="m-out">⎋ Log out of this device</button>
       ${role === 'admin' ? '<button type="button" class="m-rv">📋 Auto-detect log…</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-dc">💬 Discord posts…</button>' : ''}
+      ${role === 'admin' ? '<button type="button" class="m-er">🐞 Error reports…</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-cl">🧹 Clean up old logs…</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-out m-all">⎋ Log out all devices</button>' : ''}`;
     document.body.appendChild(menu);
@@ -227,6 +256,8 @@ body.no-delete .st-del{display:none!important}
     };
     const rv = menu.querySelector('.m-rv');
     if(rv) rv.onclick = ()=>{ menu.hidden = true; if(window.falsehoodReview) window.falsehoodReview(); };
+    const er = menu.querySelector('.m-er');
+    if(er) er.onclick = ()=>{ menu.hidden = true; openErrors(); };
     const cl = menu.querySelector('.m-cl');
     if(cl) cl.onclick = ()=>{ menu.hidden = true; if(window.falsehoodCleanup) window.falsehoodCleanup(); };
     const dc = menu.querySelector('.m-dc');
@@ -240,6 +271,31 @@ body.no-delete .st-del{display:none!important}
       await dropPresence();
       try { await auth.signOut(); } catch(e) {}
       location.reload();
+    };
+  }
+  // Admin: list of error reports from guildmates' trackers
+  async function openErrors(){
+    const esc = v=> String(v == null ? '' : v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const ov = document.createElement('div'); ov.className = 'rv-ov';
+    ov.innerHTML = `<div class="rv-card" role="dialog" aria-label="Error reports"><div class="rv-head"><h4>🐞 Error reports</h4><span><button type="button" class="er-clear">Clear all</button> <button type="button" class="er-x">Close</button></span></div>
+      <p>Problems guildmates’ trackers ran into (newest first). Each error is reported once per visit, at most 5 a day per device.</p><div class="rv-list"><div class="rv-none">Loading…</div></div></div>`;
+    document.body.appendChild(ov);
+    const list = ov.querySelector('.rv-list');
+    ov.querySelector('.er-x').onclick = ()=> ov.remove();
+    ov.onclick = e=>{ if(e.target === ov) ov.remove(); };
+    let docs = [];
+    try { docs = (await fs.collection('errlog').orderBy('at', 'desc').limit(30).get()).docs; }
+    catch(e) { list.innerHTML = '<div class="rv-none">Couldn’t load the reports (' + esc((e && e.code) || 'error') + '). Update the Firebase rules first.</div>'; return; }
+    const ver = b=>{ const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/.exec(b || ''); if(!m) return 'unknown version'; const d = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5])); return 'v' + d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0'); };
+    list.innerHTML = docs.length ? docs.map(d=>{ const x = d.data() || {};
+      return `<div class="rv-row"><div class="rv-top"><span class="rv-tag kill">ERROR</span><b>${esc(x.name || 'a guildmate')}</b><span class="rv-tag">${esc(x.role || '')}</span><span class="rv-when">${new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
+        <div class="rv-read">${esc(x.msg)}</div><div class="rv-foot"><span class="rv-st">${esc(ver(x.ver))}${x.tab ? ' · ' + esc(x.tab) + ' tab' : ''}${x.where ? ' · ' + esc(x.where) : ''}</span></div>
+        ${x.stack ? `<details><summary style="cursor:pointer;color:#8f82a6;font-size:11.5px">Details</summary><pre style="white-space:pre-wrap;font-size:11px;color:#b9aecb;margin:6px 0 0">${esc(x.stack)}</pre></details>` : ''}</div>`; }).join('')
+      : '<div class="rv-none">No errors reported. 🎉</div>';
+    ov.querySelector('.er-clear').onclick = async ()=>{
+      if(!docs.length || !confirm('Delete these error reports?')) return;
+      await Promise.all(docs.map(d=> fs.collection('errlog').doc(d.id).delete().catch(()=>{})));
+      ov.remove(); openErrors();
     };
   }
   // Who's online: each open tracker checks in every 2 minutes; counts use cheap server-side count queries
@@ -748,6 +804,7 @@ body.no-delete .st-del{display:none!important}
           if(r){ member = true; role = r; }
         }
         window.FALSEHOOD_ROLE = role;
+        if(member){ errReady = true; errFlush(); }
         if(member){ window.FALSEHOOD_FS = fs; window.FALSEHOOD_UID = uid; }
         if(member && role === 'viewer') document.body.classList.add('viewonly');
         if(member && role === 'timer') document.body.classList.add('storage-ro');
