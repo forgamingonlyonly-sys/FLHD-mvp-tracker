@@ -225,6 +225,8 @@ h1 small { font-family: var(--font-body); font-size: 11px; letter-spacing: .14em
 .b-unknown { color: var(--unknown); background: var(--unknown-bg); }
 .b-killed { color: var(--text-2); background: var(--unknown-bg); }
 .auto-mark { font-size: 11px; cursor: help; }
+/* view-only members don't see anything about Auto-detect */
+body.viewonly .auto-mark, body.viewonly .fb-watch, body.viewonly .kd-btn { display: none !important; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .b-window::before { animation: none; } .item { transition: none; } }
 
@@ -1835,7 +1837,7 @@ function renderBossBar(){
       : `<span class="nu-name">${escX(boss)}</span>${map ? `<span class="be-map">${escX(map)}</span>` : ''}<span class="sep">·</span>` + (state === 'up'
         ? '<span class="be-up"></span>'
         : `<span class="be-map">killed ${formatTime(m.lastDeath)}${m.killer ? ' by ' + escX(m.killer) : ''}</span><span class="sep">·</span><span class="be-ago"></span>`))
-      + (m && m.auto ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat">📡</span>' : '')
+      + (m && m.auto && window.FALSEHOOD_ROLE !== 'viewer' ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat">📡</span>' : '')
       + (can ? `<span class="be-acts">${state === 'up' ? '<button class="btn btn-primary be-kill" title="Mark the Boss Event killed now">Killed</button>' : ''}${undo ? '<button class="btn undo be-undo" title="Undo the last change">↶ Undo</button>' : ''}</span>` : '');
     const k = beBar.querySelector('.be-kill'); if(k) k.onclick = ()=> logKill(m, 0);
     const u = beBar.querySelector('.be-undo'); if(u) u.onclick = ()=> undoKill(m);
@@ -2996,7 +2998,7 @@ async function openHistory(m){
   }).join('');
 }
 const PIN = '<svg class="pin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
-const autoMark = m=> m.auto ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat. If it’s wrong, Undo or Reset it.">📡</span>' : '';
+const autoMark = m=> m.auto && window.FALSEHOOD_ROLE !== 'viewer' ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat. If it’s wrong, Undo or Reset it.">📡</span>' : '';
 function render(){
   pendingRender = false;
   const list = document.getElementById('mvpList');

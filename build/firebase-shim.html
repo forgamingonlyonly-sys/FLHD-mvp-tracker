@@ -352,11 +352,12 @@ body.no-delete .st-del{display:none!important}
       .then(()=>{ beatErr = null; chip.classList.remove('err'); })
       .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
     };
-    // 📡 who is running Auto-detect: everyone sees how many; only the Admin can see who
+    // 📡 who is running Auto-detect: people who can log kills see how many; only the Admin can see who.
+    // View-only members don't see it at all (and don't count it).
     const wchip = document.createElement('span');
     wchip.className = 'fb-watch';
     wchip.innerHTML = '📡 <span class="n">–</span>';
-    chip.after(wchip);
+    if(role !== 'viewer') chip.after(wchip);
     let watching = false, wTimer = null, hTimer = null, wSig = '', wN = 0;
     const health = ()=>{ try { return (window.FALSEHOOD_AD_HEALTH && window.FALSEHOOD_AD_HEALTH()) || 'ok'; } catch(e) { return 'ok'; } };
     const wWho = (force)=>{
@@ -377,7 +378,7 @@ body.no-delete .st-del{display:none!important}
         ? 'Nobody is running Auto-detect right now, so kills must be logged by hand.' + (role !== 'viewer' ? ' Start it with the Auto-detect button.' : '')
         : `${n} guildmate${n === 1 ? ' is' : 's are'} running Auto-detect, so kills in chat are logged automatically.`;
     };
-    const wRefresh = async ()=>{ try { wPaint(await countSince('watchers', Date.now() - WATCH_MS)); delete wchip.dataset.why; }
+    const wRefresh = async ()=>{ if(role === 'viewer') return; try { wPaint(await countSince('watchers', Date.now() - WATCH_MS)); delete wchip.dataset.why; }
       catch(x) { wchip.classList.remove('none'); wchip.innerHTML = '📡 ⚠'; wchip.dataset.why = ((x && x.message) || 'no connection') + (x && x.detail ? ' (' + x.detail + ')' : ''); wchip.title = 'Couldn’t count Auto-detect watchers: ' + ((x && x.message) || 'no connection') + (x && x.detail ? ' (' + x.detail + ')' : ''); } };
     window.FALSEHOOD_WATCH = {
       start(){ watching = true; wSig = ''; wBeat().then(wRefresh); clearInterval(wTimer); wTimer = setInterval(wBeat, WATCH_BEAT_MS);

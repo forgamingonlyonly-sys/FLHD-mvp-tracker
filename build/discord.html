@@ -92,7 +92,7 @@
       const place = String(m.location || '');
       // kills: wait 15 s first so an Undo right after a mis-click isn't posted
       if(m.lastDeath >= since && now - m.lastDeath >= 15000 && now - m.lastDeath < 30 * 60000){
-        const who = m.auto ? ' · 📡 auto' : (nick(m.by) ? ' · logged by ' + nick(m.by) : '');
+        const who = nick(m.by) ? ' · logged by ' + nick(m.by) : '';   // Discord is seen by view-only members too: no Auto-detect mention
         const when = m.min === m.max
           ? `Spawns ${at(open)} (${at(open, 'R')})`
           : `Floats ${at(open)} – ${at(close)} (${at(open, 'R')})`;
