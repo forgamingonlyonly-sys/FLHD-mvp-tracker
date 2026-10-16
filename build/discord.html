@@ -114,6 +114,9 @@
 
   // ---------- live board: one message that edits itself ----------
   const plain = loc=> String(loc || '').replace(/\s*\(.*\)\s*$/, '') || '?';
+  const cut = (t, n)=> { t = String(t || ''); return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t; };
+  const COLOR = { float: 0x2FBF71, over: 0xE2405C, event: 0xF08A24, quiet: 0x7F77DD };
+  const siteUrl = ()=> /^https?:/.test(location.protocol) ? location.origin + location.pathname.replace(/[^/]*$/, '') : '';
   function boardBody(){
     const now = Date.now();
     const list = mvps.filter(m=> m.type !== 'mini' && m.id !== 'boss_event' && m.lastDeath);
@@ -121,29 +124,43 @@
     const close = m=> m.lastDeath + m.max * 60000, open = m=> m.lastDeath + m.min * 60000;
     const floating = list.filter(m=> st(m) === 'float').sort((a, b)=> close(a) - close(b));
     const overdue = list.filter(m=> st(m) === 'over' && now - close(m) < 3 * 3600000).sort((a, b)=> close(b) - close(a));
-    const next = list.filter(m=> st(m) === 'wait').sort((a, b)=> open(a) - open(b)).slice(0, 8);
-    const line = (m, txt)=> `**${m.name}** · ${plain(m.location)} · ${txt}`;
-    const sec = (title, rows, none)=> `**${title}**\n` + (rows.length ? rows.join('\n') : `*${none}*`);
+    const next = list.filter(m=> st(m) === 'wait').sort((a, b)=> open(a) - open(b)).slice(0, 10);
+    // Boss Event: its own orange card while it's up (for up to 2 hours), otherwise one line at the bottom
     const be = mvps.find(m=> m.id === 'boss_event');
-    let beTxt = '*No event recorded yet*';
-    if(be && be.lastDeath){
-      const mm = /^(\S+)\s*\((.+)\)\s*$/.exec(String(be.location || ''));
-      const map = mm ? mm[1] : '', boss = mm ? mm[2] : 'MVP';
-      beTxt = be.ev === 'spawn'
-        ? `**${boss}** · ${map || '?'} · spawned ${at(be.lastDeath)} (${at(be.lastDeath, 'R')})`
-        : `✓ **${boss}** killed${be.killer ? ' by ' + be.killer : ''} · ${map || '?'} · ${at(be.lastDeath)} (${at(be.lastDeath, 'R')})`;
-    }
-    const desc = [
-      sec('🟢 Floating now', floating.map(m=> line(m, m.min === m.max ? 'has spawned' : `ends ${at(close(m))} (${at(close(m), 'R')})`)), 'Nothing floating'),
-      sec('🔴 Overdue', overdue.map(m=> line(m, `since ${at(close(m))} (${at(close(m), 'R')})`)), 'Nothing overdue'),
-      sec('⏳ Next up', next.map(m=> line(m, m.min === m.max ? `spawns ${at(open(m))} (${at(open(m), 'R')})` : `${at(open(m))} – ${at(close(m))} (${at(open(m), 'R')})`)), 'No timers running'),
-      sec('🔥 Boss Event', [beTxt], ''),
-    ].join('\n\n');
+    const bm = be && /^(\S+)\s*\((.+)\)\s*$/.exec(String(be.location || ''));
+    const beMap = bm ? bm[1] : '', beBoss = bm ? bm[2] : 'MVP';
+    const beUp = !!(be && be.lastDeath && be.ev === 'spawn' && now - be.lastDeath < 2 * 3600000);
+    let beLine = '*No event recorded yet*';
+    if(be && be.lastDeath) beLine = be.ev === 'spawn'
+      ? `**${beBoss}** · ${beMap || '?'} · spawned ${at(be.lastDeath, 'R')}`
+      : `✓ **${beBoss}** killed${be.killer ? ' by ' + be.killer : ''} · ${beMap || '?'} · ${at(be.lastDeath, 'R')}`;
+    // lines lead with the name, then the map, then a countdown Discord keeps ticking by itself
+    const line = (m, txt)=> `**${m.name}** · ${cut(plain(m.location), 34)} · ${txt}`;
+    const n = (k, w)=> `**${k}** ${w}`;
+    const summary = [n(floating.length, 'floating'), n(overdue.length, 'overdue'), n(next.length, 'coming up')].join(' · ');
+    const parts = [summary];
+    if(floating.length) parts.push('**🟢 Floating now**\n' + floating.map(m=> line(m, m.min === m.max ? `spawned **${at(open(m), 'R')}**` : `ends **${at(close(m), 'R')}**`)).join('\n'));
+    if(overdue.length) parts.push('**🔴 Overdue**\n' + overdue.map(m=> line(m, `overdue since **${at(close(m), 'R')}**`)).join('\n'));
+    if(!floating.length && !overdue.length) parts.push('*Nothing floating or overdue right now.*');
+    if(!beUp) parts.push('**🔥 Boss Event**\n' + beLine);
+    // "Next up" as columns (side by side on PC): name · map · when
+    const fields = next.length ? [
+      { name: '⏳ Next up', value: next.map(m=> '**' + cut(m.name, 18) + '**').join('\n'), inline: true },
+      { name: 'Map', value: next.map(m=> cut(plain(m.location), 18)).join('\n'), inline: true },
+      { name: 'Spawns', value: next.map(m=> at(open(m), 'R')).join('\n'), inline: true },
+    ] : [{ name: '⏳ Next up', value: '*No timers running*', inline: false }];
+    const site = siteUrl();
+    const main = {
+      title: 'Falsehood MVP board', color: overdue.length ? COLOR.over : floating.length ? COLOR.float : COLOR.quiet,
+      description: parts.join('\n\n').slice(0, 4000), fields,
+      footer: { text: 'Updates automatically while a guild tracker is open · last update' }, timestamp: new Date(now).toISOString() };
+    if(site){ main.url = site; main.thumbnail = { url: site + 'apple-touch-icon.png' }; }
+    const embeds = [main];
+    if(beUp) embeds.unshift({ color: COLOR.event, title: `🔥 BOSS EVENT · ${cut(beBoss, 60).toUpperCase()} IS UP`,
+      description: `📍 **${beMap || '?'}** · spawned ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})\nHunt, fight, and survive!` });
     // what the board says, without the times that tick by themselves: an edit is only needed when this changes
-    const sig = JSON.stringify([floating.map(m=> m.id + m.lastDeath), overdue.map(m=> m.id + m.lastDeath), next.map(m=> m.id + m.lastDeath + m.location), be ? [be.lastDeath, be.ev, be.location, be.killer] : 0, Math.floor(now / (10 * 60000))]);
-    return { sig, body: { username: 'Falsehood MVP Tracker', allowed_mentions: { parse: [] }, embeds: [{
-      title: 'Falsehood MVP board', color: 0x7F77DD, description: desc.slice(0, 4000),
-      footer: { text: 'Updates automatically while a guild tracker is open · last update' }, timestamp: new Date(now).toISOString() }] } };
+    const sig = JSON.stringify([floating.map(m=> m.id + m.lastDeath), overdue.map(m=> m.id + m.lastDeath), next.map(m=> m.id + m.lastDeath + m.location), be ? [be.lastDeath, be.ev, be.location, be.killer, beUp] : 0, Math.floor(now / (10 * 60000))]);
+    return { sig, body: { username: 'Falsehood MVP Tracker', allowed_mentions: { parse: [] }, embeds } };
   }
   let boardBusy = false, boardSeen = '';
   async function board(){
