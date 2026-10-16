@@ -1174,6 +1174,7 @@ function logHistory(m){
   }
   m._synced = { lastDeath: m.lastDeath, location: m.location, ev: m.ev || null };
   if(!act || !db || !db.collection) return;
+  if(m.auto && (act === 'kill' || act === 'spawn')) return;   // already written to the Auto-detect log (one entry per auto kill)
   let name = '';
   try { name = (window.falsehoodMyName && window.falsehoodMyName()) || localStorage.getItem('falsehood-nick') || ''; } catch(e) {}
   const e = { act, at: Date.now(), by: myId || null, name: name || null, t: m.lastDeath || null, loc: m.location || '', auto: !!m.auto };
@@ -2965,7 +2966,16 @@ async function openHistory(m){
   const day = t=>{ const d = new Date(t), today = new Date(); const same = d.toDateString() === today.toDateString();
     return (same ? '' : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ') + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
   let rows = [];
-  try { rows = (await db.collection('mvplog').doc(m.id).collection('entries').orderBy('at', 'desc').limit(10).get()).docs.map(d=> d.data() || {}); }
+  try {
+    const [hist, auto] = await Promise.all([
+      db.collection('mvplog').doc(m.id).collection('entries').orderBy('at', 'desc').limit(10).get(),
+      db.collection('autolog').where('mvp', '==', m.id).get().catch(()=> ({ docs: [] })),
+    ]);
+    const KIND = { kill: 'kill', dead: 'kill', spawn: 'spawn' };
+    rows = hist.docs.map(d=> d.data() || {}).concat(auto.docs.map(d=>{ const x = d.data() || {};
+      return { act: KIND[x.kind] || 'kill', at: x.at, by: x.by, name: x.who || '', t: x.setTo, loc: x.map ? (m.id === 'boss_event' && x.boss ? x.map + ' (' + x.boss + ')' : x.map) : '', auto: true, killer: x.killer || '', undone: !!x.undone }; }))
+      .sort((a, b)=> (b.at || 0) - (a.at || 0)).slice(0, 10);
+  }
   catch(e) { box.innerHTML = `<div class="hist-none">Couldn’t load the history (${esc((e && e.code) || 'error')}). Update the Firebase rules first.</div>`; return; }
   // the current timer came from a tracker that hasn't updated yet (or from before history started): still say who set it
   let cur = '';
@@ -2981,7 +2991,7 @@ async function openHistory(m){
     const detail = e.act === 'location' ? esc(e.loc || '')
       : (e.act === 'kill' || e.act === 'update') && e.t ? (Math.abs(e.t - e.at) > 90000 ? 'killed ' + day(e.t) : '') + (e.killer ? ' · by ' + esc(e.killer) : '') + (e.loc && e.loc !== m.defaultLocation ? ' · ' + esc(e.loc) : '')
       : e.act === 'spawn' && e.t ? 'at ' + day(e.t) + (e.loc ? ' · ' + esc(e.loc) : '') : '';
-    return `<div class="hist-row"><span class="hist-tag ${cls}">${label}</span><div class="hist-main"><b>${esc(who)}</b>${e.auto ? ' <span class="hist-auto" title="Logged by their Auto-detect">📡 Auto-detect</span>' : ''}${detail ? `<span>${detail}</span>` : ''}</div><span class="hist-when">${day(e.at)}</span></div>`;
+    return `<div class="hist-row"><span class="hist-tag ${cls}">${label}</span><div class="hist-main"><b>${esc(who)}</b>${e.auto ? ' <span class="hist-auto" title="Logged by their Auto-detect">📡 Auto-detect</span>' : ''}${e.undone ? ' <span class="hist-auto">· undone by the Admin</span>' : ''}${detail ? `<span>${detail}</span>` : ''}</div><span class="hist-when">${day(e.at)}</span></div>`;
   }).join('');
 }
 const PIN = '<svg class="pin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';

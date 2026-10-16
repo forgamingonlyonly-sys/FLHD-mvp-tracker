@@ -647,7 +647,8 @@
       const f = window.FALSEHOOD_FS; if(!f) return;
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
       f.collection('autolog').doc(id).set({ at: Date.now(), kind, mvp: m.id, name: m.name, read: String(info.text || '').slice(0, 220),
-        killer: info.killer || '', map: info.map || '', boss: info.boss || '', setTo: m.lastDeath || null, prev, by: window.FALSEHOOD_UID || null }).catch(()=>{});
+        killer: info.killer || '', map: info.map || '', boss: info.boss || '', setTo: m.lastDeath || null, prev, by: window.FALSEHOOD_UID || null,
+        who: (window.falsehoodMyName && window.falsehoodMyName()) || (()=>{ try { return localStorage.getItem('falsehood-nick') || ''; } catch(e) { return ''; } })() }).catch(()=>{});
     } catch(e) {}
   }
   async function handleKill(p, m){
