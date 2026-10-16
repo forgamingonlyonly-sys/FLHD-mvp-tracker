@@ -50,6 +50,13 @@
 .kd-pop .kd-acts{display:flex;gap:8px;margin-top:10px}
 .kd-pop button.kd-go{flex:1;padding:8px 12px;border-radius:9px;border:1px solid #c03bd6;background:#a02ab8;color:#fff;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
 .kd-pop button.kd-stop{flex:1;padding:8px 12px;border-radius:9px;border:1px solid #6b3b4a;background:#3a1f29;color:#ffb3c0;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+.kd-warn{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:9995;display:flex;align-items:center;gap:12px;max-width:min(640px,calc(100vw - 24px));padding:12px 14px;border-radius:12px;background:#2a0f1a;color:#ffe3e8;border:1.5px solid #ff6b7f;box-shadow:0 0 0 1px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.55),0 0 18px rgba(255,107,127,.45);font:13px/1.4 Inter,system-ui,sans-serif}
+.kd-warn[hidden]{display:none!important}
+.kd-warn-ic{font-size:20px;flex:0 0 auto}
+.kd-warn-txt{display:grid;gap:2px;min-width:0}.kd-warn-txt b{color:#fff;font-size:14px}
+.kd-warn-go{flex:0 0 auto;padding:7px 12px;border-radius:9px;border:1px solid #ff8a98;background:#ff6b7f;color:#2a0f1a;font:700 12.5px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.kd-warn-x{flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,138,152,.5);background:transparent;color:#ffb3c0;cursor:pointer}
+@media (max-width:560px){.kd-warn{flex-wrap:wrap}}
 </style>
 <script>
 (function(){
@@ -387,8 +394,15 @@
     if(video && video.videoWidth) return video;
     return null;
   }
+  // calmer when nothing happens: after a quiet minute, check every 3rd tick (about every 4.5 s);
+  // while the game picture is frozen (minimized), every 6th tick. Any change in chat = full speed again.
+  let quietSince = Date.now(), tickN = 0;
   async function scan(){
     if(busy || !track || track.readyState !== 'live') return;
+    tickN++;
+    const quiet = Date.now() - quietSince > 60000;
+    if(diag.frozen && tickN % 6) return;
+    if(!diag.frozen && quiet && tickN % 3) return;
     busy = true;
     try {
       const f = await frame();
@@ -430,7 +444,10 @@
       // the chat moved since the last look (new lines push older ones up, maybe out of the strips):
       // look at the whole box now, so lines that moved are still recognised and new ones aren't taken for old
       if(!doFull && geomOf() !== lastGeom){ doFull = true; readRects([{ x: 0, y: 0, w: aw, h: ah }]); }
-      lastGeom = geomOf();
+      const geomNow = geomOf();
+      if(geomNow !== lastGeom) quietSince = Date.now();   // chat moved: back to full speed
+      lastGeom = geomNow;
+      diag.pace = Date.now() - quietSince > 60000 ? (diag.frozen ? 'paused (game frozen)' : 'quiet (every ~4.5 s)') : 'full speed (every 1.5 s)';
       lines.sort((p, q)=> p.y0 - q.y0 || p.x0 - q.x0);
       evLines.sort((p, q)=> p.y0 - q.y0 || p.x0 - q.x0);
       if(doFull){
@@ -831,7 +848,7 @@
       stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 2, max: 5 } }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
     } catch(e) { return; }   // they cancelled the share box
     track = stream.getVideoTracks()[0];
-    warm = false; seenKill.clear(); seenSig.clear(); seenEvt.clear(); linePos.clear(); seenLine.clear(); scrollNoted.clear(); prevGroups = []; hot = [];
+    quietSince = Date.now(); tickN = 0; warm = false; seenKill.clear(); seenSig.clear(); seenEvt.clear(); linePos.clear(); seenLine.clear(); scrollNoted.clear(); prevGroups = []; hot = [];
     track.addEventListener('ended', stop);
     grabber = (typeof ImageCapture !== 'undefined') ? new ImageCapture(track) : null;
     if(!grabber){ video = document.createElement('video'); video.muted = true; video.srcObject = stream; video.play().catch(()=>{}); }
@@ -879,7 +896,7 @@
       <p>${on ? 'Keep Ragnarok and this tab open, with your chat box visible. New <i>“… has killed [MVP] at …”</i> lines in chat are logged for everyone.'
               : 'Share your <b>Ragnarok game window</b>. It reads the whole game window, so your chat box can be anywhere; you can mark just the chat box if you like. When a green <i>“… has killed [MVP] at …”</i> line appears in chat, the tracker logs the kill for everyone. The <b>[PW2 Boss Event]</b> “has spawned” (red) and “has been defeated” (yellow) lines update the Boss Event row. Nothing touches the game; it only reads the picture.'}</p>
       <div class="kd-status">${esc(status || (on ? 'Watching' : 'Not running'))}</div>
-      ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · reading ${esc(diag.strips || '…')} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
+      ${on ? `<div class="kd-diag">Screen ${esc(diag.size || '…')} · reading ${esc(diag.strips || "…")} · ${esc(diag.pace || "full speed")} · green lines now: ${diag.lines}${diag.lastText ? `<br>Last text read (${ago(diag.lastTextAt)}): “${esc(diag.lastText.slice(0, 110))}”` : '<br>No green announcement text seen yet'}</div>` : ''}
       <div class="kd-log">${log.length ? log.slice(0, 12).map(e=>`<div class="kd-row ${e.kind}"><span><b>${esc(e.title)}</b>${e.sub ? '<br><small>' + esc(e.sub) + '</small>' : ''}</span><small>${ago(e.at)}</small></div>`).join('') : '<div class="kd-none">Nothing detected yet.</div>'}</div>
       ${on && thumb.width ? '<div class="kd-prev"><span>What it sees (green box = area read)</span><canvas class="kd-thumb"></canvas></div>' : ''}
       ${on ? `<div class="kd-area">${areaIsDefault() ? '✓ Reading the whole game window' : '✓ Reading your marked chat box'} <span><button type="button" class="kd-mark">${areaIsDefault() ? 'Mark chat box' : 'Change'}</button>${areaIsDefault() ? '' : ' <button type="button" class="kd-reset">Reset</button>'}</span></div>` : ''}
@@ -921,6 +938,35 @@
     paintBtn();
   }
   const wait = setInterval(()=>{ if(document.getElementById('fbRole')){ clearInterval(wait); setTimeout(mount, 300); } }, 500);
+
+  // ---------- warn the watcher: their own Auto-detect can't read chat ----------
+  const WARN = {
+    frozen: ['Auto-detect can’t see the game', 'Ragnarok looks minimized or frozen. Restore the game window — it can sit behind other windows, just not minimized.'],
+    black: ['Auto-detect sees a black screen', 'Run Ragnarok in windowed mode (Alt+Enter), then press Stop and Start in Auto-detect.'],
+    outside: ['Kill text is outside your chat box', 'Your chat moved. Open Auto-detect, press Change and draw the box around your chat again (or Reset).'],
+    noarea: ['Auto-detect isn’t reading yet', 'Open Auto-detect and mark your chat box.'],
+  };
+  let warnEl = null, badSince = 0, badCode = '', snoozed = {};
+  setInterval(()=>{
+    const h = track && window.FALSEHOOD_AD_HEALTH ? window.FALSEHOOD_AD_HEALTH() : 'ok';
+    const bad = WARN[h] ? h : '';
+    if(bad !== badCode){ badCode = bad; badSince = Date.now(); }
+    const show = bad && Date.now() - badSince > 30000 && !(snoozed[bad] > Date.now());
+    if(!show){ if(warnEl) warnEl.hidden = true; return; }
+    if(!warnEl){
+      warnEl = document.createElement('div'); warnEl.className = 'kd-warn'; warnEl.setAttribute('role', 'alert');
+      document.body.appendChild(warnEl);
+    }
+    if(warnEl.hidden || warnEl.dataset.code !== bad){
+      warnEl.dataset.code = bad;
+      warnEl.innerHTML = `<span class="kd-warn-ic">📡⚠</span><span class="kd-warn-txt"><b>${WARN[bad][0]}</b>${WARN[bad][1]}</span>
+        <button type="button" class="kd-warn-go">Open Auto-detect</button><button type="button" class="kd-warn-x" title="Hide for 15 minutes">✕</button>`;
+      warnEl.querySelector('.kd-warn-go').onclick = e=>{ e.stopPropagation(); warnEl.hidden = true; if(btn && pop && pop.hidden) btn.click(); };
+      warnEl.querySelector('.kd-warn-x').onclick = ()=>{ snoozed[bad] = Date.now() + 15 * 60000; warnEl.hidden = true; };
+      warnEl.hidden = false;
+      try { if(typeof playSoft === 'function') playSoft(); } catch(e) {}
+    }
+  }, 5000);
 
   window.__adLog = (k, t, sub)=> addLog(k, t, sub);
   window.__adEvent = t=> parseEvent(t);

@@ -1,0 +1,6 @@
+{
+  "name": "flhd-tracker-build",
+  "private": true,
+  "description": "Build tools for the Falsehood MVP tracker (run: npm install, then python3 build.py)",
+  "devDependencies": { "esbuild": "0.24.0" }
+}
