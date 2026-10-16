@@ -1814,19 +1814,22 @@ function renderBossBar(){
   const m = byId.boss_event, now = Date.now();
   const mm = m && /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
   let map = mm ? mm[1] : '';
-  const boss = mm ? mm[2] : 'Boss';
+  let boss = mm ? mm[2] : 'Boss';
   const state = !m || !m.lastDeath ? 'none' : m.ev === 'spawn' ? 'up' : 'dead';
   // a map name saved before a reading fix (e.g. crad_fild051, moc_fild0g): correct it, and save the fix once.
   // The fixer lives in the Auto-detect part; load it when a saved map looks misread (letter after the number, cut-off start)
-  if(map && !window.falsehoodFixMap && A.canKill() && window.falsehoodLoadMod && /\d[a-z]+$|^[_…]/i.test(map) && !renderBossBar.loadingFix){
+  const knownBoss = b=> mvps.some(x=> x.id !== 'boss_event' && x.name.toLowerCase() === String(b).toLowerCase());
+  if(map && !window.falsehoodFixMap && A.canKill() && window.falsehoodLoadMod && (/\d[a-z]+$|^[_…]/i.test(map) || (mm && !knownBoss(boss))) && !renderBossBar.loadingFix){
     renderBossBar.loadingFix = true;
     window.falsehoodLoadMod('ad').then(()=>{ beSig = null; renderBossBar(); }).catch(()=>{});
   }
   if(map && window.falsehoodFixMap){
-    const fixed = window.falsehoodFixMap(map);
-    if(fixed && fixed !== map){
-      map = fixed;
-      if(A.canKill() && mode === 'live' && renderBossBar.fixedFor !== m.lastDeath + fixed){ renderBossBar.fixedFor = m.lastDeath + fixed; m.location = fixed + ' (' + boss + ')'; m._quiet = true; persist(m); }
+    const fixed = window.falsehoodFixMap(map) || map;
+    const fb = mm && window.falsehoodFixBoss ? (window.falsehoodFixBoss(boss) || boss) : boss;   // "Osins" → Osiris
+    if(fixed !== map || fb !== boss){
+      map = fixed; boss = fb;
+      const loc = fixed + ' (' + fb + ')';
+      if(A.canKill() && mode === 'live' && renderBossBar.fixedFor !== m.lastDeath + loc){ renderBossBar.fixedFor = m.lastDeath + loc; m.location = loc; m._quiet = true; persist(m); }
     }
   }
   const can = A.canKill() && mode !== 'connecting';
