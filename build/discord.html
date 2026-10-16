@@ -84,7 +84,7 @@
         const mm = /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
         const map = mm ? mm[1] : '', boss = mm ? mm[2] : '';
         if(m.ev === 'spawn') post('ev_spawn_' + m.lastDeath, `🔥 **Boss Event:** ${boss || 'an MVP'} has spawned${map ? ' in ' + map : ''} · ${at(m.lastDeath)}`);
-        else post('ev_dead_' + m.lastDeath, `✅ **Boss Event:** ${boss || 'MVP'} killed${m.killer ? ' by ' + m.killer : ''}${map ? ' in ' + map : ''} · ${at(m.lastDeath)}`);
+        else post('ev_dead_' + m.lastDeath, `✅ **Boss Event:** ${boss || 'MVP'} killed${m.killer ? ' by ' + String(m.killer).replace(/\s+o[ft]\s*(?:[\[\(].*)?$/i, '') : ''}${map ? ' in ' + map : ''} · ${at(m.lastDeath)}`);
         continue;
       }
       if(m.type === 'mini') continue;
@@ -115,7 +115,7 @@
   // ---------- live board: one message that edits itself ----------
   const plain = loc=> String(loc || '').replace(/\s*\(.*\)\s*$/, '') || '?';
   const cut = (t, n)=> { t = String(t || ''); return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t; };
-  const COLOR = { float: 0x2FBF71, over: 0xE2405C, event: 0xF08A24, quiet: 0x7F77DD };
+  const COLOR = { float: 0x2FBF71, over: 0xE2405C, event: 0xF08A24, done: 0x5C5470, quiet: 0x7F77DD };
   const siteUrl = ()=> /^https?:/.test(location.protocol) ? location.origin + location.pathname.replace(/[^/]*$/, '') : '';
   function boardBody(){
     const now = Date.now();
@@ -125,15 +125,12 @@
     const floating = list.filter(m=> st(m) === 'float').sort((a, b)=> close(a) - close(b));
     const overdue = list.filter(m=> st(m) === 'over' && now - close(m) < 3 * 3600000).sort((a, b)=> close(b) - close(a));
     const next = list.filter(m=> st(m) === 'wait').sort((a, b)=> open(a) - open(b)).slice(0, 10);
-    // Boss Event: its own orange card while it's up (for up to 2 hours), otherwise one line at the bottom
+    // Boss Event: its own card on top (orange while it's up, for up to 2 hours; dimmer once killed)
     const be = mvps.find(m=> m.id === 'boss_event');
     const bm = be && /^(\S+)\s*\((.+)\)\s*$/.exec(String(be.location || ''));
     const beMap = bm ? bm[1] : '', beBoss = bm ? bm[2] : 'MVP';
+    const beKiller = String((be && be.killer) || '').replace(/\s+o[ft]\s*(?:[\[\(].*)?$/i, '').trim();
     const beUp = !!(be && be.lastDeath && be.ev === 'spawn' && now - be.lastDeath < 2 * 3600000);
-    let beLine = '*No event recorded yet*';
-    if(be && be.lastDeath) beLine = be.ev === 'spawn'
-      ? `**${beBoss}** · ${beMap || '?'} · spawned ${at(be.lastDeath, 'R')}`
-      : `✓ **${beBoss}** killed${be.killer ? ' by ' + be.killer : ''} · ${beMap || '?'} · ${at(be.lastDeath, 'R')}`;
     // lines lead with the name, then the map, then a countdown Discord keeps ticking by itself
     const line = (m, txt)=> `**${m.name}** · ${cut(plain(m.location), 34)} · ${txt}`;
     const n = (k, w)=> `**${k}** ${w}`;
@@ -142,7 +139,6 @@
     if(floating.length) parts.push('**🟢 Floating now**\n' + floating.map(m=> line(m, m.min === m.max ? `spawned **${at(open(m), 'R')}**` : `ends **${at(close(m), 'R')}**`)).join('\n'));
     if(overdue.length) parts.push('**🔴 Overdue**\n' + overdue.map(m=> line(m, `overdue since **${at(close(m), 'R')}**`)).join('\n'));
     if(!floating.length && !overdue.length) parts.push('*Nothing floating or overdue right now.*');
-    if(!beUp) parts.push('**🔥 Boss Event**\n' + beLine);
     // "Next up" as columns (side by side on PC): name · map · when
     const fields = next.length ? [
       { name: '⏳ Next up', value: next.map(m=> '**' + cut(m.name, 18) + '**').join('\n'), inline: true },
@@ -156,8 +152,11 @@
       footer: { text: 'Updates automatically while a guild tracker is open · last update' }, timestamp: new Date(now).toISOString() };
     if(site){ main.url = site; main.thumbnail = { url: site + 'apple-touch-icon.png' }; }
     const embeds = [main];
+    // the Boss Event always has its own card on top: orange while it's up, dimmer once it's killed
     if(beUp) embeds.unshift({ color: COLOR.event, title: `🔥 BOSS EVENT · ${cut(beBoss, 60).toUpperCase()} IS UP`,
       description: `📍 **${beMap || '?'}** · spawned ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})` });
+    else if(be && be.lastDeath) embeds.unshift({ color: COLOR.done, title: `✅ BOSS EVENT · ${cut(beBoss, 60).toUpperCase()} ${be.ev === 'spawn' ? 'SPAWNED' : 'KILLED'}`,
+      description: `${be.ev !== 'spawn' && beKiller ? 'by **' + beKiller + '** · ' : ''}📍 **${beMap || '?'}** · ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})` });
     // what the board says, without the times that tick by themselves: an edit is only needed when this changes
     const sig = JSON.stringify([floating.map(m=> m.id + m.lastDeath), overdue.map(m=> m.id + m.lastDeath), next.map(m=> m.id + m.lastDeath + m.location), be ? [be.lastDeath, be.ev, be.location, be.killer, beUp] : 0, Math.floor(now / (10 * 60000))]);
     return { sig, body: { username: 'Falsehood MVP Tracker', allowed_mentions: { parse: [] }, embeds } };
