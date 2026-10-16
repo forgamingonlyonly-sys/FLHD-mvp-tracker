@@ -48,6 +48,16 @@
   background:linear-gradient(90deg,rgba(8,4,16,.88) 0%,rgba(8,4,16,.7) 55%,rgba(8,4,16,.35) 100%);
   box-shadow:0 0 0 1px rgba(200,150,255,.1) inset,0 0 10px rgba(155,77,255,.4),0 0 26px rgba(120,50,230,.18)}
 :root:not([data-theme="light"]) .bebar.is-dead .nu-label,:root:not([data-theme="light"]) .bebar.is-none .nu-label{background:rgba(155,77,255,.22);color:#e6d6ff;box-shadow:none}
+/* bigger Boss Event card: more room, larger name / map / timer and picture */
+.bebar{padding:16px 22px!important;min-height:64px;gap:14px!important}
+.bebar .nu-label{font-size:12px;padding:6px 14px}
+.bebar .nu-name{font-size:19px;font-weight:800}
+.bebar .be-map{font-size:15px}
+.bebar .be-up{font-size:22px;font-weight:800}
+.bebar .be-ago,.bebar .sep{font-size:15px}
+.bebar .pt-bar,.bebar .pt-bar img{width:44px!important;height:44px!important}
+.bebar .be-acts .btn{font-size:14px;padding:7px 16px}
+@media (max-width:700px){.bebar{padding:12px 14px!important}.bebar .nu-name{font-size:17px}.bebar .be-up{font-size:19px}}
 @keyframes beGlow{0%,100%{box-shadow:0 0 0 1px rgba(255,190,120,.16) inset,0 0 12px rgba(255,122,30,.6),0 0 34px rgba(255,90,20,.26)}50%{box-shadow:0 0 0 1px rgba(255,190,120,.22) inset,0 0 18px rgba(255,140,40,.85),0 0 48px rgba(255,100,20,.4)}}
 @media (prefers-reduced-motion:reduce){:root:not([data-theme="light"]) .bebar{animation:none}}
 /* 3D icons: beveled metal strokes (gold / silver / purple) with a light top edge and a shadow below */
