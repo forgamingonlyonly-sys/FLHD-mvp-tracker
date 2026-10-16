@@ -157,7 +157,7 @@
     const site = siteUrl();
     const main = {
       title: 'Falsehood MVP board', color: overdue.length ? COLOR.over : floating.length ? COLOR.float : COLOR.quiet,
-      description: parts.join('\n\n').slice(0, 4000), fields,
+      description: parts.join('\n\n').slice(0, 3990) + '\n\u200b', fields,   // \u200b: a blank line before Next up (Discord drops plain trailing newlines)
       footer: { text: 'Updates automatically while a guild tracker is open · last update' }, timestamp: new Date(now).toISOString() };
     if(site){ main.url = site; main.thumbnail = { url: site + 'apple-touch-icon.png' }; }
     const embeds = [main];
