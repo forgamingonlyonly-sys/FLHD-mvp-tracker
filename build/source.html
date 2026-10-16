@@ -1180,7 +1180,6 @@ function logHistory(m){
   let name = '';
   try { name = (window.falsehoodMyName && window.falsehoodMyName()) || localStorage.getItem('falsehood-nick') || ''; } catch(e) {}
   const e = { act, at: Date.now(), by: myId || null, name: name || null, t: m.lastDeath || null, loc: m.location || '', auto: !!m.auto };
-  if(m.id === 'boss_event' && m.killer) e.killer = m.killer;
   writeChain = writeChain.then(()=> db.collection('mvplog').doc(m.id).collection('entries').add(e)).catch(()=>{});
 }
 /* ---- "Saving…" / "Not saving" badge in the top bar: stays until saving works again ---- */
@@ -1464,7 +1463,7 @@ function getSpawnText(m){
   if(m.id === 'boss_event')
     return m.ev === 'spawn'
       ? `<span class="green">has spawned · up for ${fmtClock(now - m.lastDeath)}</span>`
-      : `killed ${formatTime(m.lastDeath)}${m.killer ? ' by ' + esc(cleanKiller(m.killer)) : ''}`;
+      : `killed ${formatTime(m.lastDeath)}`;
   const minSpawn = m.lastDeath + m.min*60000;
   const maxSpawn = m.lastDeath + m.max*60000;
   if(now < minSpawn && m.min === m.max)
@@ -1811,8 +1810,6 @@ beBar.className = 'nextup bebar is-none';
 beBar.setAttribute('aria-label', 'Boss Event');
 nextUp.after(beBar);
 let beSig = null;
-// a killer name read from chat sometimes keeps the start of "of [Guild]" ("Newton of"): drop it
-const cleanKiller = k=> String(k || '').replace(/\s+o[ft]\s*(?:[\[\(].*)?$/i, '').trim();
 function renderBossBar(){
   const m = byId.boss_event, now = Date.now();
   const mm = m && /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
@@ -1838,7 +1835,7 @@ function renderBossBar(){
       ? '<span class="nu-empty">No event recorded yet · random, about hourly</span>'
       : `<span class="nu-name">${escX(boss)}</span>${map ? `<span class="be-map">${escX(map)}</span>` : ''}<span class="sep">·</span>` + (state === 'up'
         ? '<span class="be-up"></span>'
-        : `<span class="be-map">killed ${formatTime(m.lastDeath)}${m.killer ? ' by ' + escX(cleanKiller(m.killer)) : ''}</span><span class="sep">·</span><span class="be-ago"></span>`))
+        : `<span class="be-map">killed ${formatTime(m.lastDeath)}</span><span class="sep">·</span><span class="be-ago"></span>`))
       + (m && m.auto && window.FALSEHOOD_ROLE !== 'viewer' ? ' <span class="auto-mark" title="Logged by Auto-detect from the game chat">📡</span>' : '')
       + (can ? `<span class="be-acts">${state === 'up' ? '<button class="btn btn-primary be-kill" title="Mark the Boss Event killed now">Killed</button>' : ''}${undo ? '<button class="btn undo be-undo" title="Undo the last change">↶ Undo</button>' : ''}</span>` : '');
     const k = beBar.querySelector('.be-kill'); if(k) k.onclick = ()=> logKill(m, 0);
@@ -2754,7 +2751,7 @@ function requestRender(){
 function logKill(m, minutesAgo){
   const prev = m.lastDeath, prevBy = m.by, prevEv = m.ev, prevKiller = m.killer, prevAuto = !!m.auto;
   m.auto = !!m._auto; m._auto = null;   // logged by Auto-detect (📡) or by a person
-  if(m.id === 'boss_event'){ m.ev = m._ev || 'dead'; m.killer = m._killer || ''; m._ev = m._killer = null; }
+  if(m.id === 'boss_event'){ m.ev = m._ev || 'dead'; m.killer = ''; m._ev = m._killer = null; }   // who killed the Boss Event isn't recorded
   m.lastDeath = Date.now() - minutesAgo*60000;
   m.by = myId;
   m._act = m.id === 'boss_event' && m.ev === 'spawn' ? 'spawn' : minutesAgo ? 'update' : 'kill';
@@ -2994,7 +2991,7 @@ async function openHistory(m){
     const [label, cls] = ACT[e.act] || ['Changed', 'u'];
     const who = e.name || (e.by && typeof nickNames !== 'undefined' && nickNames[e.by]) || 'a guildmate';
     const detail = e.act === 'location' ? esc(e.loc || '')
-      : (e.act === 'kill' || e.act === 'update') && e.t ? (Math.abs(e.t - e.at) > 90000 ? 'killed ' + day(e.t) : '') + (e.killer ? ' · by ' + esc(e.killer) : '') + (e.loc && e.loc !== m.defaultLocation ? ' · ' + esc(e.loc) : '')
+      : (e.act === 'kill' || e.act === 'update') && e.t ? (Math.abs(e.t - e.at) > 90000 ? 'killed ' + day(e.t) : '') + (e.killer && m.id !== 'boss_event' ? ' · by ' + esc(e.killer) : '') + (e.loc && e.loc !== m.defaultLocation ? ' · ' + esc(e.loc) : '')
       : e.act === 'spawn' && e.t ? 'at ' + day(e.t) + (e.loc ? ' · ' + esc(e.loc) : '') : '';
     return `<div class="hist-row"><span class="hist-tag ${cls}">${label}</span><div class="hist-main"><b>${esc(who)}</b>${e.auto ? ' <span class="hist-auto" title="Logged by their Auto-detect">📡 Auto-detect</span>' : ''}${e.undone ? ' <span class="hist-auto">· undone by the Admin</span>' : ''}${detail ? `<span>${detail}</span>` : ''}</div><span class="hist-when">${day(e.at)}</span></div>`;
   }).join('');
