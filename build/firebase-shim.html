@@ -100,6 +100,8 @@ body.no-delete .st-del{display:none!important}
 .fb-who .w-row em{color:#b9aecb;font-style:normal;font-size:11.5px}
 .fb-who .w-row small{color:#8f82a6;font-size:11px}
 .fb-who .w-row{align-items:center}
+.fb-who .w-h{font:600 10.5px Inter,system-ui,sans-serif;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.fb-who .w-h.ok{color:#7be0a5;background:rgba(47,191,113,.14)}.fb-who .w-h.warn{color:#f2c94c;background:rgba(242,201,76,.14)}.fb-who .w-h.bad{color:#ff8a98;background:rgba(255,107,127,.16)}
 .fb-who .w-end{display:inline-flex;align-items:center;gap:8px}
 .fb-menu .fb-who .w-kick,.fb-who .w-kick{display:inline-block;width:auto;margin:0;padding:2px 8px;border-radius:7px;border:1px solid rgba(255,138,152,.45);background:transparent;color:#ff8a98;font:600 11px Inter,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
 .fb-who .w-kick:hover{background:rgba(255,138,152,.12)}
@@ -202,6 +204,7 @@ body.no-delete .st-del{display:none!important}
       <button type="button" class="m-out">⎋ Log out of this device</button>
       ${role === 'admin' ? '<button type="button" class="m-rv">📋 Auto-detect log…</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-dc">💬 Discord posts…</button>' : ''}
+      ${role === 'admin' ? '<button type="button" class="m-cl">🧹 Clean up old logs…</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-out m-all">⎋ Log out all devices</button>' : ''}`;
     document.body.appendChild(menu);
     b.onclick = e=>{
@@ -224,6 +227,8 @@ body.no-delete .st-del{display:none!important}
     };
     const rv = menu.querySelector('.m-rv');
     if(rv) rv.onclick = ()=>{ menu.hidden = true; if(window.falsehoodReview) window.falsehoodReview(); };
+    const cl = menu.querySelector('.m-cl');
+    if(cl) cl.onclick = ()=>{ menu.hidden = true; if(window.falsehoodCleanup) window.falsehoodCleanup(); };
     const dc = menu.querySelector('.m-dc');
     if(dc) dc.onclick = ()=>{ menu.hidden = true; if(window.falsehoodDiscordSetup) window.falsehoodDiscordSetup(); };
     const nm = menu.querySelector('.m-nm');
@@ -280,23 +285,36 @@ body.no-delete .st-del{display:none!important}
     // everyone sees how many are online; only the Admin can open the list of who
     (document.getElementById('fbRole') || sync).after(chip);
     let beatErr = null;
-    const beat = ()=> Promise.all([
+    let whoSig = '', beatN = 0;
+    const beat = ()=>{
+      const sig = uid + '|' + (myNick || '') + '|' + role;
+      const writeWho = sig !== whoSig || (++beatN % 6 === 0);
+      return Promise.all([
         fs.collection(presCol()).doc(PTOKEN).set({ at: Date.now() }),
-        fs.collection('presence_who').doc(PTOKEN).set({ uid, name: myNick || null, role, at: Date.now() }),
+        writeWho ? fs.collection('presence_who').doc(PTOKEN).set({ uid, name: myNick || null, role, at: Date.now() }).then(()=>{ whoSig = sig; }) : null,
       ])
       .then(()=>{ beatErr = null; chip.classList.remove('err'); })
       .catch(x=>{ beatErr = (x && x.code) || 'error'; chip.classList.add('err'); });
+    };
     // 📡 who is running Auto-detect: everyone sees how many; only the Admin can see who
     const wchip = document.createElement('span');
     wchip.className = 'fb-watch';
     wchip.innerHTML = '📡 <span class="n">–</span>';
     chip.after(wchip);
-    let watching = false, wTimer = null;
+    let watching = false, wTimer = null, hTimer = null, wSig = '', wN = 0;
+    const health = ()=>{ try { return (window.FALSEHOOD_AD_HEALTH && window.FALSEHOOD_AD_HEALTH()) || 'ok'; } catch(e) { return 'ok'; } };
+    const wWho = (force)=>{
+      const h = health(), sig = uid + '|' + (myNick || '') + '|' + h;
+      if(!force && sig === wSig) return null;
+      return fs.collection('watchers_who').doc(PTOKEN).set({ uid, name: myNick || null, status: h, at: Date.now() }).then(()=>{ wSig = sig; });
+    };
     const wBeat = ()=> watching ? Promise.all([
         fs.collection('watchers').doc(PTOKEN).set({ at: Date.now() }),
-        fs.collection('watchers_who').doc(PTOKEN).set({ uid, name: myNick || null, at: Date.now() }),
+        wWho(++wN % 6 === 0),
       ]).catch(()=>{}) : Promise.resolve();
+    let wCount = -1;   // last known number of Auto-detect watchers (-1 = not known yet)
     const wPaint = n=>{
+      wCount = n;
       wchip.classList.toggle('none', n === 0);
       wchip.innerHTML = n === 0 ? '⚠ No auto-detect' : `📡 <span class="n">${n}</span> watching`;
       wchip.title = n === 0
@@ -306,10 +324,14 @@ body.no-delete .st-del{display:none!important}
     const wRefresh = async ()=>{ try { wPaint(await countSince('watchers', Date.now() - WATCH_MS)); delete wchip.dataset.why; }
       catch(x) { wchip.classList.remove('none'); wchip.innerHTML = '📡 ⚠'; wchip.dataset.why = ((x && x.message) || 'no connection') + (x && x.detail ? ' (' + x.detail + ')' : ''); wchip.title = 'Couldn’t count Auto-detect watchers: ' + ((x && x.message) || 'no connection') + (x && x.detail ? ' (' + x.detail + ')' : ''); } };
     window.FALSEHOOD_WATCH = {
-      start(){ watching = true; wBeat().then(wRefresh); clearInterval(wTimer); wTimer = setInterval(wBeat, WATCH_BEAT_MS); },
-      stop(){ watching = false; clearInterval(wTimer);
+      start(){ watching = true; wSig = ''; wBeat().then(wRefresh); clearInterval(wTimer); wTimer = setInterval(wBeat, WATCH_BEAT_MS);
+        // report a change in Auto-detect health within ~30 s (only writes when it actually changes)
+        clearInterval(hTimer); hTimer = setInterval(()=>{ if(watching){ const w = wWho(false); if(w) w.catch(()=>{}); } }, 30000); },
+      stop(){ watching = false; clearInterval(wTimer); clearInterval(hTimer);
         Promise.all([fs.collection('watchers').doc(PTOKEN).delete(), fs.collection('watchers_who').doc(PTOKEN).delete()]).catch(()=>{}).then(wRefresh); },
       refresh: wRefresh,
+      isWatching: ()=> watching,
+      count: ()=> wCount,
     };
     window.addEventListener('pagehide', ()=>{ if(watching){ try { fs.collection('watchers').doc(PTOKEN).delete(); fs.collection('watchers_who').doc(PTOKEN).delete(); } catch(e) {} } });
     if(role === 'admin'){
@@ -327,12 +349,17 @@ body.no-delete .st-del{display:none!important}
         wpop.style.top = (r.bottom + 6) + 'px';
         wpop.style.left = Math.max(8, Math.min(r.left, innerWidth - wpop.offsetWidth - 8)) + 'px';
         try {
-          const snap = await fs.collection('watchers_who').where('at', '>', Date.now() - WATCH_MS).get();
+          const snap = await fs.collection('watchers').where('at', '>', Date.now() - WATCH_MS).get();
+          const who = await Promise.all(snap.docs.map(d=> fs.collection('watchers_who').doc(d.id).get().then(w=> w.exists ? (w.data() || {}) : {}).catch(()=> ({}))));
           const seen = new Set();
-          const list = snap.docs.map(d=> d.data() || {}).filter(w=>{ if(seen.has(w.uid)) return false; seen.add(w.uid); return true; })
+          const list = snap.docs.map((d, i)=> Object.assign({}, who[i], { at: (d.data() || {}).at || 0 }))
+            .filter(w=>{ const k = w.uid || Math.random(); if(seen.has(k)) return false; seen.add(k); return true; })
             .sort((a, b)=> (a.name || '~').localeCompare(b.name || '~'));
+          const HL = { ok: ['ok', 'Reading OK'], frozen: ['bad', 'Game minimized / frozen'], black: ['bad', 'Black screen (full-screen game)'],
+            outside: ['warn', 'Chat is outside the marked box'], noarea: ['warn', 'Chat box not marked'], loading: ['warn', 'Starting up'], stalled: ['bad', 'Not checking (tab asleep?)'] };
           wpop.innerHTML = `<div class="m-info w-top"><span>Running Auto-detect</span></div><div class="w-grp">${list.length
-            ? list.map(w=> `<div class="w-row"><span>${w.name ? escW(w.name) : '<i>Unnamed</i>'}${w.uid === uid ? ' <em>(you)</em>' : ''}</span><small>${agoW(w.at)}</small></div>`).join('')
+            ? list.map(w=>{ const h = HL[w.status] || ['warn', 'Status unknown (old version)'];
+                return `<div class="w-row"><span>${w.name ? escW(w.name) : '<i>Unnamed</i>'}${w.uid === uid ? ' <em>(you)</em>' : ''}</span><span class="w-end"><span class="w-h ${h[0]}">${h[1]}</span><small>${agoW(w.at)}</small></span></div>`; }).join('')
             : '<div class="w-none">Nobody</div>'}</div>`;
           wpop.style.left = Math.max(8, Math.min(r.left, innerWidth - wpop.offsetWidth - 8)) + 'px';
         } catch(x) { wpop.innerHTML = '<div class="m-info">Couldn’t load the list right now.</div>'; }
@@ -432,7 +459,7 @@ body.no-delete .st-del{display:none!important}
     // when a count fails, clicking the chip says why (works on phones too, where there's no hover)
     const whyClick = (el, what)=> el.addEventListener('click', e=>{
       if(!el.dataset.why) return;
-      e.stopImmediatePropagation();
+      if(role !== 'admin') e.stopImmediatePropagation();   // the Admin still gets the list of who (it reads names, not counts)
       try { showToast(what + ': ' + el.dataset.why); } catch(x) { alert(what + ': ' + el.dataset.why); }
     }, true);
     whyClick(chip, 'Couldn’t count who’s online'); whyClick(wchip, 'Couldn’t count Auto-detect watchers');

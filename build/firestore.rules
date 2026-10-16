@@ -73,6 +73,7 @@ service cloud.firestore {
     }
     match /discordlog/{k} {
       allow read, create: if timer();
+      allow delete: if admin();
     }
     match /discordboard/{d} {
       allow read, write: if timer();
@@ -80,12 +81,12 @@ service cloud.firestore {
     // Auto-detect review log: watchers add entries; only the Admin reads them and marks them undone
     match /autolog/{k} {
       allow create: if timer();
-      allow read, update: if admin();
+      allow read, update, delete: if admin();
     }
     // per-MVP log history: anyone who can log kills adds entries; only the Admin reads them
     match /mvplog/{mvp}/entries/{e} {
       allow create: if timer() && request.resource.data.by == request.auth.uid;
-      allow read: if admin();
+      allow read, delete: if admin();
     }
     // MVP pictures: everyone signed in sees them; only the Admin adds, changes or removes them
     match /portraits/{id} {

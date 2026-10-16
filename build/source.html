@@ -1049,6 +1049,12 @@ body.compact .tc-big { font-size: 17px; } body.compact .tc-sub, body.compact .tc
   .item .controls { grid-column: 1 / -1; grid-row: auto; }
   .tc-big { font-size: 19px; } .tc-sub { display: none; } .tc-lbl { font-size: 9px; }
 }
+
+/* saving badge */
+.save-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; font: 700 11px Inter, system-ui, sans-serif; padding: 4px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; border: 1px solid; }
+.save-badge.bad { color: #ff8a98; border-color: rgba(255,107,127,.6); background: rgba(255,107,127,.14); animation: saveBlink 1.6s ease-in-out infinite; }
+.save-badge.slow { color: #f2c94c; border-color: rgba(242,201,76,.5); background: rgba(242,201,76,.12); }
+@keyframes saveBlink { 50% { box-shadow: 0 0 10px rgba(255,107,127,.6); } }
 </style>
 
 <div class="wrap">
@@ -1174,7 +1180,8 @@ function persist(m){
   if(mode !== 'live') return;
   const body = { lastDeath: m.lastDeath, by: m.by || null, location: m.location || '', updatedAt: Date.now(), auto: !!m.auto };
   if(m.id === 'boss_event'){ body.ev = m.ev || null; body.killer = m.killer || ''; }
-  writeChain = writeChain.then(()=> db.collection('mvps').doc(m.id).set(body)).catch(handleWriteError);
+  const sid = saveStart();
+  writeChain = writeChain.then(()=> db.collection('mvps').doc(m.id).set(body)).then(()=> saveDone(sid), e=>{ saveDone(sid, e); handleWriteError(e); });
   logHistory(m);
 }
 /* Per-MVP history (Admin only): every change adds one entry to mvplog/<mvp id>/entries; the ⋮ menu shows the last 10 */
@@ -1196,8 +1203,30 @@ function logHistory(m){
   if(m.id === 'boss_event' && m.killer) e.killer = m.killer;
   writeChain = writeChain.then(()=> db.collection('mvplog').doc(m.id).collection('entries').add(e)).catch(()=>{});
 }
+/* ---- "Saving…" / "Not saving" badge in the top bar: stays until saving works again ---- */
+const savePending = new Map(); let saveSeq = 0, saveErr = null;
+function saveStart(){ const id = ++saveSeq; savePending.set(id, Date.now()); return id; }
+function saveDone(id, err){ if(id) savePending.delete(id); saveErr = err ? (err.code || err.message || 'error') : null; paintSave(); }
+function saveWhy(c){
+  return c === 'resource-exhausted' || c === 'quota_exceeded' ? 'Firebase’s free daily limit is used up (resets about 3 PM Manila time)'
+    : c === 'permission-denied' ? 'not allowed (logged out, or the Firebase rules need updating)'
+    : c === 'unavailable' ? 'no connection to Firebase' : 'Firebase error: ' + c;
+}
+function paintSave(){
+  let b = document.getElementById('saveBadge');
+  if(!b){ const sync = document.getElementById('sync'); if(!sync) return;
+    b = document.createElement('button'); b.type = 'button'; b.id = 'saveBadge'; b.className = 'save-badge'; b.hidden = true; sync.after(b);
+    b.onclick = ()=>{ if(b.dataset.why) showToast(b.dataset.why); }; }
+  const slow = [...savePending.values()].some(t=> Date.now() - t > 8000);
+  if(saveErr){ b.hidden = false; b.className = 'save-badge bad'; b.textContent = '⚠ Not saving'; b.dataset.why = 'Changes aren’t being saved: ' + saveWhy(saveErr) + '. Kills logged now won’t reach guildmates.'; b.title = b.dataset.why; }
+  else if(slow){ b.hidden = false; b.className = 'save-badge slow'; b.textContent = '⏳ Saving…'; b.dataset.why = 'Still saving: waiting for Firebase (slow or no connection).'; b.title = b.dataset.why; }
+  else { b.hidden = true; b.dataset.why = ''; }
+}
+setInterval(paintSave, 2000);
 function handleWriteError(e){
   const code = e && e.code;
+  if(saveErr === null) saveErr = code || 'error';
+  paintSave();
   if(code === 'invalid_argument' || code === 'revoked' || code === 'not_granted'){
     canWrite = false;
     showNotice('<b>View only.</b> You can see the timers and storage but can’t make changes.<button class="unlock" onclick="falsehoodUnlock()">🔑 Enter editor password</button>');
@@ -2028,7 +2057,7 @@ function saveItem(item, action){
   if(i >= 0) storageItems[i] = item; else storageItems.push(item);
   if(storageLive){
     const body = JSON.parse(JSON.stringify(item)); delete body.id;
-    lootWrites = lootWrites.then(()=> db.collection('loot').doc(item.id).set(body)).catch(lootError);
+    lootWrites = lootWrites.then(()=> db.collection('loot').doc(item.id).set(body)).then(()=> saveDone(null), lootError);
   } else saveStorageLocal();
   refreshStorage();
 }
@@ -2036,7 +2065,7 @@ function deleteItem(id){
   const gone = storageItems.find(x=>x.id === id);
   if(gone) logAction('deleted', gone.item, gone);
   storageItems = storageItems.filter(x=>x.id !== id);
-  if(storageLive) lootWrites = lootWrites.then(()=> db.collection('loot').doc(id).delete()).catch(lootError);
+  if(storageLive) lootWrites = lootWrites.then(()=> db.collection('loot').doc(id).delete()).then(()=> saveDone(null), lootError);
   else saveStorageLocal();
   refreshStorage();
 }
@@ -2223,7 +2252,7 @@ function logAction(action, itemName, snapshot, current){
   if(src && src.no) entry.no = src.no;
   if(snapshot) entry.snapshot = JSON.parse(JSON.stringify(snapshot));   // a deleted item's full copy, so it can be restored
   if(storageLive){
-    lootWrites = lootWrites.then(()=> db.collection('lootlog').doc(newId()).set(entry)).catch(lootError);
+    lootWrites = lootWrites.then(()=> db.collection('lootlog').doc(newId()).set(entry)).then(()=> saveDone(null), lootError);
     lootLog = [entry].concat(lootLog).slice(0, 30);
   } else {
     lootLog = [entry].concat(lootLog).slice(0, 100);
@@ -2283,7 +2312,7 @@ window.falsehoodSetName = ()=>{
         const nErr = window.falsehoodNickError ? window.falsehoodNickError(v) : '';
         if(nErr){ showToast(nErr); return; }
         const ref = db.collection('names').doc(me);
-        (v ? ref.set({ name: v }) : ref.delete()).catch(lootError);
+        (v ? ref.set({ name: v }) : ref.delete()).then(()=> saveDone(null), lootError);
         if(v) nickNames[me] = v; else delete nickNames[me];
         renderStorage();
       });
@@ -2918,6 +2947,57 @@ function openRowMenu(btn, m){
   rowMenu.style.top = (r.bottom + 4) + 'px';
   rowMenu.style.left = Math.max(8, Math.min(r.right - rowMenu.offsetWidth, innerWidth - rowMenu.offsetWidth - 8)) + 'px';
 }
+/* ---- Clean up old logs (Admin): Discord post claims, the Auto-detect log and MVP history older than 30 days.
+   MVP history always keeps the last 10 per MVP. Runs by itself once a week when the Admin opens the tracker. ---- */
+async function cleanupLogs(manual){
+  if(!isAdmin() || mode !== 'live' || !db) return 0;
+  const cutoff = Date.now() - 30 * 86400000;
+  const doomed = [];
+  const add = (col, snap)=> snap.docs.forEach(d=> doomed.push(col.doc(d.id)));
+  try { const c = db.collection('discordlog'); add(c, await c.where('at', '<', cutoff).get()); } catch(e) {}
+  try { const c = db.collection('autolog'); add(c, await c.where('at', '<', cutoff).get()); } catch(e) {}
+  for(const m of mvps){
+    try {
+      const ent = db.collection('mvplog').doc(m.id).collection('entries');
+      const snap = await ent.where('at', '<', cutoff).orderBy('at', 'desc').get();
+      if(!snap.docs.length) continue;
+      // keep the newest 10 overall: only delete old ones beyond what the history window shows
+      const recent = await ent.orderBy('at', 'desc').limit(10).get();
+      const keep = new Set(recent.docs.map(d=> d.id));
+      snap.docs.forEach(d=>{ if(!keep.has(d.id)) doomed.push(ent.doc(d.id)); });
+    } catch(e) {}
+  }
+  let n = 0;
+  for(let i = 0; i < doomed.length; i += 400){
+    const part = doomed.slice(i, i + 400);
+    try {
+      if(db.batch){ const b = db.batch(); part.forEach(r=> b.delete(r)); await b.commit(); }
+      else await Promise.all(part.map(r=> r.delete()));
+      n += part.length;
+    } catch(e) { if(manual) showToast('Couldn’t delete some old logs (' + ((e && e.code) || 'error') + '). Update the Firebase rules first.'); break; }
+  }
+  try { await db.doc('meta/cleanup').set({ at: Date.now(), removed: n }); } catch(e) {}
+  return n;
+}
+window.falsehoodCleanup = async ()=>{
+  if(!isAdmin()) return;
+  openModal('🧹 Clean up old logs', 'Delete Discord post records, Auto-detect log entries and MVP history older than <b>30 days</b>?<br><br>MVP history always keeps the last 10 entries per MVP. Timers, Storage and pictures aren’t touched. This also runs by itself once a week.', async ()=>{
+    showToast('Cleaning up old logs…');
+    const n = await cleanupLogs(true);
+    showToast(n ? `Removed ${n} old log entr${n === 1 ? 'y' : 'ies'}.` : 'Nothing old enough to remove.');
+  });
+  confirmBtn.textContent = 'Clean up';
+};
+// once a week, quietly, when the Admin has the tracker open
+setTimeout(async function weekly(){
+  try {
+    if(isAdmin() && mode === 'live' && db){
+      const d = await db.doc('meta/cleanup').get();
+      const last = d.exists ? (+(d.data() || {}).at || 0) : 0;
+      if(Date.now() - last > 7 * 86400000) await cleanupLogs(false);
+    }
+  } catch(e) {}
+}, 90000);
 async function openHistory(m){
   if(!isAdmin()) return;
   openModal(`🕘 ${m.name}`, '<div class="hist-list"><div class="hist-none">Loading…</div></div>', null);
