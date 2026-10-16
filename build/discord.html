@@ -72,8 +72,11 @@
   const boardOn = ()=> cfg.board !== false;
   function tick(){
     watchCfg();
-    if(!cfg || !cfg.on || !cfg.url || !canPost() || typeof mvps === 'undefined') return;
-    if(!amPoster()) return;
+    if(!cfg || !cfg.url || !canPost() || typeof mvps === 'undefined') return;
+    // test mode: Discord is "off" for everyone (old versions included) except the one tracker named in onlyBy
+    const solo = !!cfg.onlyBy && cfg.onlyBy === window.FALSEHOOD_UID;
+    if(cfg.onlyBy ? !solo : !cfg.on) return;
+    if(!solo && !amPoster()) return;
     if(boardOn()) board();
     if(!postsOn()) return;
     const now = Date.now(), since = +cfg.since || 0;
@@ -211,9 +214,10 @@
       <input class="dc-url" type="url" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false">
       <label class="dc-ck"><input type="checkbox" class="dc-board"> <span><b>Live board</b>: one message that edits itself (pin it once in Discord)</span></label>
       <label class="dc-ck"><input type="checkbox" class="dc-posts"> <span><b>Individual posts</b>: a new message for each kill, spawn window, overdue and Boss Event</span></label>
-      <div class="dc-st">${cur && cur.on ? '✓ Discord posts are <b>on</b>.' : cur && cur.url ? 'Discord posts are <b>off</b>.' : 'Not set up yet.'}</div>
+      <label class="dc-ck dc-solo-l"><input type="checkbox" class="dc-solo"> <span>🧪 <b>Test mode: only my tracker updates Discord</b>. Everyone else’s tracker (old or new version) stops posting. Discord only updates while your tracker is open.</span></label>
+      <div class="dc-st">${cur && cur.onlyBy ? '🧪 <b>Test mode</b>: only ' + (cur.onlyBy === window.FALSEHOOD_UID ? 'your tracker' : 'the Admin’s tracker') + ' updates Discord.' : cur && cur.on ? '✓ Discord posts are <b>on</b>.' : cur && cur.url ? 'Discord posts are <b>off</b>.' : 'Not set up yet.'}</div>
       <div class="dc-acts">
-        ${cur && cur.on ? '<button type="button" class="dc-off">Turn off</button>' : ''}
+        ${cur && (cur.on || cur.onlyBy) ? '<button type="button" class="dc-off">Turn off</button>' : ''}
         <button type="button" class="dc-test">Send test</button>
         <button type="button" class="dc-close">Close</button>
         <button type="button" class="dc-save">Save &amp; turn on</button>
@@ -223,6 +227,7 @@
     if(cur && cur.url) inp.value = cur.url;
     ov.querySelector('.dc-board').checked = !cur || cur.board !== false;
     ov.querySelector('.dc-posts').checked = !!(cur && cur.posts === true);
+    ov.querySelector('.dc-solo').checked = !!(cur && cur.onlyBy);
     const say = (t, k)=>{ st.className = 'dc-st' + (k ? ' ' + k : ''); st.innerHTML = t; };
     const valid = ()=>{ const u = inp.value.trim(); if(!HOOK_RE.test(u)){ say('That doesn’t look like a Discord webhook URL. It starts with https://discord.com/api/webhooks/', 'bad'); return null; } return u; };
     ov.querySelector('.dc-close').onclick = ()=> ov.remove();
@@ -237,12 +242,15 @@
       const u = valid(); if(!u) return;
       const bOn = ov.querySelector('.dc-board').checked, pOn = ov.querySelector('.dc-posts').checked;
       if(!bOn && !pOn){ say('Tick the live board, individual posts, or both.', 'bad'); return; }
-      try { await fs().doc('config_discord/main').set({ url: u, on: true, board: bOn, posts: pOn, since: Date.now(), by: window.FALSEHOOD_UID || null }); say('✓ Saved. Discord posts are on.', 'ok'); setTimeout(()=> ov.remove(), 1200); }
+      const solo = ov.querySelector('.dc-solo').checked, me = window.FALSEHOOD_UID || null;
+      // test mode keeps "on" false, so trackers that don't know about test mode (old versions) stay quiet
+      try { await fs().doc('config_discord/main').set({ url: u, on: !solo, onlyBy: solo ? me : null, board: bOn, posts: pOn, since: Date.now(), by: me });
+        say(solo ? '✓ Saved. 🧪 Test mode: only your tracker updates Discord.' : '✓ Saved. Discord posts are on (everyone’s trackers).', 'ok'); setTimeout(()=> ov.remove(), 1500); }
       catch(e) { say('Couldn’t save (' + ((e && e.code) || 'error') + '). Update the Firebase rules first.', 'bad'); }
     };
     const off = ov.querySelector('.dc-off');
     if(off) off.onclick = async ()=>{
-      try { await fs().doc('config_discord/main').set(Object.assign({}, cur, { on: false })); say('Discord posts are off.', 'ok'); setTimeout(()=> ov.remove(), 1000); }
+      try { await fs().doc('config_discord/main').set(Object.assign({}, cur, { on: false, onlyBy: null })); say('Discord posts are off.', 'ok'); setTimeout(()=> ov.remove(), 1000); }
       catch(e) { say('Couldn’t save (' + ((e && e.code) || 'error') + ').', 'bad'); }
     };
     inp.focus();
