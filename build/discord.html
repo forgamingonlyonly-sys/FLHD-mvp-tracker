@@ -139,8 +139,8 @@
     const n = (k, w)=> `**${k}** ${w}`;
     const summary = [n(floating.length, 'floating'), n(overdue.length, 'overdue'), n(next.length, 'coming up')].join(' · ');
     const parts = [summary];
-    // ⏰ ending within 15 minutes gets its own group on top, so the urgent ones don't get lost in a long list
-    const SOON = 15 * 60000, NOW = 5 * 60000;
+    // ⏰ ending within 10 minutes gets its own group on top, so the urgent ones don't get lost in a long list
+    const SOON = 10 * 60000, NOW = 5 * 60000;
     const ending = floating.filter(m=> m.min !== m.max && close(m) - now <= SOON), floatRest = floating.filter(m=> !ending.includes(m));
     const fl = m=> line(m, m.min === m.max ? `spawned **${at(open(m), 'R')}**` : `ends **${at(close(m), 'R')}**`);
     if(ending.length) parts.push('**⏰ Ending soon**\n' + ending.map(fl).join('\n'));
