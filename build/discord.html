@@ -157,7 +157,7 @@
     if(site){ main.url = site; main.thumbnail = { url: site + 'apple-touch-icon.png' }; }
     const embeds = [main];
     if(beUp) embeds.unshift({ color: COLOR.event, title: `🔥 BOSS EVENT · ${cut(beBoss, 60).toUpperCase()} IS UP`,
-      description: `📍 **${beMap || '?'}** · spawned ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})\nHunt, fight, and survive!` });
+      description: `📍 **${beMap || '?'}** · spawned ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})` });
     // what the board says, without the times that tick by themselves: an edit is only needed when this changes
     const sig = JSON.stringify([floating.map(m=> m.id + m.lastDeath), overdue.map(m=> m.id + m.lastDeath), next.map(m=> m.id + m.lastDeath + m.location), be ? [be.lastDeath, be.ev, be.location, be.killer, beUp] : 0, Math.floor(now / (10 * 60000))]);
     return { sig, body: { username: 'Falsehood MVP Tracker', allowed_mentions: { parse: [] }, embeds } };
