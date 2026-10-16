@@ -1816,7 +1816,12 @@ function renderBossBar(){
   let map = mm ? mm[1] : '';
   const boss = mm ? mm[2] : 'Boss';
   const state = !m || !m.lastDeath ? 'none' : m.ev === 'spawn' ? 'up' : 'dead';
-  // a map name saved before a reading fix (e.g. crad_fild051): correct it, and save the fix once
+  // a map name saved before a reading fix (e.g. crad_fild051, moc_fild0g): correct it, and save the fix once.
+  // The fixer lives in the Auto-detect part; load it when a saved map looks misread (letter after the number, cut-off start)
+  if(map && !window.falsehoodFixMap && A.canKill() && window.falsehoodLoadMod && /\d[a-z]+$|^[_…]/i.test(map) && !renderBossBar.loadingFix){
+    renderBossBar.loadingFix = true;
+    window.falsehoodLoadMod('ad').then(()=>{ beSig = null; renderBossBar(); }).catch(()=>{});
+  }
   if(map && window.falsehoodFixMap){
     const fixed = window.falsehoodFixMap(map);
     if(fixed && fixed !== map){
@@ -1840,18 +1845,7 @@ function renderBossBar(){
       + (can ? `<span class="be-acts">${state === 'up' ? '<button class="btn btn-primary be-kill" title="Mark the Boss Event killed now">Killed</button>' : ''}${undo ? '<button class="btn undo be-undo" title="Undo the last change">↶ Undo</button>' : ''}</span>` : '');
     const k = beBar.querySelector('.be-kill'); if(k) k.onclick = ()=> logKill(m, 0);
     const u = beBar.querySelector('.be-undo'); if(u) u.onclick = ()=> undoKill(m);
-    // fix a misread map name: click it, type, Enter
-    const mapEl = beBar.querySelector('.be-map');
-    if(can && mapEl && state !== 'none' && map){
-      mapEl.classList.add('be-edit'); mapEl.contentEditable = 'true'; mapEl.spellcheck = false;
-      mapEl.title = /^…/.test(map) ? 'The start of the map name couldn’t be read from the chat. Click and type the full name (e.g. iz_dun03)' : 'Click to fix the map name';
-      mapEl.onkeydown = e=>{ if(e.key === 'Enter'){ e.preventDefault(); mapEl.blur(); } };
-      mapEl.onblur = ()=>{
-        const v = mapEl.textContent.trim().replace(/\s+/g, '');
-        if(v && v !== map){ m.location = v + ' (' + boss + ')'; persist(m); }
-        beSig = null; renderBossBar();
-      };
-    }
+    // the map can't be edited by hand: it comes from the game chat (Auto-detect) only
   }
   if(state === 'up') beBar.querySelector('.be-up').textContent = 'up for ' + fmtClock(now - m.lastDeath);
   if(state === 'dead'){ const mins = Math.floor((now - m.lastDeath) / 60000); beBar.querySelector('.be-ago').textContent = mins < 1 ? 'just now' : mins < 60 ? mins + ' min ago' : Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm ago'; }
@@ -3041,7 +3035,7 @@ function render(){
 
     const loc = el.querySelector('.loc');
     loc.textContent = m.location || '';
-    if(!locked){
+    if(false){   // locations can't be edited by hand (Admin decision, Oct 2026)
       loc.contentEditable = 'true';
       loc.title = 'Click to edit location';
       loc.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); loc.blur(); } };
