@@ -39,6 +39,17 @@
 :root:not([data-theme="light"]) .nu-hero .pt-card img{filter:drop-shadow(0 0 6px rgba(170,110,255,.55))}
 @media (max-width:700px){:root:not([data-theme="light"]) .nu-hero .nu-item{border-left:0;border-top:1px solid rgba(155,77,255,.3)}
   :root:not([data-theme="light"]) .nextup.nu-hero{background:linear-gradient(180deg,rgba(8,4,16,.88),rgba(8,4,16,.62))}}
+/* Boss Event bar: glowing frame like Next Spawns — orange fire while the boss is up, soft purple once it's killed */
+:root:not([data-theme="light"]) .bebar{border:1.5px solid #ff8a2a;border-left-width:1.5px;
+  background:linear-gradient(90deg,rgba(28,10,4,.9) 0%,rgba(16,6,10,.78) 55%,rgba(8,4,16,.45) 100%);
+  box-shadow:0 0 0 1px rgba(255,190,120,.16) inset,0 0 14px rgba(255,122,30,.7),0 0 40px rgba(255,90,20,.32);animation:beGlow 2.6s ease-in-out infinite}
+:root:not([data-theme="light"]) .bebar .nu-label{background:linear-gradient(180deg,#ffb35c,#ff7a1e);color:#3a1204;box-shadow:0 0 10px rgba(255,140,40,.55)}
+:root:not([data-theme="light"]) .bebar.is-dead,:root:not([data-theme="light"]) .bebar.is-none{border-color:rgba(155,77,255,.55);animation:none;
+  background:linear-gradient(90deg,rgba(8,4,16,.88) 0%,rgba(8,4,16,.7) 55%,rgba(8,4,16,.35) 100%);
+  box-shadow:0 0 0 1px rgba(200,150,255,.1) inset,0 0 10px rgba(155,77,255,.4),0 0 26px rgba(120,50,230,.18)}
+:root:not([data-theme="light"]) .bebar.is-dead .nu-label,:root:not([data-theme="light"]) .bebar.is-none .nu-label{background:rgba(155,77,255,.22);color:#e6d6ff;box-shadow:none}
+@keyframes beGlow{0%,100%{box-shadow:0 0 0 1px rgba(255,190,120,.16) inset,0 0 12px rgba(255,122,30,.6),0 0 34px rgba(255,90,20,.26)}50%{box-shadow:0 0 0 1px rgba(255,190,120,.22) inset,0 0 18px rgba(255,140,40,.85),0 0 48px rgba(255,100,20,.4)}}
+@media (prefers-reduced-motion:reduce){:root:not([data-theme="light"]) .bebar{animation:none}}
 /* 3D icons: beveled metal strokes (gold / silver / purple) with a light top edge and a shadow below */
 .tab-ic svg,.nu-hero .nu-label svg,.pin,.st-ic svg{
   filter:drop-shadow(0 -.6px 0 rgba(255,245,220,.55)) drop-shadow(0 1.4px .6px rgba(0,0,0,.85)) drop-shadow(0 0 3px rgba(0,0,0,.4))}
