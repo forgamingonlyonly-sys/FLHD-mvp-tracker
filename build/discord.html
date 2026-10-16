@@ -139,14 +139,20 @@
     const n = (k, w)=> `**${k}** ${w}`;
     const summary = [n(floating.length, 'floating'), n(overdue.length, 'overdue'), n(next.length, 'coming up')].join(' · ');
     const parts = [summary];
-    if(floating.length) parts.push('**🟢 Floating now**\n' + floating.map(m=> line(m, m.min === m.max ? `spawned **${at(open(m), 'R')}**` : `ends **${at(close(m), 'R')}**`)).join('\n'));
+    // ⏰ ending within 15 minutes gets its own group on top, so the urgent ones don't get lost in a long list
+    const SOON = 15 * 60000, NOW = 5 * 60000;
+    const ending = floating.filter(m=> m.min !== m.max && close(m) - now <= SOON), floatRest = floating.filter(m=> !ending.includes(m));
+    const fl = m=> line(m, m.min === m.max ? `spawned **${at(open(m), 'R')}**` : `ends **${at(close(m), 'R')}**`);
+    if(ending.length) parts.push('**⏰ Ending soon**\n' + ending.map(fl).join('\n'));
+    if(floatRest.length) parts.push('**🟢 Floating now**\n' + floatRest.map(fl).join('\n'));
     if(overdue.length) parts.push('**🔴 Overdue**\n' + overdue.map(m=> line(m, `overdue since **${at(close(m), 'R')}**`)).join('\n'));
     if(!floating.length && !overdue.length) parts.push('*Nothing floating or overdue right now.*');
     // "Next up" as columns (side by side on PC): name · map · when
     const fields = next.length ? [
-      { name: '⏳ Next up', value: next.map(m=> '**' + cut(m.name, 18) + '**').join('\n'), inline: true },
+      // ⚡ spawning within 5 minutes: get ready
+      { name: '⏳ Next up', value: next.map(m=> (open(m) - now <= NOW ? '⚡ ' : '') + '**' + cut(m.name, 18) + '**').join('\n'), inline: true },
       { name: 'Map', value: next.map(m=> cut(plain(m.location), 18)).join('\n'), inline: true },
-      { name: 'Spawns', value: next.map(m=> at(open(m), 'R')).join('\n'), inline: true },
+      { name: 'Spawns', value: next.map(m=> open(m) - now <= NOW ? '**' + at(open(m), 'R') + '**' : at(open(m), 'R')).join('\n'), inline: true },
     ] : [{ name: '⏳ Next up', value: '*No timers running*', inline: false }];
     const site = siteUrl();
     const main = {
@@ -161,7 +167,7 @@
     else if(be && be.lastDeath) embeds.unshift({ color: COLOR.done, title: `✅ BOSS EVENT · ${cut(beBoss, 60).toUpperCase()} ${be.ev === 'spawn' ? 'SPAWNED' : 'KILLED'}`,
       description: `${be.ev !== 'spawn' && beKiller ? 'by **' + beKiller + '** · ' : ''}📍 **${beMap || '?'}** · ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})` });
     // what the board says, without the times that tick by themselves: an edit is only needed when this changes
-    const sig = JSON.stringify([floating.map(m=> m.id + m.lastDeath), overdue.map(m=> m.id + m.lastDeath), next.map(m=> m.id + m.lastDeath + m.location), be ? [be.lastDeath, be.ev, be.location, be.killer, beUp] : 0, Math.floor(now / (10 * 60000))]);
+    const sig = JSON.stringify([ending.map(m=> m.id), next.filter(m=> open(m) - now <= NOW).map(m=> m.id), floating.map(m=> m.id + m.lastDeath), overdue.map(m=> m.id + m.lastDeath), next.map(m=> m.id + m.lastDeath + m.location), be ? [be.lastDeath, be.ev, be.location, be.killer, beUp] : 0, Math.floor(now / (10 * 60000))]);
     return { sig, body: { username: 'Falsehood MVP Tracker', allowed_mentions: { parse: [] }, embeds } };
   }
   let boardBusy = false, boardSeen = '';
