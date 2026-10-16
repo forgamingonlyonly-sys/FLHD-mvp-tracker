@@ -1253,16 +1253,19 @@ function applySnapshot(snap){
     m.location = (typeof b.location === 'string' && b.location && !(OLD_DEFAULT[m.id] || []).includes(b.location)) ? b.location : m.defaultLocation;
     m._synced = { lastDeath: m.lastDeath, location: m.location, ev: m.ev || null };
   });
-  if(firstSnapshot){
-    // Seed alert tracking from the real data so nothing fires on load
+  const cached = !!(snap.metadata && snap.metadata.fromCache);
+  if(firstSnapshot || cachedStart){
+    // Seed alert tracking from the real data so nothing fires on load (a saved copy shown first doesn't count)
     mvps.forEach(m=> prevStatus[m.id] = getStatus(m));
     firstSnapshot = false;
+    cachedStart = cached;
   }
   sweepStale();
   lastSyncAt = Date.now();
   requestRender();
 }
 let lastSyncAt = 0;
+var cachedStart = false;   // the first data came from this browser's saved copy; the fresh copy follows
 
 async function connect(){
   let c = null;
@@ -1294,7 +1297,8 @@ async function connect(){
     } catch(e) {}
   }
   setSync();
-  startStorageLive();
+  storageReady = true;                    // Storage data loads the first time its tab is opened
+  if(currentTab === 'storage') startStorageLive();
   db.collection('mvps').onSnapshot(applySnapshot, ()=>{
     mode = 'local';
     setSync();
@@ -1551,7 +1555,8 @@ function renderTabs(){
       return `<button class="tab tab-timer${t === currentTab ? ' active' : ''}" data-tab="timer" role="tab" aria-selected="${t === currentTab}">${run ? '<span class="live-dot" title="Timer running"></span>' : ''}<i class="tab-ic">${TAB_IC.timer}</i>TIMER</button>`;
     }
     if(t === 'storage'){
-      const n = (typeof storageItems !== 'undefined' ? storageItems : []).filter(x=>x.status !== 'sold').length;
+      let n = (typeof storageItems !== 'undefined' ? storageItems : []).filter(x=>x.status !== 'sold').length;
+      if(typeof storageLive !== 'undefined' && storageReady && !storageLoaded){ try { n = +localStorage.getItem('falsehood-storage-count') || 0; } catch(e) {} }
       return `<button class="tab tab-storage${t === currentTab ? ' active' : ''}" data-tab="storage" role="tab" aria-selected="${t === currentTab}"><i class="tab-ic">${TAB_IC.storage}</i>STORAGE<span class="count">${n}</span></button>`;
     }
     const list = mvps.filter(m=>m.type === t && m.id !== 'boss_event' && !isHidden(m));
@@ -1994,19 +1999,17 @@ function loadStorageLocal(){
 function saveStorageLocal(){
   try { localStorage.setItem('falsehood-storage', JSON.stringify(storageItems)); } catch(e) {}
 }
+var storageReady = false, storageLoaded = false;   // var: safe to read before this line runs
 function startStorageLive(){
-  if(typeof db === 'undefined' || !db) return;
+  if(typeof db === 'undefined' || !db || storageLive) return;
   storageLive = true;
   db.collection('loot').onSnapshot(snap=>{
     storageItems = snap.docs.map(d=> Object.assign({ id: d.id }, JSON.parse(JSON.stringify(d.data() || {}))));
+    storageLoaded = true;
+    try { localStorage.setItem('falsehood-storage-count', String(storageItems.filter(x=>x.status !== 'sold').length)); } catch(e) {}
     refreshStorage();
   }, ()=>{});
   startLogLive();
-  db.collection('names').onSnapshot(snap=>{
-    nickNames = {};
-    snap.docs.forEach(d=>{ const n = (d.data() || {}).name; if(typeof n === 'string' && n.trim()) nickNames[d.id] = n.trim().slice(0, 24); });
-    if(currentTab === 'storage') renderStorage();
-  }, ()=>{});
   db.doc('meta/counter').onSnapshot(snap=>{
     sharedCounter = snap.exists ? (+(snap.data() || {}).last || 0) : 0;
     if(currentTab === 'storage') renderStorage();
@@ -2237,6 +2240,12 @@ function startLogLive(){
 const whoHTML = uid => uid ? `<span class="who" data-uid="${escX(uid)}">a member</span>`
   : `<span class="who">${storageLive ? 'someone' : 'you'}</span>`;   // shared page: entries saved before names were recorded
 let nickNames = {};                        // shared page: in-game names people set for themselves (names/<their id>)
+window.addEventListener('falsehood-names', e=>{
+  const src = (e && e.detail) || {}, next = {};
+  for(const k in src){ const n = src[k]; if(typeof n === 'string' && n.trim()) next[k] = n.trim().slice(0, 24); }
+  nickNames = next;
+  if(currentTab === 'storage') renderStorage();
+});
 async function fillWho(){
   const spans = [...storageView.querySelectorAll('.who[data-uid]')];
   if(!spans.length) return;
@@ -2718,6 +2727,7 @@ function applyStorageView(){
   try { if(typeof paintAlertEmpty === 'function') paintAlertEmpty(); } catch(e) {}   // re-filter alerts for the open tab
   const tOn = currentTab === 'timer';
   const on = currentTab === 'storage';
+  if(on && storageReady && !storageLive) startStorageLive();
   document.getElementById('mvpList').hidden = on || tOn;
   storageView.hidden = !on;
   try { timerView.hidden = currentTab !== 'timer'; if(currentTab === 'timer') paintCycle(); } catch(e) {}
@@ -2793,14 +2803,60 @@ function mvpByBossName(boss){
   return mvps.find(m=> m.id !== 'boss_event' && portraits[m.id] && (n.startsWith(m.name.toLowerCase().replace(/[^a-z]/g, '')) || m.name.toLowerCase().replace(/[^a-z]/g, '').startsWith(n)))
     || mvps.find(m=> m.id !== 'boss_event' && (n.startsWith(m.name.toLowerCase().replace(/[^a-z]/g, '')) || m.name.toLowerCase().replace(/[^a-z]/g, '').startsWith(n))) || null;
 }
-function startPortraits(){
+/* Pictures are saved in this browser and downloaded again only when the Admin changes one.
+   meta/portraits holds a small index { v: { mvpId: changedAt } }; only changed pictures are fetched. */
+const picStore = (()=>{
+  let dbp = null;
+  const open = ()=> dbp || (dbp = new Promise((res, rej)=>{
+    try { const r = indexedDB.open('falsehood-pics', 1);
+      r.onupgradeneeded = ()=> r.result.createObjectStore('p');
+      r.onsuccess = ()=> res(r.result); r.onerror = ()=> rej(r.error); } catch(e) { rej(e); } }));
+  const tx = async (mode, fn)=>{ const d = await open(); return new Promise((res, rej)=>{ const t = d.transaction('p', mode), st = t.objectStore('p'); const out = fn(st); t.oncomplete = ()=> res(out && out.result); t.onerror = ()=> rej(t.error); }); };
+  return {
+    all: async ()=>{ try { const d = await open(); return await new Promise(res=>{ const out = {}; const c = d.transaction('p').objectStore('p').openCursor();
+      c.onsuccess = ()=>{ const k = c.result; if(k){ out[k.key] = k.value; k.continue(); } else res(out); }; c.onerror = ()=> res(out); }); } catch(e) { return {}; } },
+    put: (id, v)=> tx('readwrite', st=> st.put(v, id)).catch(()=>{}),
+    del: id=> tx('readwrite', st=> st.delete(id)).catch(()=>{}),
+  };
+})();
+const picOk = x=> x && typeof x.data === 'string' && x.data.startsWith('data:image/');
+function picsChanged(){ requestRender(); beSig = null; nextSig = null; }
+async function startPortraits(){
   if(portraitsLive || !db) return;
   portraitsLive = true;
-  db.collection('portraits').onSnapshot(snap=>{
-    const next = {};
-    snap.docs.forEach(d=>{ const x = d.data() || {}; if(typeof x.data === 'string' && x.data.startsWith('data:image/')) next[d.id] = x.data; });
-    portraits = next;
-    requestRender(); beSig = null; nextSig = null;
+  const cache = await picStore.all();               // what this browser already has
+  const fromCache = {}; for(const id in cache) if(picOk(cache[id])) fromCache[id] = cache[id].data;
+  if(Object.keys(fromCache).length){ portraits = fromCache; picsChanged(); }
+  let syncing = Promise.resolve();
+  db.doc('meta/portraits').onSnapshot(snap=>{
+    const idx = snap.exists ? ((snap.data() || {}).v || {}) : null;
+    syncing = syncing.then(async ()=>{
+      if(!idx){
+        if(startPortraits.fullRead) return;  // only once per visit
+        startPortraits.fullRead = true;
+        // no index yet (pictures uploaded before this version): read them all once, then write the index
+        const all = await db.collection('portraits').get();
+        const v = {}, next = {};
+        for(const d of all.docs){ const x = d.data() || {}; if(!picOk(x)) continue; v[d.id] = x.at || 1; next[d.id] = x.data; cache[d.id] = { at: x.at || 1, data: x.data }; picStore.put(d.id, cache[d.id]); }
+        portraits = next; picsChanged();
+        if(canWrite && A.canKill() && window.FALSEHOOD_ROLE !== 'timer' && window.FALSEHOOD_ROLE !== 'viewer') db.doc('meta/portraits').set({ v }).catch(()=>{});
+        return;
+      }
+      let changed = false;
+      for(const id in idx){
+        if(cache[id] && cache[id].at === idx[id] && picOk(cache[id])) continue;
+        try {
+          const d = await db.collection('portraits').doc(id).get();
+          const x = d.exists ? (d.data() || {}) : null;
+          if(picOk(x)){ cache[id] = { at: idx[id], data: x.data }; picStore.put(id, cache[id]); }
+          else { delete cache[id]; picStore.del(id); }
+          changed = true;
+        } catch(e) {}
+      }
+      for(const id in cache) if(!(id in idx)){ delete cache[id]; picStore.del(id); changed = true; }
+      const next = {}; for(const id in cache) if(picOk(cache[id])) next[id] = cache[id].data;
+      if(changed || Object.keys(next).length !== Object.keys(portraits).length){ portraits = next; picsChanged(); }
+    }).catch(()=>{});
   }, ()=>{});
 }
 setInterval(()=>{ if(mode === 'live' && db) startPortraits(); }, 1000);
@@ -2816,8 +2872,9 @@ function pickPortrait(m){
     if(f.size > PORTRAIT_MAX){ showToast(`That file is ${Math.round(f.size / 1024)} KB. Pictures can be up to 700 KB.`); return; }
     const rd = new FileReader();
     rd.onload = ()=>{
-      db.collection('portraits').doc(m.id).set({ data: rd.result, type: f.type, at: Date.now(), by: myId || null })
-        .then(()=> showToast(`Picture saved for ${m.name}.`))
+      const picAt = Date.now();
+      db.collection('portraits').doc(m.id).set({ data: rd.result, type: f.type, at: picAt, by: myId || null })
+        .then(()=>{ showToast(`Picture saved for ${m.name}.`); return db.doc('meta/portraits').set({ v: { [m.id]: picAt } }, { merge: true }).catch(()=>{}); })
         .catch(e=> showToast('Couldn’t save the picture (' + ((e && e.code) || 'error') + '). Update the Firebase rules first.'));
     };
     rd.readAsDataURL(f);
@@ -2827,6 +2884,7 @@ function pickPortrait(m){
 function removePortrait(m){
   if(!isAdmin() || !portraits[m.id]) return;
   openModal('Remove picture?', `Remove the picture for <b>${esc(m.name)}</b> for everyone?`, ()=>{
+    try { db.doc('meta/portraits').update({ ['v.' + m.id]: firebase.firestore.FieldValue.delete() }).catch(()=>{}); } catch(e) {}
     db.collection('portraits').doc(m.id).delete().then(()=> showToast(`Picture removed for ${m.name}.`)).catch(()=> showToast('Couldn’t remove the picture.'));
   });
   confirmBtn.textContent = 'Remove';

@@ -126,6 +126,8 @@ body.no-delete .st-del{display:none!important}
   firebase.initializeApp(cfg);
   const auth = firebase.auth();
   const fs = firebase.firestore();
+  // keep a copy of the data in this browser (all tabs share it), so a refresh downloads only what changed
+  try { if(fs.enablePersistence) fs.enablePersistence({ synchronizeTabs: true }).catch(()=>{}); } catch(e) {}
 
   // Short lease on a doc, used by the tracker to hand out item numbers one at a time
   firebase.firestore.DocumentReference.prototype.acquire = async function(opts){
@@ -418,9 +420,15 @@ body.no-delete .st-del{display:none!important}
       document.addEventListener('click', ()=>{ pop.hidden = true; });
       chip.title = 'Click to see who’s online';
     }
-    refresh(); beat().finally(refresh);
-    setInterval(()=>{ beat(); if(document.visibilityState === 'visible') refresh(); }, BEAT_MS);
-    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ beat().finally(refresh); } });
+    // first count right after this device checks in (or after 8 s if the check-in is slow)
+    let firstDone = false; const first = ()=>{ if(!firstDone){ firstDone = true; refresh(); } };
+    beat().finally(first); setTimeout(first, 8000);
+    const COUNT_MS = 10 * 60000;
+    let countedAt = Date.now();
+    const maybeRefresh = (force)=>{ if(document.visibilityState !== 'visible') return; if(!force && Date.now() - countedAt < COUNT_MS - 5000) return; countedAt = Date.now(); refresh(); };
+    setInterval(()=>{ beat(); maybeRefresh(); }, BEAT_MS);
+    setInterval(()=> maybeRefresh(), 60000);
+    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible' && Date.now() - countedAt > 5 * 60000){ countedAt = Date.now(); beat().finally(refresh); } });
     // when a count fails, clicking the chip says why (works on phones too, where there's no hover)
     const whyClick = (el, what)=> el.addEventListener('click', e=>{
       if(!el.dataset.why) return;
@@ -733,7 +741,10 @@ body.no-delete .st-del{display:none!important}
   let namesOn = false;
   function watchNames(){
     if(namesOn) return; namesOn = true;
-    fs.collection('names').onSnapshot(s=>{ s.docs.forEach(d=>{ names[d.id] = (d.data() || {}).name; }); }, ()=>{});
+    fs.collection('names').onSnapshot(s=>{
+      s.docs.forEach(d=>{ names[d.id] = (d.data() || {}).name; });
+      try { window.dispatchEvent(new CustomEvent('falsehood-names', { detail: names })); } catch(e) {}
+    }, ()=>{});
   }
   window.claude = {
     async use(what){
