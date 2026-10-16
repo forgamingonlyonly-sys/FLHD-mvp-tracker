@@ -186,7 +186,7 @@
       cx.drawImage(tmp, 0, 0, cv.width, cv.height);
       let sig = '';
       for(let x = 0; x < cw; x += 5){ let c = 0; for(let y = 0; y < ch; y++) c += mask[(cy0 + y)*W + cx0 + x]; sig += c.toString(36); }
-      out.push({ canvas: cv, sig: cw + 'x' + ch + ':' + sig, y0: a, y1: b, x0, x1, short });
+      out.push({ canvas: cv, small: tmp, sig: cw + 'x' + ch + ':' + sig, y0: a, y1: b, x0, x1, short });
     }
     return out;
   }
@@ -207,7 +207,7 @@
       if(ch && !rules.isNew(it.text) && !rules.isDone(ch.map(x=> x.text).join(' '))) ch.push(it);
       else { if(ch) ch.done = true; if(!it.ln.short) chains.push([it]); }
     }
-    return chains.map(c=>({ text: c.map(x=> x.text).join(' '), key: c.map(x=> x.ln.sig).join('|'), y: c[c.length - 1].ln.y1, x0: c[0].ln.x0 }));
+    return chains.map(c=>({ text: c.map(x=> x.text).join(' '), lns: c.map(x=> x.ln), key: c.map(x=> x.ln.sig).join('|'), y: c[c.length - 1].ln.y1, x0: c[0].ln.x0 }));
   }
 
   // "[Name] of Guild [Guild] has killed [Maya] at Ant Hell F2."
@@ -525,6 +525,8 @@
       for(const c of killChains){ c.p = parseLine(c.text); c.m = c.p ? resolve(c.p) : null; c.sem = c.m ? 'k:' + c.m.id : null; }
       for(const c of evChains){
         c.e = parseEvent(c.text);
+        // the map didn't read as a real map (e.g. "iz_dun03" read as "_AunG3"): look again, closer, before using it
+        if(c.e && c.e.map && !isRealMap(c.e.map) && c.lns) c.e = (await rereadEvent(c)) || c.e;
         if(c.e && (c.e.kind !== 'dead' && c.e.kind !== 'spawn' || !c.e.map || c.e.map.length < 4)) c.e = null;
         c.sem = c.e ? 'e:' + c.e.kind + ':' + norm(c.e.boss || c.e.map) : null;
       }
@@ -724,7 +726,7 @@
   }
   function snapMap(raw){
     const lower = String(raw || '').toLowerCase().replace(/[^a-z0-9_!|]/g, '');
-    if(!lower) return null;
+    if(!lower || lower[0] === '_') return null;      // the start of the name is missing: don't guess which map
     const cands = new Set();
     const add = c=>{ if(c && c.length >= 4){ cands.add(c); cands.add(c.replace(/rn|ra|ri|nn|in/g, 'm')); } };
     add(lower.replace(/[!|]/g, ''));
@@ -763,7 +765,64 @@
       const sc = head === st ? 1.01 : sim1(head, st);
       if(sc > bs){ bs = sc; best = st + num(name.slice(st.length) + tail); }
     }
-    return bs >= 0.8 ? best : m;
+    if(bs >= 0.8) return best;
+    // the start of the name was lost ("iz_dun03" read as "_AunG3"): keep the part we can trust and mark the gap,
+    // so the row says "…_dun03" instead of nonsense (click the map on the Boss Event bar to fill it in)
+    const part = partialMap(lower);
+    return part || m;
+  }
+  const isRealMap = m=> MAP_LIST.includes(String(m || '').toLowerCase());
+  const MAP_TAILS = [...new Set(MAP_LIST.map(x=> (/_[a-z]+\d+$/.exec(x) || [''])[0]).filter(Boolean))];
+  function partialMap(lower){
+    let s = String(lower || '').replace(/^…/, '');
+    const cut = s.indexOf('_'); if(cut < 0 || cut > 3) return null;     // only when the start (a short prefix) was lost
+    const pre = s.slice(0, cut); s = s.slice(cut);
+    if(!/^_[a-z0-9]{3,}$/.test(s)) return null;
+    // the number at the end: letters that look like digits (G3 → 03)
+    if(/\d$/.test(s)) s = s.replace(/[a-z0-9]{1,2}$/, d=> d.replace(/[odgqc]/g, '0').replace(/[il]/g, '1').replace(/s/g, '5').replace(/z/g, '2').replace(/b/g, '8'));
+    let best = null, bs = 0, second = 0;
+    for(const t of MAP_TAILS){
+      const sc = 1 - lev(s, t) / Math.max(s.length, t.length);
+      if(sc > bs){ second = bs; bs = sc; best = t; } else if(sc > second) second = sc;
+    }
+    if(!(bs >= 0.6 && bs - second >= 0.1)) return null;
+    // a bit of the start survived ("lz" for "iz"): pick the one map with that ending whose start is closest
+    if(pre){
+      const opts = MAP_LIST.filter(x=> x.endsWith(best)).map(x=>({ x, sc: 1 - lev(pre, x.slice(0, -best.length)) / Math.max(pre.length, x.length - best.length) })).sort((p, q)=> q.sc - p.sc);
+      if(opts[0] && opts[0].sc >= 0.5 && (!opts[1] || opts[0].sc - opts[1].sc >= 0.2)) return opts[0].x;
+    }
+    return '…' + best;
+  }
+  // a second, closer look at an event line whose map didn't come out right: the same line drawn
+  // two other ways (sharp pixels / bigger), read again; used only if it now gives a real map
+  const reread = new Map();
+  async function rereadEvent(c){
+    const key = c.lns.map(l=> l.sig).join('|');
+    if(reread.has(key)) return reread.get(key);
+    reread.set(key, null);
+    if(reread.size > 50) reread.delete(reread.keys().next().value);
+    let out = null;
+    try {
+      await loadOCR();
+      for(const [sc, smooth] of [[3, false], [6, true]]){
+        const texts = [];
+        for(const ln of c.lns){
+          const src = ln.small; if(!src) { texts.length = 0; break; }
+          const cv = document.createElement('canvas'), m = 12;
+          cv.width = src.width * sc + m * 2; cv.height = src.height * sc + m * 2;
+          const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height);
+          x.imageSmoothingEnabled = smooth; if(smooth) x.imageSmoothingQuality = 'high';
+          x.drawImage(src, m, m, src.width * sc, src.height * sc);
+          const { data } = await worker.recognize(cv);
+          texts.push(String((data && data.text) || '').replace(/\s+/g, ' ').trim());
+        }
+        if(!texts.length) break;
+        const e = parseEvent(texts.join(' '));
+        if(e && e.kind === c.e.kind && e.map && isRealMap(e.map)){ out = e; c.text = texts.join(' '); break; }
+      }
+    } catch(x) {}
+    reread.set(key, out);
+    return out;
   }
 
 
@@ -798,7 +857,7 @@
     recent.set(m.id, now);
     if(m.ev === 'spawn'){
       const sp = /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
-      if(sp && e.map !== sp[1] && norm(sp[2]) === norm(e.boss)){
+      if(sp && e.map !== sp[1] && norm(sp[2]) === norm(e.boss) && isRealMap(sp[1]) && !isRealMap(e.map)){
         const a = String(e.rawMap || e.map || '').toLowerCase(), b2 = sp[1].toLowerCase();
         if(a && 1 - lev(a, b2) / Math.max(a.length, b2.length) >= 0.6) e.map = sp[1];
       }
@@ -971,7 +1030,7 @@
 
   window.__adLog = (k, t, sub)=> addLog(k, t, sub);
   window.__adEvent = t=> parseEvent(t);
-  window.falsehoodFixMap = m=> fixMap(String(m || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm'));
+  window.falsehoodFixMap = m=> /^…/.test(String(m || '')) ? m : fixMap(String(m || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm'));
   window.__adDiag = ()=> diag;
   // health for the Admin's 📡 list: is this watcher's Auto-detect actually able to read chat?
   window.FALSEHOOD_AD_HEALTH = ()=>{

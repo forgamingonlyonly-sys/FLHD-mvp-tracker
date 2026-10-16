@@ -1843,7 +1843,7 @@ function renderBossBar(){
     const mapEl = beBar.querySelector('.be-map');
     if(can && mapEl && state !== 'none' && map){
       mapEl.classList.add('be-edit'); mapEl.contentEditable = 'true'; mapEl.spellcheck = false;
-      mapEl.title = 'Click to fix the map name';
+      mapEl.title = /^…/.test(map) ? 'The start of the map name couldn’t be read from the chat. Click and type the full name (e.g. iz_dun03)' : 'Click to fix the map name';
       mapEl.onkeydown = e=>{ if(e.key === 'Enter'){ e.preventDefault(); mapEl.blur(); } };
       mapEl.onblur = ()=>{
         const v = mapEl.textContent.trim().replace(/\s+/g, '');
