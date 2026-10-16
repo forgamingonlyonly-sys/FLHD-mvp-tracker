@@ -1,0 +1,51 @@
+<!-- Loads the optional parts only for the people who use them:
+     Discord posts (anyone who can log kills), the Admin review list (Admin), and Auto-detect (on first click).
+     The build fills in __MODS__ with the file of each part. -->
+<script>
+(function(){
+  const MODS = window.FALSEHOOD_MODS = __MODS__;
+  const loading = {};
+  window.falsehoodLoadMod = k=>{
+    if(loading[k]) return loading[k];
+    loading[k] = new Promise((res, rej)=>{
+      const s = document.createElement('script'); s.src = MODS[k]; s.async = true;
+      s.onload = ()=> res();
+      s.onerror = ()=>{
+        delete loading[k];
+        try { showToast('Couldn’t load this part of the tracker. Refresh the page (there may be a new version).'); } catch(e) {}
+        rej(new Error('load ' + k));
+      };
+      document.head.appendChild(s);
+    });
+    return loading[k];
+  };
+  const canLog = r=> r === 'editor' || r === 'admin' || r === 'timer';
+  // automated test browsers load everything up front
+  const eager = !!navigator.webdriver && !window.__lazyTest;
+  if(eager) Object.keys(MODS).forEach(k=> window.falsehoodLoadMod(k).catch(()=>{}));
+  const wait = setInterval(()=>{
+    const r = window.FALSEHOOD_ROLE;
+    if(!r || !document.getElementById('fbRole')) return;
+    clearInterval(wait);
+    if(canLog(r)) window.falsehoodLoadMod('dc').catch(()=>{});
+    if(r === 'admin') window.falsehoodLoadMod('rv').catch(()=>{});
+    if(!canLog(r) || eager) return;
+    // Auto-detect: a light stand-in button; the reader itself loads the first time it's clicked
+    setTimeout(()=>{
+      const anchor = document.querySelector('.fb-online') || document.getElementById('fbRole');
+      if(!anchor || document.querySelector('.kd-btn')) return;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'kd-btn kd-stub';
+      b.title = 'Share your Ragnarok window and kills are logged automatically';
+      b.innerHTML = '<span class="kd-dot"></span>Auto-detect';
+      anchor.after(b);
+      b.onclick = e=>{
+        e.stopPropagation();
+        if(b.classList.contains('busy')) return;
+        b.classList.add('busy'); b.lastChild.textContent = 'Loading…';
+        window.__adOpenOnMount = true;
+        window.falsehoodLoadMod('ad').catch(()=>{ b.classList.remove('busy'); b.lastChild.textContent = 'Auto-detect'; window.__adOpenOnMount = false; });
+      };
+    }, 300);
+  }, 300);
+})();
+</script>

@@ -6,6 +6,7 @@ firebase-shim.html   Firebase sign-in, roles, presence; goes into <head>
 autodetect.html      Auto-detect (reads kill / Boss Event lines from the shared game window)
 discord.html         Discord board and posts
 review.html          Admin review list of Auto-detect logs
+modloader.html       loads Auto-detect / Discord / review only for the people who use them
 scene.html           night scene behind the tracker (dark theme)
 updater.html         "new version" bar and version label (gets the build id)
 Writes ../index.html, ../version.json and large images to ../assets/."""
@@ -23,13 +24,24 @@ def add_before_body(html):
     global src
     i = src.rfind('</body>')
     src = src[:i] + html + '\n' + src[i:]
-for name in ['scene.html', 'autodetect.html', 'discord.html', 'review.html', 'updater.html']:
-    add_before_body((root / name).read_text().replace('__BUILD__', build_id))
-
-# big built-in images become separate files, so browsers keep them between updates
+# Auto-detect, Discord and the Admin review list load only for the people who use them:
+# their scripts become separate files (assets/mod-*.js, named by content so browsers keep them between updates);
+# their styles stay in the page. modloader.html decides who loads what.
 import re, base64, hashlib
 assets = root.parent / 'assets'
 assets.mkdir(exist_ok=True)
+LAZY = {'autodetect.html': 'ad', 'discord.html': 'dc', 'review.html': 'rv'}
+lazy_code, mod_urls = {}, {}
+for name in ['scene.html', 'autodetect.html', 'discord.html', 'review.html', 'modloader.html', 'updater.html']:
+    html = (root / name).read_text().replace('__BUILD__', build_id)
+    if name in LAZY:
+        scripts = re.findall(r'<script>(.*?)</script>', html, flags=re.S)
+        assert len(scripts) == 1, name
+        lazy_code[LAZY[name]] = scripts[0]
+        html = re.sub(r'<script>.*?</script>', '', html, flags=re.S)
+    add_before_body(html)
+
+# big built-in images and sounds become separate files, so browsers keep them between updates
 def _extract(m):
     kind, data = m.group(1), m.group(2)
     if len(data) < 4000: return m.group(0)
@@ -38,6 +50,12 @@ def _extract(m):
     (assets / name).write_bytes(raw)
     return 'assets/' + name
 src = re.sub(r'data:image/([a-z+]+);base64,([A-Za-z0-9+/=]+)', _extract, src)
+def _extract_audio(m):
+    raw = base64.b64decode(m.group(2))
+    name = 'sfx-' + hashlib.sha1(raw).hexdigest()[:10] + '.' + {'mpeg': 'mp3'}.get(m.group(1), m.group(1))
+    (assets / name).write_bytes(raw)
+    return 'assets/' + name
+src = re.sub(r'data:audio/([a-z0-9]+);base64,([A-Za-z0-9+/=]{4000,})', _extract_audio, src)
 # compact the published page: inline <style> and <script> blocks are minified with esbuild
 # (build/node_modules: run `npm install` in build/). Without esbuild the page is published as is.
 import subprocess, shutil
@@ -57,6 +75,14 @@ if esb:
     print('compacted', before, '->', len(src))
 else:
     print('esbuild not found: published without compacting')
+# the lazy modules: minify, name by content, and tell the page where they are
+for f in assets.glob('mod-*.js'): f.unlink()
+for key, code in lazy_code.items():
+    js = _minify(code, 'js') if esb else code
+    name = 'mod-' + key + '-' + hashlib.sha1(js.encode()).hexdigest()[:10] + '.js'
+    (assets / name).write_text(js)
+    mod_urls[key] = 'assets/' + name
+src = src.replace('__MODS__', json.dumps(mod_urls))
 (root.parent / 'version.json').write_text(json.dumps({'build': build_id}))
 (root.parent / 'index.html').write_text(src)
 print('built', len(src))

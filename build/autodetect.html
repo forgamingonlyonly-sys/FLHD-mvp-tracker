@@ -980,8 +980,10 @@
     if(r !== 'editor' && r !== 'admin' && r !== 'timer') return;   // anyone who can log kills
     const anchor = document.querySelector('.fb-online') || document.getElementById('fbRole');
     if(!anchor || btn) return;
-    btn = document.createElement('button'); btn.type = 'button'; btn.className = 'kd-btn';
-    anchor.after(btn);
+    // take over the stand-in button the page showed before this part loaded
+    btn = document.querySelector('.kd-btn');
+    if(btn){ btn.className = 'kd-btn'; }
+    else { btn = document.createElement('button'); btn.type = 'button'; btn.className = 'kd-btn'; anchor.after(btn); }
     pop = document.createElement('div'); pop.className = 'kd-pop'; pop.hidden = true;
     document.body.appendChild(pop);
     btn.onclick = e=>{
@@ -996,8 +998,10 @@
     document.addEventListener('click', ()=>{ if(pop) pop.hidden = true; });
     setInterval(()=>{ if(pop && !pop.hidden) paintPop(); }, 5000);
     paintBtn();
+    if(window.__adOpenOnMount){ window.__adOpenOnMount = false; btn.click(); }
   }
-  const wait = setInterval(()=>{ if(document.getElementById('fbRole')){ clearInterval(wait); setTimeout(mount, 300); } }, 500);
+  if(document.getElementById('fbRole') && window.FALSEHOOD_ROLE) mount();     // loaded later, on the first click
+  else { const wait = setInterval(()=>{ if(document.getElementById('fbRole')){ clearInterval(wait); setTimeout(mount, 300); } }, 500); }
 
   // ---------- warn the watcher: their own Auto-detect can't read chat ----------
   const WARN = {

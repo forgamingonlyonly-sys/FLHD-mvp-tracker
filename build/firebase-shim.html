@@ -255,13 +255,13 @@ body.no-delete .st-del{display:none!important}
       catch(e) { alert('Couldn’t log everyone out (' + ((e && e.code) || 'error') + '). Check your connection and try again.'); }
     };
     const rv = menu.querySelector('.m-rv');
-    if(rv) rv.onclick = ()=>{ menu.hidden = true; if(window.falsehoodReview) window.falsehoodReview(); };
+    if(rv) rv.onclick = ()=>{ menu.hidden = true; (window.falsehoodLoadMod ? window.falsehoodLoadMod('rv') : Promise.resolve()).then(()=>{ if(window.falsehoodReview) window.falsehoodReview(); }).catch(()=>{}); };
     const er = menu.querySelector('.m-er');
     if(er) er.onclick = ()=>{ menu.hidden = true; openErrors(); };
     const cl = menu.querySelector('.m-cl');
     if(cl) cl.onclick = ()=>{ menu.hidden = true; if(window.falsehoodCleanup) window.falsehoodCleanup(); };
     const dc = menu.querySelector('.m-dc');
-    if(dc) dc.onclick = ()=>{ menu.hidden = true; if(window.falsehoodDiscordSetup) window.falsehoodDiscordSetup(); };
+    if(dc) dc.onclick = ()=>{ menu.hidden = true; (window.falsehoodLoadMod ? window.falsehoodLoadMod('dc') : Promise.resolve()).then(()=>{ if(window.falsehoodDiscordSetup) window.falsehoodDiscordSetup(); }).catch(()=>{}); };
     const nm = menu.querySelector('.m-nm');
     if(nm) nm.onclick = ()=>{ menu.hidden = true; if(window.falsehoodSetName) window.falsehoodSetName(); };
     const up = menu.querySelector('.m-up');
