@@ -87,7 +87,7 @@
         const mm = /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
         const map = mm ? mm[1] : '', boss = mm ? mm[2] : '';
         if(m.ev === 'spawn') post('ev_spawn_' + m.lastDeath, `🔥 **Boss Event:** ${boss || 'an MVP'} has spawned${map ? ' in ' + map : ''} · ${at(m.lastDeath)}`);
-        else post('ev_dead_' + m.lastDeath, `✅ **Boss Event:** ${boss || 'MVP'} killed${m.killer ? ' by ' + String(m.killer).replace(/\s+o[ft]\s*(?:[\[\(].*)?$/i, '') : ''}${map ? ' in ' + map : ''} · ${at(m.lastDeath)}`);
+        else post('ev_dead_' + m.lastDeath, `✅ **Boss Event:** ${boss || 'MVP'} killed${map ? ' in ' + map : ''} · ${at(m.lastDeath)}`);
         continue;
       }
       if(m.type === 'mini') continue;
@@ -132,7 +132,6 @@
     const be = mvps.find(m=> m.id === 'boss_event');
     const bm = be && /^(\S+)\s*\((.+)\)\s*$/.exec(String(be.location || ''));
     const beMap = bm ? bm[1] : '', beBoss = bm ? bm[2] : 'MVP';
-    const beKiller = String((be && be.killer) || '').replace(/\s+o[ft]\s*(?:[\[\(].*)?$/i, '').trim();
     const beUp = !!(be && be.lastDeath && be.ev === 'spawn' && now - be.lastDeath < 2 * 3600000);
     // lines lead with the name, then the map, then a countdown Discord keeps ticking by itself
     const line = (m, txt)=> `**${m.name}** · ${cut(plain(m.location), 34)} · ${txt}`;
@@ -165,7 +164,7 @@
     if(beUp) embeds.unshift({ color: COLOR.event, title: `🔥 BOSS EVENT · ${cut(beBoss, 60).toUpperCase()} IS UP`,
       description: `📍 **${beMap || '?'}** · spawned ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})` });
     else if(be && be.lastDeath) embeds.unshift({ color: COLOR.done, title: `✅ BOSS EVENT · ${cut(beBoss, 60).toUpperCase()} ${be.ev === 'spawn' ? 'SPAWNED' : 'KILLED'}`,
-      description: `${be.ev !== 'spawn' && beKiller ? 'by **' + beKiller + '** · ' : ''}📍 **${beMap || '?'}** · ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})` });
+      description: `📍 **${beMap || '?'}** · ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})` });
     // what the board says, without the times that tick by themselves: an edit is only needed when this changes
     const sig = JSON.stringify([ending.map(m=> m.id), next.filter(m=> open(m) - now <= NOW).map(m=> m.id), floating.map(m=> m.id + m.lastDeath), overdue.map(m=> m.id + m.lastDeath), next.map(m=> m.id + m.lastDeath + m.location), be ? [be.lastDeath, be.ev, be.location, be.killer, beUp] : 0, Math.floor(now / (10 * 60000))]);
     return { sig, body: { username: 'Falsehood MVP Tracker', allowed_mentions: { parse: [] }, embeds } };
