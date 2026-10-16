@@ -1,6 +1,6 @@
-<!-- Discord posts: kills, spawn windows and the Boss Event go to the guild's Discord channel through a webhook.
-     Any FLHD / Timers / Admin device with the tracker open does the posting; a shared lock (discordlog) makes
-     sure each message is sent once. Only the Admin can set the webhook, and View-only accounts can't read it. -->
+<!-- Discord board: a live MVP board (one message that edits itself) in up to two Discord channels, through webhooks.
+     Any FLHD / Timers / Admin device with the tracker open does the updating; a shared lock (discordboard) makes
+     sure only one edits at a time. Only the Admin can set the webhook, and View-only accounts can't read it. -->
 <style>
 .dc-ov{position:fixed;inset:0;z-index:9999;background:rgba(10,6,18,.7);display:flex;align-items:center;justify-content:center;padding:16px;font-family:Inter,system-ui,sans-serif}
 .dc-card{width:min(440px,100%);box-sizing:border-box;background:#1b1426;color:#f1ecf8;border:1px solid #3b2d52;border-radius:14px;padding:16px;display:grid;gap:10px;box-shadow:0 14px 40px rgba(0,0,0,.45)}
@@ -44,31 +44,11 @@
       body: JSON.stringify({ content, username: 'Falsehood MVP Tracker', avatar_url: avatar(), allowed_mentions: { parse: [] } }) });
     return r.ok;
   }
-  // up to two channels (webhooks), each with its own choice of live board and/or individual posts
+  // up to two channels (webhooks), each with its own live board
   const hooks = ()=> [
-    cfg.url ? { url: cfg.url, board: cfg.board !== false, posts: cfg.posts === true, doc: 'discordboard/main' } : null,
-    cfg.url2 ? { url: cfg.url2, board: cfg.board2 !== false, posts: cfg.posts2 === true, doc: 'discordboard/main2' } : null,
+    cfg.url ? { url: cfg.url, board: cfg.board !== false, doc: 'discordboard/main' } : null,
+    cfg.url2 ? { url: cfg.url2, board: cfg.board2 !== false, doc: 'discordboard/main2' } : null,
   ].filter(Boolean);
-  // first device to claim a message posts it; everyone else skips it
-  async function claim(key){
-    const ref = fs().collection('discordlog').doc(key);
-    try {
-      return await fs().runTransaction(async tx=>{
-        const s = await tx.get(ref);
-        if(s.exists) return false;
-        tx.set(ref, { at: Date.now(), by: window.FALSEHOOD_UID || null });
-        return true;
-      });
-    } catch(e) { return false; }
-  }
-  const tried = new Set();
-  async function post(key, content){
-    if(tried.has(key)) return;
-    tried.add(key);
-    if(!(await claim(key))) return;
-    for(const h of hooks()) if(h.posts){ try { await send(h.url, content); } catch(e) {} }   // claimed once, sent to every channel that wants posts
-  }
-
   // When someone runs Auto-detect, only their trackers post to Discord (fewer Firebase reads);
   // when nobody does, every tracker that can post takes part as before.
   const amPoster = ()=>{
@@ -77,7 +57,6 @@
     if(w.isWatching()) return true;
     return !(w.count() > 0);
   };
-  const postsOn = ()=> hooks().some(h=> h.posts);
   function tick(){
     watchCfg();
     if(!cfg || !cfg.url || !canPost() || typeof mvps === 'undefined') return;
@@ -86,40 +65,6 @@
     if(cfg.onlyBy ? !solo : !cfg.on) return;
     if(!solo && !amPoster()) return;
     for(const h of hooks()) if(h.board) board(h);
-    if(!postsOn()) return;
-    const now = Date.now(), since = +cfg.since || 0;
-    for(const m of mvps){
-      if(!m.lastDeath) continue;
-      if(m.id === 'boss_event'){
-        if(m.lastDeath < since || now - m.lastDeath < 5000 || now - m.lastDeath > 10 * 60000) continue;
-        const mm = /^(\S+)\s*\((.+)\)\s*$/.exec(String(m.location || ''));
-        const map = mm ? mm[1] : '', boss = mm ? mm[2] : '';
-        if(m.ev === 'spawn') post('ev_spawn_' + m.lastDeath, `🔥 **Boss Event:** ${boss || 'an MVP'} has spawned${map ? ' in ' + map : ''} · ${at(m.lastDeath)}`);
-        else post('ev_dead_' + m.lastDeath, `✅ **Boss Event:** ${boss || 'MVP'} killed${map ? ' in ' + map : ''} · ${at(m.lastDeath)}`);
-        continue;
-      }
-      if(m.type === 'mini') continue;
-      const open = m.lastDeath + m.min * 60000, close = m.lastDeath + m.max * 60000;
-      const place = String(m.location || '');
-      // kills: wait 15 s first so an Undo right after a mis-click isn't posted
-      if(m.lastDeath >= since && now - m.lastDeath >= 15000 && now - m.lastDeath < 30 * 60000){
-        const who = nick(m.by) ? ' · logged by ' + nick(m.by) : '';   // Discord is seen by view-only members too: no Auto-detect mention
-        const when = m.min === m.max
-          ? `Spawns ${at(open)} (${at(open, 'R')})`
-          : `Floats ${at(open)} – ${at(close)} (${at(open, 'R')})`;
-        post('kill_' + m.id + '_' + m.lastDeath, `💀 **${m.name}** killed ${at(m.lastDeath)}${who}${place ? ' · ' + place : ''}\n${when}`);
-      }
-      // spawn window opens
-      if(open >= since && now >= open && now - open < 15 * 60000 && (m.min === m.max || now <= close)){
-        post('open_' + m.id + '_' + m.lastDeath, m.min === m.max
-          ? `🟢 **${m.name}** has spawned${place ? ' · ' + place : ''}`
-          : `🟢 **${m.name}** is floating now${place ? ' · ' + place : ''} · window ends ${at(close)} (${at(close, 'R')})`);
-      }
-      // window closed and nobody logged a new kill: it's overdue
-      if(m.min !== m.max && close >= since && now > close && now - close < 15 * 60000){
-        post('over_' + m.id + '_' + m.lastDeath, `🔴 **${m.name}** is overdue${place ? ' · ' + place : ''} · window ended ${at(close)} (${at(close, 'R')})`);
-      }
-    }
   }
   setInterval(tick, 5000);
 
@@ -220,20 +165,16 @@
     let cur = null;
     try { const s = await fs().doc('config_discord/main').get(); cur = s.exists ? s.data() : null; } catch(e) {}
     const ov = document.createElement('div'); ov.className = 'dc-ov';
-    ov.innerHTML = `<div class="dc-card" role="dialog" aria-label="Discord posts">
-      <h4>💬 Discord posts</h4>
-      <p>Keeps a live MVP board in a Discord channel (one message that updates itself), and can also post each kill, spawn window, overdue and Boss Event. No pings. Any FLHD / Timers / Admin with the tracker open does the updating.</p>
+    ov.innerHTML = `<div class="dc-card" role="dialog" aria-label="Discord board">
+      <h4>💬 Discord board</h4>
+      <p>Keeps a live MVP board in a Discord channel: one message that updates itself (pin it once in Discord). No pings. Any FLHD / Timers / Admin with the tracker open does the updating.</p>
       <ol><li>In Discord: <b>Server Settings → Integrations → Webhooks → New Webhook</b>.</li><li>Pick the channel, then <b>Copy Webhook URL</b>.</li><li>Paste it here and press <b>Save &amp; turn on</b>.</li></ol>
       <div class="dc-sec">Channel 1</div>
       <input class="dc-url" type="url" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false">
-      <label class="dc-ck"><input type="checkbox" class="dc-board"> <span><b>Live board</b>: one message that edits itself (pin it once in Discord)</span></label>
-      <label class="dc-ck"><input type="checkbox" class="dc-posts"> <span><b>Individual posts</b>: a new message for each kill, spawn window, overdue and Boss Event</span></label>
-      <div class="dc-sec">Channel 2 <small>(optional, e.g. a separate #mvp-feed)</small></div>
+      <div class="dc-sec">Channel 2 <small>(optional: the same live board in a second channel)</small></div>
       <input class="dc-url2" type="url" placeholder="Leave empty for one channel only" autocomplete="off" spellcheck="false">
-      <label class="dc-ck"><input type="checkbox" class="dc-board2"> <span><b>Live board</b></span></label>
-      <label class="dc-ck"><input type="checkbox" class="dc-posts2"> <span><b>Individual posts</b></span></label>
       <label class="dc-ck dc-solo-l"><input type="checkbox" class="dc-solo"> <span>🧪 <b>Test mode: only my tracker updates Discord</b>. Everyone else’s tracker (old or new version) stops posting. Discord only updates while your tracker is open.</span></label>
-      <div class="dc-st">${cur && cur.onlyBy ? '🧪 <b>Test mode</b>: only ' + (cur.onlyBy === window.FALSEHOOD_UID ? 'your tracker' : 'the Admin’s tracker') + ' updates Discord.' : cur && cur.on ? '✓ Discord posts are <b>on</b>.' : cur && cur.url ? 'Discord posts are <b>off</b>.' : 'Not set up yet.'}</div>
+      <div class="dc-st">${cur && cur.onlyBy ? '🧪 <b>Test mode</b>: only ' + (cur.onlyBy === window.FALSEHOOD_UID ? 'your tracker' : 'the Admin’s tracker') + ' updates Discord.' : cur && cur.on ? '✓ The Discord board is <b>on</b>.' : cur && cur.url ? 'The Discord board is <b>off</b>.' : 'Not set up yet.'}</div>
       <div class="dc-acts">
         ${cur && (cur.on || cur.onlyBy) ? '<button type="button" class="dc-off">Turn off</button>' : ''}
         <button type="button" class="dc-test">Send test</button>
@@ -243,13 +184,10 @@
     document.body.appendChild(ov);
     const inp = ov.querySelector('.dc-url'), st = ov.querySelector('.dc-st');
     if(cur && cur.url) inp.value = cur.url;
-    ov.querySelector('.dc-board').checked = !cur || cur.board !== false;
-    ov.querySelector('.dc-posts').checked = !!(cur && cur.posts === true);
     ov.querySelector('.dc-solo').checked = !!(cur && cur.onlyBy);
     const inp2 = ov.querySelector('.dc-url2');
     if(cur && cur.url2) inp2.value = cur.url2;
-    ov.querySelector('.dc-board2').checked = !!(cur && cur.url2 && cur.board2 !== false);
-    ov.querySelector('.dc-posts2').checked = !!(cur && cur.url2 && cur.posts2 === true);
+
     const say = (t, k)=>{ st.className = 'dc-st' + (k ? ' ' + k : ''); st.innerHTML = t; };
     const valid = ()=>{ const u = inp.value.trim(); if(!HOOK_RE.test(u)){ say('That doesn’t look like a Discord webhook URL. It starts with https://discord.com/api/webhooks/', 'bad'); return null; } return u; };
     ov.querySelector('.dc-close').onclick = ()=> ov.remove();
@@ -268,20 +206,16 @@
     };
     ov.querySelector('.dc-save').onclick = async ()=>{
       const u = valid(); if(!u) return;
-      const bOn = ov.querySelector('.dc-board').checked, pOn = ov.querySelector('.dc-posts').checked;
       const u2 = valid2(); if(u2 === null) return;
-      const bOn2 = ov.querySelector('.dc-board2').checked, pOn2 = ov.querySelector('.dc-posts2').checked;
-      if(!bOn && !pOn && !(u2 && (bOn2 || pOn2))){ say('Tick the live board, individual posts, or both.', 'bad'); return; }
-      if(u2 && !bOn2 && !pOn2){ say('For channel 2, tick the live board, individual posts, or both (or clear its URL).', 'bad'); return; }
       const solo = ov.querySelector('.dc-solo').checked, me = window.FALSEHOOD_UID || null;
       // test mode keeps "on" false, so trackers that don't know about test mode (old versions) stay quiet
-      try { await fs().doc('config_discord/main').set({ url: u, on: !solo, onlyBy: solo ? me : null, board: bOn, posts: pOn, url2: u2 || null, board2: !!(u2 && bOn2), posts2: !!(u2 && pOn2), since: Date.now(), by: me });
-        say(solo ? '✓ Saved. 🧪 Test mode: only your tracker updates Discord.' : '✓ Saved. Discord posts are on (everyone’s trackers).', 'ok'); setTimeout(()=> ov.remove(), 1500); }
+      try { await fs().doc('config_discord/main').set({ url: u, on: !solo, onlyBy: solo ? me : null, board: true, posts: false, url2: u2 || null, board2: !!u2, posts2: false, since: Date.now(), by: me });
+        say(solo ? '✓ Saved. 🧪 Test mode: only your tracker updates Discord.' : '✓ Saved. The Discord board is on (everyone’s trackers update it).', 'ok'); setTimeout(()=> ov.remove(), 1500); }
       catch(e) { say('Couldn’t save (' + ((e && e.code) || 'error') + '). Update the Firebase rules first.', 'bad'); }
     };
     const off = ov.querySelector('.dc-off');
     if(off) off.onclick = async ()=>{
-      try { await fs().doc('config_discord/main').set(Object.assign({}, cur, { on: false, onlyBy: null })); say('Discord posts are off.', 'ok'); setTimeout(()=> ov.remove(), 1000); }
+      try { await fs().doc('config_discord/main').set(Object.assign({}, cur, { on: false, onlyBy: null })); say('The Discord board is off.', 'ok'); setTimeout(()=> ov.remove(), 1000); }
       catch(e) { say('Couldn’t save (' + ((e && e.code) || 'error') + ').', 'bad'); }
     };
     inp.focus();
