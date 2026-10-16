@@ -60,11 +60,20 @@
     try { await send(cfg.url, content); } catch(e) {}
   }
 
+  // When someone runs Auto-detect, only their trackers post to Discord (fewer Firebase reads);
+  // when nobody does, every tracker that can post takes part as before.
+  const amPoster = ()=>{
+    const w = window.FALSEHOOD_WATCH;
+    if(!w || !w.isWatching) return true;
+    if(w.isWatching()) return true;
+    return !(w.count() > 0);
+  };
   const postsOn = ()=> cfg.posts === true;
   const boardOn = ()=> cfg.board !== false;
   function tick(){
     watchCfg();
     if(!cfg || !cfg.on || !cfg.url || !canPost() || typeof mvps === 'undefined') return;
+    if(!amPoster()) return;
     if(boardOn()) board();
     if(!postsOn()) return;
     const now = Date.now(), since = +cfg.since || 0;
@@ -90,13 +99,13 @@
         post('kill_' + m.id + '_' + m.lastDeath, `💀 **${m.name}** killed ${at(m.lastDeath)}${who}${place ? ' · ' + place : ''}\n${when}`);
       }
       // spawn window opens
-      if(open >= since && now >= open && now - open < 3 * 60000){
+      if(open >= since && now >= open && now - open < 15 * 60000 && (m.min === m.max || now <= close)){
         post('open_' + m.id + '_' + m.lastDeath, m.min === m.max
           ? `🟢 **${m.name}** has spawned${place ? ' · ' + place : ''}`
           : `🟢 **${m.name}** is floating now${place ? ' · ' + place : ''} · window ends ${at(close)} (${at(close, 'R')})`);
       }
       // window closed and nobody logged a new kill: it's overdue
-      if(m.min !== m.max && close >= since && now > close && now - close < 3 * 60000){
+      if(m.min !== m.max && close >= since && now > close && now - close < 15 * 60000){
         post('over_' + m.id + '_' + m.lastDeath, `🔴 **${m.name}** is overdue${place ? ' · ' + place : ''} · window ended ${at(close)} (${at(close, 'R')})`);
       }
     }

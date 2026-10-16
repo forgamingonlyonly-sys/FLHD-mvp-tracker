@@ -926,6 +926,17 @@
   window.__adEvent = t=> parseEvent(t);
   window.falsehoodFixMap = m=> fixMap(String(m || '').replace(/[^A-Za-z0-9_]/g, '').replace(/rn/g, 'm'));
   window.__adDiag = ()=> diag;
+  // health for the Admin's 📡 list: is this watcher's Auto-detect actually able to read chat?
+  window.FALSEHOOD_AD_HEALTH = ()=>{
+    if(!track) return 'ok';
+    if(!worker) return 'loading';
+    if(lastScan && Date.now() - lastScan > 60000) return 'stalled';
+    if(diag.black) return 'black';
+    if(diag.frozen) return 'frozen';
+    if(!area) return 'noarea';
+    if(diag.outside > 0) return 'outside';
+    return 'ok';
+  };
   window.__adEventLog = t=>{ const e = parseEvent(t); if(e){ e.text = t; handleEvent(e); } return e; };
   window.__adParse = t=>{ const p = parseLine(t); if(!p) return null; const m = matchMvp(p.mvp, p.map) || (p.loose ? findInWords(p.after || p.text, p.map) : null) || byMap(p.map); return { mvp: p.mvp, map: p.map, killer: p.killer, loose: !!p.loose, id: m ? m.id : null }; };
   // for testing: window.__adTest(imageOrCanvas) runs one frame through the reader

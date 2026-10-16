@@ -8,7 +8,7 @@ discord.html         Discord board and posts
 review.html          Admin review list of Auto-detect logs
 scene.html           night scene behind the tracker (dark theme)
 updater.html         "new version" bar and version label (gets the build id)
-Writes ../index.html and ../version.json."""
+Writes ../index.html, ../version.json and large images to ../assets/."""
 import pathlib, time, json
 root = pathlib.Path(__file__).resolve().parent
 src = (root / 'source.html').read_text()
@@ -26,6 +26,18 @@ def add_before_body(html):
 for name in ['scene.html', 'autodetect.html', 'discord.html', 'review.html', 'updater.html']:
     add_before_body((root / name).read_text().replace('__BUILD__', build_id))
 
+# big built-in images become separate files, so browsers keep them between updates
+import re, base64, hashlib
+assets = root.parent / 'assets'
+assets.mkdir(exist_ok=True)
+def _extract(m):
+    kind, data = m.group(1), m.group(2)
+    if len(data) < 4000: return m.group(0)
+    raw = base64.b64decode(data)
+    name = 'img-' + hashlib.sha1(raw).hexdigest()[:10] + '.' + {'svg+xml': 'svg'}.get(kind, kind)
+    (assets / name).write_bytes(raw)
+    return 'assets/' + name
+src = re.sub(r'data:image/([a-z+]+);base64,([A-Za-z0-9+/=]+)', _extract, src)
 (root.parent / 'version.json').write_text(json.dumps({'build': build_id}))
 (root.parent / 'index.html').write_text(src)
 print('built', len(src))
