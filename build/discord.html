@@ -86,6 +86,14 @@
     const bm = be && /^(\S+)\s*\((.+)\)\s*$/.exec(String(be.location || ''));
     const beMap = bm ? bm[1] : '', beBoss = bm ? bm[2] : 'MVP';
     const beUp = !!(be && be.lastDeath && be.ev === 'spawn' && now - be.lastDeath < 2 * 3600000);
+    // the boss's picture from the tracker (Admin-uploaded) goes in the corner of the Boss Event card, as a file attached to the board
+    let pic = null;
+    try {
+      const bm = be && be.lastDeath && typeof mvpByBossName === 'function' ? mvpByBossName(beBoss) : null;
+      const url = bm && typeof portraits !== 'undefined' ? portraits[bm.id] : '';
+      const mt = /^data:image\/(gif|png|webp|jpeg|jpg);base64,/i.exec(url || '');
+      if(mt){ const ext = mt[1].toLowerCase().replace('jpeg', 'jpg'); pic = { name: 'boss-' + bm.id + '.' + ext, url, key: bm.id + ':' + url.length }; }
+    } catch(e) {}
     // lines lead with the name, then the map, then a countdown Discord keeps ticking by itself
     const line = (m, txt)=> `**${m.name}** · ${cut(plain(m.location), 34)} · ${txt}`;
     const n = (k, w)=> `**${k}** ${w}`;
@@ -118,14 +126,15 @@
       description: `📍 **${beMap || '?'}** · spawned ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})` });
     else if(be && be.lastDeath) embeds.unshift({ color: COLOR.done, title: `✅ BOSS EVENT · ${cut(beBoss, 60).toUpperCase()} ${be.ev === 'spawn' ? 'SPAWNED' : 'KILLED'}`,
       description: `📍 **${beMap || '?'}** · ${at(be.lastDeath, 'R')} (${at(be.lastDeath)})` });
+    if(pic && be && be.lastDeath) embeds[0].thumbnail = { url: 'attachment://' + pic.name };
     // what the board says, without the times that tick by themselves: an edit is only needed when this changes
     const sig = JSON.stringify([ending.map(m=> m.id), next.filter(m=> open(m) - now <= NOW).map(m=> m.id), floating.map(m=> m.id + m.lastDeath), overdue.map(m=> m.id + m.lastDeath), next.map(m=> m.id + m.lastDeath + m.location), be ? [be.lastDeath, be.ev, be.location, be.killer, beUp] : 0, Math.floor(now / (10 * 60000))]);
-    return { sig, body: { username: 'Falsehood MVP Tracker', avatar_url: avatar(), allowed_mentions: { parse: [] }, embeds } };
+    return { sig: sig + '|' + (pic ? pic.key : ''), pic, body: { username: 'Falsehood MVP Tracker', avatar_url: avatar(), allowed_mentions: { parse: [] }, embeds } };
   }
   const boardBusy = {}, boardSeen = {};
   async function board(h){
     if(boardBusy[h.doc]) return;
-    const { sig, body } = boardBody();
+    const { sig, body, pic } = boardBody();
     if(sig === boardSeen[h.doc]) return;
     boardBusy[h.doc] = true;
     const ref = fs().doc(h.doc);
@@ -143,16 +152,28 @@
       const d = st.d;
       let id = d.url === h.url ? d.id : null;     // a new webhook (another channel) starts a new board
       let ok = false;
+      const picKey = pic ? pic.key : '';
+      // the boss picture is uploaded only when it changes; otherwise the one already on the message is kept
+      const req = async (url, method, withPic)=>{
+        if(withPic && pic){
+          const fd = new FormData(), blob = await (await fetch(pic.url)).blob();
+          fd.append('payload_json', JSON.stringify(Object.assign({}, body, { attachments: [{ id: 0, filename: pic.name }] })));
+          fd.append('files[0]', blob, pic.name);
+          return fetch(url, { method, body: fd });
+        }
+        const b = withPic ? Object.assign({}, body, { attachments: [] }) : body;   // no picture any more: remove the old one
+        return fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+      };
       if(id){
-        const r = await fetch(h.url + '/messages/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const r = await req(h.url + '/messages/' + id, 'PATCH', (d.pic || '') !== picKey);
         ok = r.ok;
         if(r.status === 404) id = null;              // someone deleted the board: post a new one
       }
       if(!id){
-        const r = await fetch(h.url + (h.url.includes('?') ? '&' : '?') + 'wait=true', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const r = await req(h.url + (h.url.includes('?') ? '&' : '?') + 'wait=true', 'POST', !!pic);
         if(r.ok){ const j = await r.json(); id = j && j.id; ok = !!id; }
       }
-      await ref.set({ id: id || null, url: h.url, sig: ok ? sig : (d.sig || ''), editedAt: Date.now(), by: me, lockUntil: 0, lockBy: null });
+      await ref.set({ id: id || null, url: h.url, sig: ok ? sig : (d.sig || ''), pic: ok ? picKey : (d.pic || ''), editedAt: Date.now(), by: me, lockUntil: 0, lockBy: null });
       if(ok) boardSeen[h.doc] = sig;
     } catch(e) {
       try { await ref.set({ lockUntil: 0, lockBy: null }, { merge: true }); } catch(x) {}
