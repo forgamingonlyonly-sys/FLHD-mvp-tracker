@@ -66,14 +66,14 @@ service cloud.firestore {
       allow create, update: if timer() && request.resource.data.uid == request.auth.uid;
       allow delete: if timer();
     }
-    // Discord posts: FLHD / Timers / Admin read the webhook and claim each message once; only the Admin sets it
+    // Discord board: FLHD / Timers / Admin read the webhook settings; only the Admin sets them.
+    // discordlog = records of the old individual posts (removed): only the Admin's clean-up reads and deletes them
     match /config_discord/{d} {
       allow read: if timer();
       allow write: if admin();
     }
     match /discordlog/{k} {
-      allow read, create: if timer();
-      allow delete: if admin();
+      allow read, delete: if admin();
     }
     match /discordboard/{d} {
       allow read, write: if timer();

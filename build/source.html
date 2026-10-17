@@ -2911,14 +2911,17 @@ function openRowMenu(btn, m){
   rowMenu.style.top = (r.bottom + 4) + 'px';
   rowMenu.style.left = Math.max(8, Math.min(r.right - rowMenu.offsetWidth, innerWidth - rowMenu.offsetWidth - 8)) + 'px';
 }
-/* ---- Clean up old logs (Admin): Discord post claims, the Auto-detect log and MVP history older than 30 days.
+/* ---- Clean up old logs (Admin): the Auto-detect log, error reports and MVP history older than 30 days (and, once, the old Discord post records).
    MVP history always keeps the last 10 per MVP. Runs by itself once a week when the Admin opens the tracker. ---- */
 async function cleanupLogs(manual){
   if(!isAdmin() || mode !== 'live' || !db) return 0;
   const cutoff = Date.now() - 30 * 86400000;
   const doomed = [];
   const add = (col, snap)=> snap.docs.forEach(d=> doomed.push(col.doc(d.id)));
-  try { const c = db.collection('discordlog'); add(c, await c.where('at', '<', cutoff).get()); } catch(e) {}
+  // old Discord post records: individual posts were removed, so clear them all once, then never look again
+  let meta = {}; try { const s = await db.doc('meta/cleanup').get(); meta = s.exists ? (s.data() || {}) : {}; } catch(e) {}
+  let dlogLeft = !meta.dlogDone;
+  if(dlogLeft){ try { const c = db.collection('discordlog'); const s = await c.limit(400).get(); add(c, s); if(s.docs.length < 400) dlogLeft = false; } catch(e) {} }
   try { const c = db.collection('autolog'); add(c, await c.where('at', '<', cutoff).get()); } catch(e) {}
   try { const c = db.collection('errlog'); add(c, await c.where('at', '<', cutoff).get()); } catch(e) {}
   for(const m of mvps){
@@ -2941,12 +2944,12 @@ async function cleanupLogs(manual){
       n += part.length;
     } catch(e) { if(manual) showToast('Couldn’t delete some old logs (' + ((e && e.code) || 'error') + '). Update the Firebase rules first.'); break; }
   }
-  try { await db.doc('meta/cleanup').set({ at: Date.now(), removed: n }); } catch(e) {}
+  try { await db.doc('meta/cleanup').set({ at: Date.now(), removed: n, dlogDone: !dlogLeft || !!meta.dlogDone }); } catch(e) {}
   return n;
 }
 window.falsehoodCleanup = async ()=>{
   if(!isAdmin()) return;
-  openModal('🧹 Clean up old logs', 'Delete Discord post records, Auto-detect log entries, error reports and MVP history older than <b>30 days</b>?<br><br>MVP history always keeps the last 10 entries per MVP. Timers, Storage and pictures aren’t touched. This also runs by itself once a week.', async ()=>{
+  openModal('🧹 Clean up old logs', 'Delete Auto-detect log entries, error reports and MVP history older than <b>30 days</b>?<br><br>MVP history always keeps the last 10 entries per MVP. Timers, Storage and pictures aren’t touched. This also runs by itself once a week.', async ()=>{
     showToast('Cleaning up old logs…');
     const n = await cleanupLogs(true);
     showToast(n ? `Removed ${n} old log entr${n === 1 ? 'y' : 'ies'}.` : 'Nothing old enough to remove.');

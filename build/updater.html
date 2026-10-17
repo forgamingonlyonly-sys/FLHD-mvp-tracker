@@ -43,6 +43,7 @@
       const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
       if(!r.ok) return;
       const v = await r.json();
+      if(v && v.build) window.FALSEHOOD_LATEST = String(v.build);
       if(v && v.build && v.build !== BUILD){
         paintVer('old');
         if(Date.now() - snoozed > 30 * 60000) bar.hidden = false;
