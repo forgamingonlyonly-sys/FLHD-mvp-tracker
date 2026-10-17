@@ -90,7 +90,7 @@
 @media (max-width:760px){.toolbar-right .summary .chip{padding:0 6px!important;letter-spacing:.02em;font-size:11px}.toolbar-right .summary .chip b{font-size:13.5px}}
 @media (max-width:480px){.toolbar-right .summary .chip{padding:0 4px!important;letter-spacing:0;font-size:10px;gap:3px!important;min-width:0}.toolbar-right .summary .chip .dot{width:6px;height:6px}.toolbar-right .summary .chip b{font-size:12.5px}}
 /* MVP rows: gold-framed dark metal with a glowing status bar on the left and gold gothic names;
-   rows with no timer (Unknown) are dimmed so the live ones stand out (full brightness on hover) */
+   rows with no timer (Unknown) are dimmed so the live ones stand out (full brightness on hover); timer sizes unchanged */
 .item{background:linear-gradient(180deg,rgba(46,36,62,.94),rgba(18,12,28,.94))!important;border:1px solid rgba(227,162,26,.35)!important;border-left:1px solid rgba(227,162,26,.35)!important;border-radius:10px!important;
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,230,160,.12),0 3px 10px rgba(0,0,0,.55)!important;position:relative}
 .item::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:0 4px 4px 0;background:#4a3d5e;pointer-events:none}
@@ -101,8 +101,6 @@
 .item.fav{border-color:rgba(255,210,87,.75)!important}
 .item.s-unknown{opacity:.55;filter:saturate(.6);transition:opacity .15s,filter .15s}
 .item.s-unknown:hover,.item.s-unknown:focus-within{opacity:1;filter:none}
-.item.s-window .tc-big,.item.s-overdue .tc-big,.item.s-waiting .tc-big{font-size:34px!important}
-@media (max-width:600px){.item.s-window .tc-big,.item.s-overdue .tc-big,.item.s-waiting .tc-big{font-size:26px!important}}
 /* 3D icons: beveled metal strokes (gold / silver / purple) with a light top edge and a shadow below */
 .tab-ic svg,.nu-hero .nu-label svg,.pin,.st-ic svg{
   filter:drop-shadow(0 -.6px 0 rgba(255,245,220,.55)) drop-shadow(0 1.4px .6px rgba(0,0,0,.85)) drop-shadow(0 0 3px rgba(0,0,0,.4))}
