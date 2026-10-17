@@ -98,6 +98,9 @@ body.no-delete .st-del{display:none!important}
 .fb-who .w-h span{color:#9d8fb3;font-weight:600}
 .fb-who .w-row{display:flex;justify-content:space-between;gap:12px;padding:5px 4px;font-size:13px}
 .fb-who .w-row em{color:#b9aecb;font-style:normal;font-size:11.5px}
+#fbRefreshAll{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:10001;display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:calc(100vw - 24px);box-sizing:border-box;background:#1b1426;color:#f1ecf8;border:1px solid #c03bd6;border-radius:12px;padding:10px 14px;font:13px Inter,system-ui,sans-serif;box-shadow:0 12px 34px rgba(0,0,0,.5)}
+#fbRefreshAll button{padding:7px 12px;border-radius:9px;border:1px solid #c03bd6;background:#a02ab8;color:#fff;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+#fbRefreshAll .r-x{background:transparent;border-color:#4a3a63;color:#b9aecb}
 .fb-who .w-row em.w-old{color:#ffb35c}.fb-who .w-row em.w-new{color:#7be0a5}
 .fb-who .w-row small{color:#8f82a6;font-size:11px}
 .fb-who .w-row{align-items:center}
@@ -235,6 +238,7 @@ body.no-delete .st-del{display:none!important}
       ${role === 'admin' ? '<button type="button" class="m-dc">💬 Discord board…</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-er">🐞 Error reports…</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-cl">🧹 Clean up old logs…</button>' : ''}
+      ${role === 'admin' ? '<button type="button" class="m-rf">🔄 Refresh all trackers</button>' : ''}
       ${role === 'admin' ? '<button type="button" class="m-out m-all">⎋ Log out all devices</button>' : ''}`;
     document.body.appendChild(menu);
     b.onclick = e=>{
@@ -254,6 +258,14 @@ body.no-delete .st-del{display:none!important}
       menu.hidden = true;
       try { await logoutAll(); alert('Done. All other devices are being logged out now.'); }
       catch(e) { alert('Couldn’t log everyone out (' + ((e && e.code) || 'error') + '). Check your connection and try again.'); }
+    };
+    const rf = menu.querySelector('.m-rf');
+    if(rf) rf.onclick = async ()=>{
+      menu.hidden = true;
+      if(!confirm('Refresh every open tracker now?\n\nEveryone gets the newest version within a few seconds. Nobody has to log in again. Anyone running Auto-detect gets a button instead, so their screen share isn’t cut off.')) return;
+      try { await fs.doc('meta/refresh').set({ at: firebase.firestore.FieldValue.serverTimestamp(), by: auth.currentUser ? auth.currentUser.uid : null, byName: myNick || null });
+        alert('Done. Open trackers are refreshing now.\n\nTrackers opened before this button existed can’t hear it; they update when those guildmates refresh themselves.'); }
+      catch(e) { alert('Couldn’t send the refresh (' + ((e && e.code) || 'error') + '). Update the Firebase rules first.'); }
     };
     const rv = menu.querySelector('.m-rv');
     if(rv) rv.onclick = ()=>{ menu.hidden = true; (window.falsehoodLoadMod ? window.falsehoodLoadMod('rv') : Promise.resolve()).then(()=>{ if(window.falsehoodReview) window.falsehoodReview(); }).catch(()=>{}); };
@@ -748,6 +760,38 @@ body.no-delete .st-del{display:none!important}
       if(await staleLogin(uid, d.exists ? d.data() : null)) forcedLogout();
     }, e=>{ if(e && e.code === 'permission-denied') forcedLogout(); });
   }
+  // the Admin pressed "Refresh all trackers" (meta/refresh): reload to the newest version.
+  // Only a press made after this page opened counts; a reading straight from the offline cache never does.
+  function watchRefresh(uid){
+    let base;
+    fs.doc('meta/refresh').onSnapshot({ includeMetadataChanges: true }, d=>{
+      if(d.metadata && (d.metadata.fromCache || d.metadata.hasPendingWrites)) return;
+      const v = d.exists ? (d.data() || {}) : {};
+      const at = v.at && typeof v.at.toMillis === 'function' ? v.at.toMillis() : 0;
+      if(base === undefined){ base = at; return; }
+      if(!at || at === base) return;
+      base = at;
+      if(v.by === uid) return;                      // the Admin who pressed it is already up to date
+      adminRefresh(v.byName);
+    }, ()=>{});
+  }
+  function adminRefresh(byName){
+    const watching = !!(window.FALSEHOOD_WATCH && window.FALSEHOOD_WATCH.isWatching && window.FALSEHOOD_WATCH.isWatching());
+    let bar = document.getElementById('fbRefreshAll');
+    if(!bar){ bar = document.createElement('div'); bar.id = 'fbRefreshAll'; bar.setAttribute('role', 'alert'); document.body.appendChild(bar); }
+    const who = byName ? byName + ' (Admin)' : 'The Admin';
+    if(watching){
+      // a reload would stop the screen share: ask instead
+      bar.innerHTML = `<span>🔄 <b>${who} asked everyone to refresh.</b> Refreshing stops your Auto-detect: press Refresh, then start Auto-detect again.</span><button type="button" class="r-go">Refresh</button><button type="button" class="r-x">Later</button>`;
+      bar.querySelector('.r-go').onclick = ()=> location.reload();
+      bar.querySelector('.r-x').onclick = ()=> bar.remove();
+      return;
+    }
+    let left = 10;
+    const paint = ()=>{ bar.innerHTML = `<span>🔄 <b>${who} is refreshing the tracker</b> to the newest version in ${left} s…</span><button type="button" class="r-go">Refresh now</button>`; bar.querySelector('.r-go').onclick = ()=> location.reload(); };
+    paint();
+    const t = setInterval(()=>{ left--; if(left <= 0){ clearInterval(t); location.reload(); } else paint(); }, 1000);
+  }
   // the Admin logged this one person out (kicks/<uid>): sign out if it's newer than this login
   const ONE_FLAG = 'falsehood-kicked-one';
   function watchKick(uid){
@@ -817,7 +861,7 @@ body.no-delete .st-del{display:none!important}
         if(member){ window.FALSEHOOD_FS = fs; window.FALSEHOOD_UID = uid; }
         if(member && role === 'viewer') document.body.classList.add('viewonly');
         if(member && role === 'timer') document.body.classList.add('storage-ro');
-        if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); watchSession(uid); watchKick(uid); }
+        if(member){ await ensureNick(uid); showRole(); startPresence(uid); startIdleWatch(); watchSession(uid); watchKick(uid); watchRefresh(uid); }
         if(member && role !== 'admin') document.body.classList.add('no-delete');   // only the Admin deletes Storage items
         return member ? uid : null;
       } catch(e) {

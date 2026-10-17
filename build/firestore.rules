@@ -50,6 +50,8 @@ service cloud.firestore {
     }
     match /meta/{id} {
       allow create, update: if id == 'session' && admin() && request.resource.data.resetAt == request.time;
+      // "Refresh all trackers": only the Admin presses it
+      allow create, update: if id == 'refresh' && admin() && request.resource.data.at == request.time;
     }
     // who is online (nicknames): only the Admin can read it
     match /presence_who/{t} {
@@ -106,8 +108,8 @@ service cloud.firestore {
     }
     match /{col}/{id} {
       allow read: if member() && !(col in ['members', 'config', 'names', 'presence_who', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks', 'errlog']);
-      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks', 'errlog']) && !(col == 'meta' && id == 'session');
-      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks', 'errlog']);
+      allow create, update: if editor() && !(col in ['members', 'config', 'names', 'watchers_who', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks', 'errlog']) && !(col == 'meta' && id in ['session', 'refresh']);
+      allow delete: if editor() && !(col in ['members', 'config', 'names', 'loot', 'config_discord', 'discordlog', 'discordboard', 'autolog', 'portraits', 'killclaim', 'kicks', 'errlog']) && !(col == 'meta' && id in ['session', 'refresh']);
       allow write: if col in ['presence_admin', 'presence_editor', 'presence_timer', 'presence_viewer'] && member()
         && (request.resource == null || request.resource.data.keys().hasOnly(['at']));
     }

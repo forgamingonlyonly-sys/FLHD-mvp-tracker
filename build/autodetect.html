@@ -545,6 +545,7 @@
           if(!missSeen.has(mk) && /k\S{0,3}ed\b|o[ft]\s+gu/i.test(c.text)){
             missSeen.set(mk, now);
             addLog('miss', c.p ? `Couldn’t match “${c.p.mvp}”` : 'Saw a message but couldn’t read it', c.p ? [c.p.map, c.p.killer && 'by ' + c.p.killer].filter(Boolean).join(' · ') : c.text.slice(0, 90));
+            if(warm) recordMiss(c.text, c.p ? c.p.mvp : '');
           }
           continue;
         }
@@ -644,12 +645,31 @@
     }
   }
   const snap = m=> ({ lastDeath: m.lastDeath || null, by: m.by || null, auto: !!m.auto, ev: m.ev || null, killer: m.killer || '', location: m.location || '' });
+  // misread report: a Boss Event whose map or boss name isn't one we know gets flagged for the Admin's 📋 log
+  function oddRead(kind, info){
+    if(kind !== 'spawn' && kind !== 'dead') return '';
+    const bad = [];
+    if(info.map && !isRealMap(info.map)) bad.push('map');
+    const known = (typeof mvps !== 'undefined' ? mvps : []).some(x=> x.id !== 'boss_event' && norm(x.name) === norm(info.boss || ''));
+    if(info.boss && !known) bad.push('boss');
+    return bad.join(',');
+  }
+  // a kill line that couldn't be matched to any MVP: one shared entry per message (the first watcher's write wins)
+  function recordMiss(text, guess){
+    try {
+      const f = window.FALSEHOOD_FS; if(!f) return;
+      const t = norm(text).slice(0, 60); let h = 0; for(let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+      const id = 'miss_' + new Date().toISOString().slice(0, 10) + '_' + (h >>> 0).toString(36);
+      f.collection('autolog').doc(id).set({ at: Date.now(), kind: 'miss', mvp: '', name: guess || '', read: String(text || '').slice(0, 220),
+        by: window.FALSEHOOD_UID || null, who: (window.falsehoodMyName && window.falsehoodMyName()) || '' }).catch(()=>{});
+    } catch(e) {}
+  }
   function record(kind, m, prev, info){
     try {
       const f = window.FALSEHOOD_FS; if(!f) return;
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
       f.collection('autolog').doc(id).set({ at: Date.now(), kind, mvp: m.id, name: m.name, read: String(info.text || '').slice(0, 220),
-        killer: info.killer || '', map: info.map || '', boss: info.boss || '', setTo: m.lastDeath || null, prev, by: window.FALSEHOOD_UID || null,
+        killer: info.killer || '', map: info.map || '', boss: info.boss || '', setTo: m.lastDeath || null, prev, by: window.FALSEHOOD_UID || null, odd: oddRead(kind, info),
         who: (window.falsehoodMyName && window.falsehoodMyName()) || (()=>{ try { return localStorage.getItem('falsehood-nick') || ''; } catch(e) { return ''; } })() }).catch(()=>{});
     } catch(e) {}
   }

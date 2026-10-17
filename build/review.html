@@ -19,6 +19,12 @@
 .rv-foot .rv-st{margin-right:auto}
 .rv-st.ok{color:#7be0a5}.rv-st.old{color:#8f82a6}.rv-st.undone{color:#e0c27a}
 .rv-none{color:#8f82a6;font-size:12.5px;padding:8px 0}
+.rv-odd{border-color:rgba(255,170,60,.55)!important;background:rgba(60,30,8,.35)!important}
+.rv-warn,.rv-warn-t{color:#ffb35c;font-weight:700}
+.rv-warn{margin-left:6px;font-size:11.5px}
+.rv-tag.miss{background:#5a3a12;color:#ffd9a8}
+.rv-only{display:flex;gap:6px;align-items:center;font-size:12.5px;color:#cfc4df;cursor:pointer}
+.rv-only input{accent-color:#a02ab8}
 </style>
 <script>
 (function(){
@@ -27,7 +33,7 @@
   const when = t=>{ const d = new Date(t), m = Math.floor((Date.now() - t) / 60000);
     return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · ' + (m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm ago'); };
   const who = id=> (id && typeof nickNames !== 'undefined' && nickNames[id]) || (id === window.FALSEHOOD_UID ? 'you' : 'a guildmate');
-  const KIND = { kill: 'KILL', spawn: 'EVENT SPAWN', dead: 'EVENT KILL' };
+  const KIND = { kill: 'KILL', spawn: 'EVENT SPAWN', dead: 'EVENT KILL', miss: 'NOT MATCHED' };
 
   window.falsehoodReview = async ()=>{
     const fs = window.FALSEHOOD_FS;
@@ -35,7 +41,8 @@
     const ov = document.createElement('div'); ov.className = 'rv-ov';
     ov.innerHTML = `<div class="rv-card" role="dialog" aria-label="Auto-detect log">
       <div class="rv-head"><h4>📋 Auto-detect log</h4><span><button type="button" class="rv-ref">↻ Refresh</button> <button type="button" class="rv-x">Close</button></span></div>
-      <p>The last 20 things Auto-detect logged, with what it read from the game chat. If one is wrong, press <b>Undo</b> to put that MVP back the way it was.</p>
+      <p>The last 20 things Auto-detect logged, with what it read from the game chat. If one is wrong, press <b>Undo</b> to put that MVP back the way it was. <b class="rv-warn-t">⚠</b> marks a reading that looks wrong (unknown map or boss, or a kill line it couldn’t match): screenshot those for a fix.</p>
+      <label class="rv-only"><input type="checkbox" class="rv-oddonly"> Only show ⚠ readings to check</label>
       <div class="rv-list"><div class="rv-none">Loading…</div></div></div>`;
     document.body.appendChild(ov);
     const list = ov.querySelector('.rv-list');
@@ -43,20 +50,26 @@
     ov.onclick = e=>{ if(e.target === ov) ov.remove(); };
     const load = async ()=>{
       let docs = [];
-      try { docs = (await fs.collection('autolog').orderBy('at', 'desc').limit(20).get()).docs; }
+      const only = ov.querySelector('.rv-oddonly').checked;
+      try { docs = (await fs.collection('autolog').orderBy('at', 'desc').limit(only ? 60 : 20).get()).docs; }
       catch(e) { list.innerHTML = '<div class="rv-none">Couldn’t load the log (' + esc((e && e.code) || 'error') + '). Update the Firebase rules first.</div>'; return; }
-      if(!docs.length){ list.innerHTML = '<div class="rv-none">Nothing logged by Auto-detect yet.</div>'; return; }
+      if(only) docs = docs.filter(d=>{ const x = d.data() || {}; return x.kind === 'miss' || x.odd; });
+      if(!docs.length){ list.innerHTML = `<div class="rv-none">${only ? 'No ⚠ readings to check in the recent log. 👍' : 'Nothing logged by Auto-detect yet.'}</div>`; return; }
       list.innerHTML = docs.map(d=>{
         const x = d.data() || {}, m = byId[x.mvp];
         // still the current state of that MVP? then it can be undone
         const current = m && !x.undone && m.lastDeath === x.setTo;
+        if(x.kind === 'miss') return `<div class="rv-row rv-odd"><div class="rv-top"><span class="rv-tag miss">NOT MATCHED</span>⚠ Couldn’t match ${x.name ? '“' + esc(x.name) + '”' : 'a kill line'} to an MVP<span class="rv-when">${when(x.at)}</span></div>
+          <div class="rv-read"><i>Read:</i> “${esc(x.read || '—')}”</div>
+          <div class="rv-foot"><span class="rv-st old">Not logged</span><span>seen by ${esc(who(x.by))}'s Auto-detect</span></div></div>`;
+        const oddTxt = x.odd ? ` <span class="rv-warn" title="This reading looks wrong: check it against the game chat">⚠ unusual ${esc(String(x.odd).replace(',', ' + '))}</span>` : '';
         const what = x.kind === 'kill'
           ? `<b>${esc(x.name)}</b> killed${x.killer ? ' by ' + esc(x.killer) : ''}${x.map ? ' · ' + esc(x.map) : ''}`
           : `<b>${esc(x.boss || 'Boss')}</b> ${x.kind === 'spawn' ? 'spawned' : 'killed' + (x.killer ? ' by ' + esc(x.killer) : '')}${x.map ? ' · ' + esc(x.map) : ''}`;
         const st = x.undone ? '<span class="rv-st undone">↶ Undone</span>'
           : current ? '<span class="rv-st ok">✓ On the tracker now</span>'
           : '<span class="rv-st old">Changed since (a newer kill or edit)</span>';
-        return `<div class="rv-row"><div class="rv-top"><span class="rv-tag ${esc(x.kind)}">${KIND[x.kind] || 'LOG'}</span>${what}<span class="rv-when">${when(x.at)}</span></div>
+        return `<div class="rv-row${x.odd ? ' rv-odd' : ''}"><div class="rv-top"><span class="rv-tag ${esc(x.kind)}">${KIND[x.kind] || 'LOG'}</span>${what}${oddTxt}<span class="rv-when">${when(x.at)}</span></div>
           <div class="rv-read"><i>Read:</i> “${esc(x.read || '—')}”</div>
           <div class="rv-foot">${st}<span>by ${esc(who(x.by))}'s Auto-detect</span>${current ? `<button type="button" data-undo="${esc(d.id)}">↶ Undo</button>` : ''}</div></div>`;
       }).join('');
@@ -78,6 +91,7 @@
       });
     };
     ov.querySelector('.rv-ref').onclick = load;
+    ov.querySelector('.rv-oddonly').onchange = load;
     load();
   };
 })();

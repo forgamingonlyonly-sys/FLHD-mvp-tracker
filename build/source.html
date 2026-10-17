@@ -1056,7 +1056,8 @@ body.compact .tc-big { font-size: 17px; } body.compact .tc-sub, body.compact .tc
   <span class="sync" id="sync">Connecting</span>
   <div class="summary" id="summary"></div>
   <button class="btn alert-btn" id="alertBtn" title="Sound and notification when an MVP enters its spawn window">🔕 Alerts off</button>
-  <button class="btn reset-all" id="resetAllBtn">↺ Reset all</button>
+  <button class="btn reset-all" id="resetAllBtn" title="Admin only: clear every timer on this tab">↺ Reset all</button>
+  <button class="btn undo" id="undoResetBtn" hidden title="Bring back all the timers from before the last Reset all">↶ Undo reset</button>
 </header>
 
 <div class="notice" id="notice" hidden></div>
@@ -1602,8 +1603,9 @@ const matchesSearch = m => (m.name + ' ' + (m.location || '')).toLowerCase().inc
 function visibleList(){
   return mvps.filter(m=> m.id !== 'boss_event' && !isHidden(m) && (searchQ ? matchesSearch(m) : inTab(m)));
 }
-// An MVP overdue for 3+ hours was almost certainly killed without being logged: treat it as Unknown again
-const STALE_MS = 3 * 60 * 60000;
+// An MVP overdue for 2+ hours was almost certainly killed without being logged: treat it as Unknown again
+// (the Discord board drops it from Overdue at the same point)
+const STALE_MS = 2 * 60 * 60000;
 const isStale = m => m.id !== 'boss_event' && !!m.lastDeath && Date.now() > m.lastDeath + m.max*60000 + STALE_MS;
 function sweepStale(){
   let changed = false;
@@ -1921,7 +1923,7 @@ function renderNextUp(){
   const bar = document.querySelector('.toolbar');
   const right = document.createElement('div');
   right.className = 'toolbar-right';
-  right.append(document.getElementById('compactBtn'), document.getElementById('resetAllBtn'));
+  right.append(document.getElementById('compactBtn'), document.getElementById('resetAllBtn'), document.getElementById('undoResetBtn'));
   bar.appendChild(right);
   // Search bar removed; with no search text the list always follows the selected tab
   const search = bar.querySelector('.search');
@@ -3012,7 +3014,10 @@ function render(){
   const list = document.getElementById('mvpList');
   list.innerHTML = '';
   const locked = !canWrite || mode === 'connecting';
+  // Reset all: Admin only (one mis-click would clear every timer for the whole guild)
+  document.getElementById('resetAllBtn').hidden = window.FALSEHOOD_ROLE !== 'admin';
   document.getElementById('resetAllBtn').disabled = locked;
+  paintUndoReset();
 
   rendered = visibleList().sort(compareMvps);
 
@@ -3101,15 +3106,49 @@ function renderHidden(){
   });
 }
 
-/* ================= RESET ALL ================= */
+/* ================= RESET ALL (Admin only, with Undo) ================= */
+// what the timers were before the last Reset all, kept for 30 minutes (also across a refresh)
+var RESET_UNDO_MS = 30 * 60000;
+var resetUndo = null;   // var: render() can run before this line
+try { resetUndo = JSON.parse(localStorage.getItem('falsehood-reset-undo') || 'null'); } catch(e) {}
+function paintUndoReset(){
+  const b = document.getElementById('undoResetBtn');
+  if(!b) return;
+  const ok = !!(resetUndo && Date.now() - resetUndo.at < RESET_UNDO_MS && window.FALSEHOOD_ROLE === 'admin' && canWrite && mode !== 'connecting');
+  b.hidden = !ok;
+  if(ok) b.title = `Bring back the ${resetUndo.items.length} timer${resetUndo.items.length === 1 ? '' : 's'} cleared by Reset all at ${formatTime(resetUndo.at)}`;
+}
+setInterval(paintUndoReset, 60000);
 document.getElementById('resetAllBtn').onclick = ()=>{
+  if(!isAdmin()) return;
   const label = currentTab === 'mini' ? 'MINI MVPs' : 'MVPs';
   openModal('Reset All',
-    `Reset the timers for <b>all ${label}</b> for everyone in the guild?<br>The other tab and all locations are kept.`,
+    `Reset the timers for <b>all ${label}</b> for everyone in the guild?<br>The other tab and all locations are kept. You can undo this for 30 minutes.`,
     ()=>{
+      const items = mvps.filter(m=> inTab(m) && m.lastDeath).map(m=>({ id: m.id, lastDeath: m.lastDeath, by: m.by || null, auto: !!m.auto, ev: m.ev || null, killer: m.killer || '', location: m.location || '' }));
+      if(items.length){ resetUndo = { at: Date.now(), items }; try { localStorage.setItem('falsehood-reset-undo', JSON.stringify(resetUndo)); } catch(e) {} }
       mvps.forEach(m=>{ if(inTab(m) && m.lastDeath) clearKill(m); });
       render();
+      if(items.length) showToast(`${items.length} timer${items.length === 1 ? '' : 's'} reset. Press ↶ Undo reset to bring them back.`);
     });
+};
+document.getElementById('undoResetBtn').onclick = ()=>{
+  if(!resetUndo || !isAdmin()) return;
+  let n = 0;
+  for(const it of resetUndo.items){
+    const m = byId[it.id];
+    if(!m || m.lastDeath) continue;          // someone logged a new kill since the reset: keep that one
+    m.lastDeath = it.lastDeath; m.by = it.by; m.auto = it.auto;
+    if(m.id === 'boss_event'){ m.ev = it.ev; m.killer = ''; }
+    if(it.location) m.location = it.location;
+    m._act = 'undo';
+    persist(m);
+    if(typeof prevStatus !== 'undefined') prevStatus[m.id] = getStatus(m);
+    n++;
+  }
+  resetUndo = null; try { localStorage.removeItem('falsehood-reset-undo'); } catch(e) {}
+  render();
+  showToast(n ? `${n} timer${n === 1 ? '' : 's'} restored.` : 'Nothing to restore (new kills were logged since the reset).');
 };
 
 const A = {

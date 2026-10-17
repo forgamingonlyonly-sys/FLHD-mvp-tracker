@@ -79,7 +79,7 @@
     const st = m=>{ const o = m.lastDeath + m.min * 60000, c = m.lastDeath + m.max * 60000; return now < o ? 'wait' : now <= c ? 'float' : 'over'; };
     const close = m=> m.lastDeath + m.max * 60000, open = m=> m.lastDeath + m.min * 60000;
     const floating = list.filter(m=> st(m) === 'float').sort((a, b)=> close(a) - close(b));
-    const overdue = list.filter(m=> st(m) === 'over' && now - close(m) < 3 * 3600000).sort((a, b)=> close(b) - close(a));
+    const overdue = list.filter(m=> st(m) === 'over' && now - close(m) < 2 * 3600000).sort((a, b)=> close(b) - close(a));
     const next = list.filter(m=> st(m) === 'wait').sort((a, b)=> open(a) - open(b)).slice(0, 10);
     // Boss Event: its own card on top (orange while it's up, for up to 2 hours; dimmer once killed)
     const be = mvps.find(m=> m.id === 'boss_event');
