@@ -60,14 +60,14 @@
 @media (max-width:700px){.bebar{padding:11px 13px!important}.bebar .nu-name{font-size:16px}.bebar .be-up{font-size:17px}}
 @keyframes beGlow{0%,100%{box-shadow:0 0 0 1px rgba(255,190,120,.16) inset,0 0 12px rgba(255,122,30,.6),0 0 34px rgba(255,90,20,.26)}50%{box-shadow:0 0 0 1px rgba(255,190,120,.22) inset,0 0 18px rgba(255,140,40,.85),0 0 48px rgba(255,100,20,.4)}}
 @media (prefers-reduced-motion:reduce){:root:not([data-theme="light"]) .bebar{animation:none}}
-/* tabs: raised dark-metal plaques; the open tab gets a gold rim and gold text */
+/* tabs: raised dark-metal plaques; the open tab gets a violet rim and glow (violet is kept for buttons, the open tab and the logo) */
 .tabs{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;gap:8px}
 .tab{border-radius:8px!important;padding:10px 18px!important;color:#cfc4df;font-family:Cinzel,serif;font-weight:700;letter-spacing:.1em;
   background:linear-gradient(180deg,#3a3148 0%,#231b30 50%,#17111f 100%)!important;border:1px solid #4a3d5e;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.6)!important}
 .tab:hover{border-color:#6b5a8c;color:#f1ecf8}
-.tab.active{color:#ffe08a!important;border-color:#e3a21a;background:linear-gradient(180deg,#4a2f7a 0%,#2c1650 55%,#1b0d33 100%)!important;
-  box-shadow:inset 0 1px 0 rgba(255,230,160,.35),0 0 0 1px rgba(227,162,26,.5),0 0 14px rgba(255,190,60,.35)!important;text-shadow:0 0 8px rgba(255,190,60,.5)}
+.tab.active{color:#f3e9ff!important;border-color:#9b4dff;background:linear-gradient(180deg,#5a2f9a 0%,#3a1a70 55%,#22104a 100%)!important;
+  box-shadow:inset 0 1px 0 rgba(220,190,255,.35),0 0 0 1px rgba(155,77,255,.6),0 0 14px rgba(155,77,255,.45)!important;text-shadow:none}
 .tab .count,.tab.active .count{background:rgba(0,0,0,.35)!important;color:inherit!important;font-family:Inter,system-ui,sans-serif}
 @media (max-width:560px){.tabs{gap:5px;flex-wrap:nowrap!important}.tab{padding:7px 9px!important;letter-spacing:.03em;font-size:12px!important;gap:5px!important}.tab .tab-ic{width:14px!important;height:14px!important}.tab .count{padding:0 5px!important;font-size:10.5px}}
 /* status counts: one raised metal HUD panel (matches the tabs), coloured glowing numbers; metal buttons */
@@ -106,10 +106,10 @@
   filter:drop-shadow(0 -.6px 0 rgba(255,245,220,.55)) drop-shadow(0 1.4px .6px rgba(0,0,0,.85)) drop-shadow(0 0 3px rgba(0,0,0,.4))}
 .tab-ic svg{stroke:url(#ic3dSilver);stroke-width:2.2}
 .tab-ic svg circle[r="1.4"]{fill:url(#ic3dSilver)}
-.tab.active .tab-ic svg{stroke:url(#ic3dGold)}
-.tab.active .tab-ic svg circle[r="1.4"]{fill:url(#ic3dGold)}
+.tab.active .tab-ic svg{stroke:url(#ic3dPurple)}
+.tab.active .tab-ic svg circle[r="1.4"]{fill:url(#ic3dPurple)}
 .nu-hero .nu-label svg{stroke:url(#ic3dGold)!important;stroke-width:2.4;filter:drop-shadow(0 -.6px 0 rgba(255,250,225,.7)) drop-shadow(0 1.6px .6px rgba(0,0,0,.9)) drop-shadow(0 0 6px rgba(255,180,40,.45))!important}
-.pin{stroke:url(#ic3dPurple);stroke-width:2.3}
+.pin{stroke:#8f82a6;stroke-width:2.3}   /* location pins: muted grey-violet */
 .st-ic svg{stroke:url(#ic3dGold)}
 .st-stat.t-store .st-ic svg{stroke:url(#ic3dPurple)}
 .st-stat.t-sold .st-ic svg{stroke:url(#ic3dGreen)}
