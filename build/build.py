@@ -50,12 +50,16 @@ def _extract(m):
     (assets / name).write_bytes(raw)
     return 'assets/' + name
 src = re.sub(r'data:image/([a-z+]+);base64,([A-Za-z0-9+/=]+)', _extract, src)
+sfx_made = set()
 def _extract_audio(m):
     raw = base64.b64decode(m.group(2))
     name = 'sfx-' + hashlib.sha1(raw).hexdigest()[:10] + '.' + {'mpeg': 'mp3'}.get(m.group(1), m.group(1))
     (assets / name).write_bytes(raw)
+    sfx_made.add(name)
     return 'assets/' + name
 src = re.sub(r'data:audio/([a-z0-9]+);base64,([A-Za-z0-9+/=]{4000,})', _extract_audio, src)
+for f in assets.glob('sfx-*'):                      # sounds no longer in the page
+    if f.name not in sfx_made: f.unlink()
 # compact the published page: inline <style> and <script> blocks are minified with esbuild
 # (build/node_modules: run `npm install` in build/). Without esbuild the page is published as is.
 import subprocess, shutil

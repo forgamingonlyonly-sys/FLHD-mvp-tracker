@@ -41,7 +41,6 @@ service cloud.firestore {
       allow write: if member() && request.auth.uid == uid;
     }
     match /mvps/{id} { allow write: if timer(); }
-    match /cycle/{id} { allow write: if timer(); }
     match /loot/{id} { allow delete: if admin(); }
     // log out one person: only the Admin sets it; each device reads only its own
     match /kicks/{uid} {
