@@ -70,6 +70,25 @@
   box-shadow:inset 0 1px 0 rgba(255,230,160,.35),0 0 0 1px rgba(227,162,26,.5),0 0 14px rgba(255,190,60,.35)!important;text-shadow:0 0 8px rgba(255,190,60,.5)}
 .tab .count,.tab.active .count{background:rgba(0,0,0,.35)!important;color:inherit!important;font-family:Inter,system-ui,sans-serif}
 @media (max-width:560px){.tabs{gap:5px;flex-wrap:nowrap!important}.tab{padding:7px 9px!important;letter-spacing:.03em;font-size:12px!important;gap:5px!important}.tab .tab-ic{width:14px!important;height:14px!important}.tab .count{padding:0 5px!important;font-size:10.5px}}
+/* status counts: one raised metal HUD panel (matches the tabs), coloured glowing numbers; metal buttons */
+.toolbar-right .summary{background:linear-gradient(180deg,#3a3148 0%,#231b30 50%,#17111f 100%)!important;border:1px solid #4a3d5e!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.6)!important;border-radius:8px!important;gap:0!important;overflow:hidden!important}
+.toolbar-right .summary .chip{background:transparent!important;border:0!important;border-right:1px solid rgba(0,0,0,.55)!important;box-shadow:1px 0 0 rgba(255,255,255,.06);height:34px!important;padding:0 12px!important;font-family:Cinzel,serif;font-weight:700;letter-spacing:.05em;color:#cfc4df}
+.toolbar-right .summary .chip:last-child{border-right:0!important;box-shadow:none}
+.toolbar-right .summary .chip b{font-family:Inter,system-ui,sans-serif;font-size:15px}
+.toolbar-right .summary .chip:nth-child(1) b{color:#2fbf71;text-shadow:0 0 8px rgba(47,191,113,.6)}
+.toolbar-right .summary .chip:nth-child(1) .dot{box-shadow:0 0 6px #2fbf71}
+.toolbar-right .summary .chip:nth-child(2) b{color:#e0a100;text-shadow:0 0 8px rgba(224,161,0,.6)}
+.toolbar-right .summary .chip:nth-child(2) .dot{box-shadow:0 0 6px #e0a100}
+.toolbar-right .summary .chip:nth-child(3) b{color:#e2405c;text-shadow:0 0 8px rgba(226,64,92,.6)}
+.toolbar-right .summary .chip:nth-child(3) .dot{box-shadow:0 0 6px #e2405c}
+.toolbar-right .summary .chip:nth-child(4) b{color:#8f82a6;text-shadow:0 0 8px rgba(143,130,166,.6)}
+.toolbar-right .summary .chip:nth-child(4) .dot{box-shadow:0 0 6px #8f82a6}
+#compactBtn,#resetAllBtn,#undoResetBtn{background:linear-gradient(180deg,#3a3148 0%,#231b30 50%,#17111f 100%)!important;border:1px solid #4a3d5e!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 0 rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.6)!important;border-radius:8px!important;height:34px!important;font-family:Cinzel,serif;font-weight:700;letter-spacing:.06em;color:#cfc4df!important}
+#compactBtn:hover{border-color:#6b5a8c!important;color:#f1ecf8!important}
+#resetAllBtn{border-color:#7a3446!important;color:#ffb3c0!important}
+#undoResetBtn{border-color:#e3a21a!important;color:#ffe08a!important}
+@media (max-width:760px){.toolbar-right .summary .chip{padding:0 6px!important;letter-spacing:.02em;font-size:11px}.toolbar-right .summary .chip b{font-size:13.5px}}
+@media (max-width:480px){.toolbar-right .summary .chip{padding:0 4px!important;letter-spacing:0;font-size:10px;gap:3px!important;min-width:0}.toolbar-right .summary .chip .dot{width:6px;height:6px}.toolbar-right .summary .chip b{font-size:12.5px}}
 /* 3D icons: beveled metal strokes (gold / silver / purple) with a light top edge and a shadow below */
 .tab-ic svg,.nu-hero .nu-label svg,.pin,.st-ic svg{
   filter:drop-shadow(0 -.6px 0 rgba(255,245,220,.55)) drop-shadow(0 1.4px .6px rgba(0,0,0,.85)) drop-shadow(0 0 3px rgba(0,0,0,.4))}
