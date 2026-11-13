@@ -1518,7 +1518,7 @@ async function fillNames(){
 
 
 /* ================= MVP / MINI MVP TABS ================= */
-const MINI_IDS = ['ghost_poring','angel_poring','angel_toy','angel_yuno','devil_yuno','arch_yuno','angel_mjolnir','ghost_sunken','g_seyren','g_eremes','g_howard','g_margaretha','g_kathryne','g_cecil'];
+const MINI_IDS = ['ghost_poring','angel_poring','angel_toy','angel_yuno','devil_yuno','arch_yuno','angel_mjolnir','ghost_sunken'];
 mvps.forEach(m=>{ m.type = MINI_IDS.includes(m.id) ? 'mini' : 'mvp'; });
 let tabSig = '';
 let currentTab = (()=>{ try { const t = localStorage.getItem('falsehood-tab'); return t === 'mini' || t === 'storage' ? t : 'mvp'; } catch(e) { return 'mvp'; } })();
