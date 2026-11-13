@@ -257,7 +257,7 @@
     samurai: ['Incantation Samurai', 'Samurai Specter'], garm: ['Garm', 'Hatii'], amonra: ['Amon Ra', 'Amonra'],
     gtb: ['Golden Thief Bug'], evil_snake: ['Evil Snake Lord'], doppel: ['Doppelganger'], stormy: ['Stormy Knight', 'Knight of Windstorm'],
     turtle_general: ['Turtle General'], dark_lord: ['Dark Lord'], orc_hero: ['Orc Hero'], orc_lord: ['Orc Lord'],
-    rsx0806: ['RSX-0806', 'RSX 0806', 'RSX0806'], tao_gunka: ['Tao Gunka'], lady_tanee: ['Lady Tanee'], bacsojin: ['Bacsojin', 'White Lady'],
+    rsx0806: ['RSX-0806', 'RSX 0806', 'RSX0806'], biolab3: ['Lord Knight Seyren', 'Assassin Cross Eremes', 'Master Smith Howard', 'Whitesmith Howard', 'High Priest Margaretha', 'High Wizard Kathryne', 'Sniper Cecil'], tao_gunka: ['Tao Gunka'], lady_tanee: ['Lady Tanee'], bacsojin: ['Bacsojin', 'White Lady'],
   };
   // MVPs that share a name: pick by the map in the announcement
   const FAMILIES = [
@@ -690,6 +690,7 @@
     recent.set(m.id, now);
     if(!(await claim('k_' + m.id))){ addLog('skip', `${m.name} already logged by another watcher`, who); return; }
     const prevK = snap(m);
+    if(m.id === 'biolab3' && window.falsehoodBio3Name) m._boss = window.falsehoodBio3Name(p.mvp);
     try { m._auto = true; logKill(m, 0); } catch(e) { addLog('miss', `${m.name}: couldn’t log`, String(e && e.message || e)); return; }
     record('kill', m, prevK, { text: p.text, killer: p.killer ? p.killer + (p.guild ? ' (' + p.guild + ')' : '') : '', map: p.map });
     addLog('ok', `${m.name} logged`, [p.map, who].filter(Boolean).join(' · '));

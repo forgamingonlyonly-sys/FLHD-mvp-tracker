@@ -1076,6 +1076,7 @@ let mvps = [
   { id:'tao_gunka',    name:'Tao Gunka',         min:300, max:310, location:'Beach Dungeon West Cave (beach_dun)' },
   { id:'lady_tanee',   name:'Lady Tanee',        min:420, max:430, location:'Ayothaya Dungeon F2 (ayo_dun02)' },
   { id:'bacsojin',     name:'Bacsojin (White Lady)', min:117, max:127, location:'Louyang Dungeon F3 (lou_dun03)' },
+  { id:'biolab3',      name:'Bio Lab F3 MVP',    min:43, max:105, location:'Bio Lab F3 (lhz_dun03)' },
   { id:'rsx0806',      name:'RSX-0806',          min:125, max:135, location:'Mine Dungeon F2 (ein_dun02)' },
   { id:'boss_event',   name:'Boss Event',        min:60, max:60, location:'Random map ([PW2 Boss Event])' },
   { id:'ghost_poring', name:'Ghostring Poring Island', min:30, max:30,  location:'Sograt Desert, Payon Field 4 (pay_fild04)' },
@@ -1085,16 +1086,32 @@ let mvps = [
   { id:'devil_yuno',   name:'Deviling Yuno',     min:60, max:90,  location:'El Mes Plateau, Yuno Field 3 (yuno_fild03)' },
   { id:'arch_yuno',    name:'Archangeling Yuno', min:60, max:90,  location:'El Mes Plateau, Yuno Field 5 (yuno_fild05)' },
   { id:'angel_mjolnir', name:'Angeling Argiope', min:30, max:30,  location:'Mjolnir Mountains (mjolnir_10)' },
-  { id:'ghost_sunken', name:'Ghostring Sunken',  min:30, max:30,  location:'Sunken Ship F1 (treasure01)' },
-  { id:'g_seyren', name:'Lord Knight Seyren', min:45, max:85, location:'Bio Lab F3 (lhz_dun03)' },
-  { id:'g_eremes', name:'Assassin Cross Eremes', min:43, max:82, location:'Bio Lab F3 (lhz_dun03)' },
-  { id:'g_howard', name:'Master Smith Howard', min:50, max:95, location:'Bio Lab F3 (lhz_dun03)' },
-  { id:'g_margaretha', name:'High Priest Margaretha', min:55, max:105, location:'Bio Lab F3 (lhz_dun03)' },
-  { id:'g_kathryne', name:'High Wizard Kathryne', min:43, max:84, location:'Bio Lab F3 (lhz_dun03)' },
-  { id:'g_cecil', name:'Sniper Cecil', min:45, max:87, location:'Bio Lab F3 (lhz_dun03)' }
+  { id:'ghost_sunken', name:'Ghostring Sunken',  min:30, max:30,  location:'Sunken Ship F1 (treasure01)' }
 ];
 const byId = {};
 mvps.forEach(m=>{ m.lastDeath = null; m.by = null; m.defaultLocation = m.location; byId[m.id] = m; });
+// Bio Lab F3: only one of six MVPs spawns at a time, at random. One shared row; its respawn time is the one of the boss killed last.
+const BIO3 = { 'Lord Knight Seyren': [45, 85], 'Assassin Cross Eremes': [43, 82], 'Master Smith Howard': [50, 95],
+  'High Priest Margaretha': [55, 105], 'High Wizard Kathryne': [43, 84], 'Sniper Cecil': [45, 87] };
+const BIO3_ANY = [43, 105];   // boss not known: the widest range of the six
+function bio3Boss(m){ const x = /^(.+?) · /.exec(String((m || byId.biolab3 || {}).location || '')); return x && BIO3[x[1]] ? x[1] : ''; }
+function bio3Name(t){   // a name read from chat → one of the six (or '')
+  const n = String(t || '').toLowerCase().replace(/[^a-z]/g, '');
+  if(!n) return '';
+  const by = (f)=> Object.keys(BIO3).find(f) || '';
+  // by the boss's own name (Cecil, Seyren…), then by the job in front of it (a misread name still has "Sniper")
+  const JOB = { 'Lord Knight Seyren': ['lordknight'], 'Assassin Cross Eremes': ['assassincross', 'assassin'], 'Master Smith Howard': ['mastersmith', 'whitesmith', 'blacksmith'],
+    'High Priest Margaretha': ['highpriest', 'priest'], 'High Wizard Kathryne': ['highwizard', 'wizard'], 'Sniper Cecil': ['sniper'] };
+  const lev = (a, b)=>{ let p = Array.from({ length: b.length + 1 }, (_, j)=> j); for(let i = 1; i <= a.length; i++){ const c = [i]; for(let j = 1; j <= b.length; j++) c[j] = Math.min(p[j] + 1, c[j-1] + 1, p[j-1] + (a[i-1] === b[j-1] ? 0 : 1)); p = c; } return p[b.length]; };
+  const close = k=>{ const t = k.toLowerCase().replace(/[^a-z]/g, ''); return 1 - lev(n, t) / Math.max(n.length, t.length); };
+  const best = Object.keys(BIO3).map(k=> [k, close(k)]).sort((a, b)=> b[1] - a[1])[0];
+  return by(k=>{ const w = k.toLowerCase().split(' '); return n.includes(w[w.length - 1]); }) || by(k=> JOB[k].some(j=> n.startsWith(j))) || (best[1] >= 0.7 ? best[0] : '');
+}
+if(byId.biolab3){
+  const b3 = byId.biolab3;
+  Object.defineProperty(b3, 'min', { get: ()=> (BIO3[bio3Boss(b3)] || BIO3_ANY)[0], set: ()=>{}, configurable: true });
+  Object.defineProperty(b3, 'max', { get: ()=> (BIO3[bio3Boss(b3)] || BIO3_ANY)[1], set: ()=>{}, configurable: true });
+}
 
 /* ================= PERSONAL PREFS (this browser only) ================= */
 let prefs = { fav:{}, hidden:{}, input:{} };
@@ -1908,6 +1925,24 @@ function canUndo(m){
   // only while the timer is still the one this person logged (nobody changed it since)
   return !!u && m.lastDeath === u.setTo && Date.now() - u.at < UNDO_MS && A.canKill();
 }
+// Bio Lab F3: pick which of the six was killed (sets its respawn time)
+function bio3Pick(anchor, m, go){
+  document.querySelectorAll('.bio3-pick').forEach(x=> x.remove());
+  const pop = document.createElement('div');
+  pop.className = 'bio3-pick';
+  pop.innerHTML = '<div class="bp-t">Which boss was killed?</div>'
+    + Object.keys(BIO3).map(k=> `<button type="button" data-b="${esc(k)}">${esc(k)} <small>${BIO3[k][0]}~${BIO3[k][1]}m</small></button>`).join('')
+    + `<button type="button" data-b="" class="bp-x">Not sure <small>${BIO3_ANY[0]}~${BIO3_ANY[1]}m</small></button>`;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.top = Math.min(r.bottom + 6, innerHeight - pop.offsetHeight - 8) + scrollY + 'px';
+  pop.style.left = Math.max(8, Math.min(r.right - pop.offsetWidth, innerWidth - pop.offsetWidth - 8)) + 'px';
+  const close = ()=>{ pop.remove(); document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', key); };
+  const out = e=>{ if(!pop.contains(e.target)) close(); };
+  const key = e=>{ if(e.key === 'Escape') close(); };
+  setTimeout(()=>{ document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', key); }, 0);
+  pop.addEventListener('click', e=>{ const b = e.target.closest('button'); if(!b) return; m._boss = b.dataset.b; close(); go(); });
+}
 function undoKill(m){
   const u = undoLog[m.id];
   if(!u || m.lastDeath !== u.setTo) return;
@@ -1915,6 +1950,7 @@ function undoKill(m){
   m.by = u.prevBy;
   m.auto = !!u.prevAuto;
   if(m.id === 'boss_event'){ m.ev = u.prevEv || (u.prev ? 'dead' : null); m.killer = u.prevKiller || ''; }
+  if(m.id === 'biolab3' && typeof u.prevLoc === 'string') m.location = u.prevLoc || m.defaultLocation;
   m._act = 'undo';
   persist(m);
   delete undoLog[m.id]; saveUndo();
@@ -2713,12 +2749,15 @@ function logKill(m, minutesAgo){
   const prev = m.lastDeath, prevBy = m.by, prevEv = m.ev, prevKiller = m.killer, prevAuto = !!m.auto;
   m.auto = !!m._auto; m._auto = null;   // logged by Auto-detect (📡) or by a person
   if(m.id === 'boss_event'){ m.ev = m._ev || 'dead'; m.killer = ''; m._ev = m._killer = null; }   // who killed the Boss Event isn't recorded
+  const prevLoc = m.location;
+  if(m.id === 'biolab3'){ const bn = BIO3[m._boss] ? m._boss : ''; m.location = bn ? bn + ' · ' + m.defaultLocation : m.defaultLocation; m._boss = null; }
   m.lastDeath = Date.now() - minutesAgo*60000;
   m.by = myId;
   m._act = m.id === 'boss_event' && m.ev === 'spawn' ? 'spawn' : minutesAgo ? 'update' : 'kill';
   recordUndo(m, prev, prevBy);
   undoLog[m.id].prevAuto = prevAuto; saveUndo();
   if(m.id === 'boss_event'){ undoLog[m.id].prevEv = prevEv || null; undoLog[m.id].prevKiller = prevKiller || ''; saveUndo(); }
+  if(m.id === 'biolab3'){ undoLog[m.id].prevLoc = prevLoc || ''; saveUndo(); }
   prefs.input[m.id] = 0; savePrefs();
   prevStatus[m.id] = getStatus(m);
   persist(m);
@@ -3020,8 +3059,8 @@ function render(){
       };
     }
 
-    el.querySelector('.kill').onclick = ()=> logKill(m, 0);
-    el.querySelector('.update').onclick = ()=> openMinutesModal(m, mins=> logKill(m, mins));
+    el.querySelector('.kill').onclick = e=> m.id === 'biolab3' ? bio3Pick(e.currentTarget, m, ()=> logKill(m, 0)) : logKill(m, 0);
+    el.querySelector('.update').onclick = e=> m.id === 'biolab3' ? bio3Pick(e.currentTarget, m, ()=> openMinutesModal(m, mins=> logKill(m, mins))) : openMinutesModal(m, mins=> logKill(m, mins));
 
 
     list.appendChild(el);
@@ -3104,6 +3143,7 @@ document.getElementById('undoResetBtn').onclick = ()=>{
   showToast(n ? `${n} timer${n === 1 ? '' : 's'} restored.` : 'Nothing to restore (new kills were logged since the reset).');
 };
 
+window.falsehoodBio3Name = t=> bio3Name(t);
 const A = {
   canKill: ()=> canWrite && mode !== 'connecting',
   kill: m=> logKill(m, 0),
